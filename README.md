@@ -13,10 +13,12 @@ coarse graining: several atoms are grouped into larger particles so large
 molecular systems are easier to construct and manipulate.
 
 Stage 3 converts the simplified model back to individual atoms. This is called
-backmapping. The canonical Stage 3 output is:
+backmapping. Modern runs place the canonical Stage 3 file in the run directory
+and expose a stable final alias:
 
 ```text
-outputs/<run_id>/stage3/final_all_atom.pdb
+runs/<name>/stage3_backmapping/final_all_atom.pdb
+runs/<name>/final/all_atom/backmapped.pdb
 ```
 
 Stage 4 prepares the atom-by-atom system using CHARMM36-compatible molecular
@@ -166,12 +168,15 @@ Stable final aliases are created only after the corresponding stage validates:
 final/cg/backmap_input.gro
 final/cg/structure.gro
 final/cg/topology.top
-outputs/<run_id>/stage3/final_all_atom.pdb
 final/all_atom/backmapped.pdb
 final/all_atom/backmapped.dms
 final/all_atom/minimized_all_atom.gro
 final/all_atom/topology.top
 ```
+
+Compatibility note: legacy stage-wrapper output locations such as
+`outputs/<run_id>/stage3/final_all_atom.pdb` may appear in older runs. New
+beginner workflows should use the `runs/<name>/...` layout above.
 
 ## Dependencies
 

@@ -1,12 +1,11 @@
 cff-version: 1.2.0
 message: "If you use MembraneForger, cite this repository and the upstream tools and force fields listed in THIRD_PARTY_NOTICES.md."
 title: "MembraneForger"
-version: "0.1.0"
-date-released: "2026-07-15"
+version: "0.2.0"
 authors:
   - given-names: "Roland"
     family-names: "Del Mundo"
-license: "MIT"
+license: "GPL-3.0-only"
 references:
   - type: software
     title: "Martini force fields"
