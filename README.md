@@ -33,7 +33,7 @@ Green software tests mean the workflow code and safeguards passed. They do not
 prove that every biological system, protonation state, ligand, membrane
 composition, or force-field choice is scientifically valid.
 
-## Beginner Workflow
+## Setup
 
 ```bash
 git clone <repository-url> MembraneForger
