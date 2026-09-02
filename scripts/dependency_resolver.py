@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -24,12 +25,20 @@ from external_dependencies import (
 
 ROOT = Path(__file__).resolve().parents[1]
 
+
+def file_sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
 DEPENDENCIES: dict[str, dict[str, Any]] = {
     "Python": {"env": "PYTHON_BIN", "path": "python3", "required": True, "version": ["--version"]},
     "GROMACS": {"env": "GMX_BIN", "path": "gmx", "required": False, "version": ["--version"]},
     "martinize2": {"env": "MARTINIZE2_BIN", "path": "martinize2", "required": False, "version": ["--version"]},
     "Vermouth": {"module": "vermouth", "required": False},
-    "INSANE": {"env": "INSANE_BIN", "path": "insane", "required": False},
+    "INSANE": {"bundled_script": "scripts/insane_M3_lipids_new.py", "required": True},
     "mstool": {"module_path": "resources/vendor/mstool", "required": False},
     "OpenMM": {"module": "openmm", "required": False},
     "DSSP": {"special": "dssp", "required": False},
@@ -99,6 +108,20 @@ def resolve_one(name: str, spec: dict[str, Any], configured: dict[str, Any]) -> 
     if spec.get("special") == "molfile_to_params":
         return {**resolve_molfile_to_params(required=spec["required"]).as_dict(), "required": spec["required"], "source": "MOLFILE_TO_PARAMS or PATH", "value": os.environ.get("MOLFILE_TO_PARAMS", "molfile_to_params.py")}
     config_entry = configured.get(normalize(name), {})
+    if "bundled_script" in spec:
+        path = ROOT / spec["bundled_script"]
+        ok = path.is_file()
+        version = ""
+        if ok:
+            version = f"bundled exact script sha256={file_sha256(path)}"
+        return {
+            "name": name,
+            "status": availability_status(ok, spec["required"]),
+            "source": "repository",
+            "value": spec["bundled_script"],
+            "version": version,
+            "required": spec["required"],
+        }
     if isinstance(config_entry, dict):
         for key in ("value", "bin", "path", "command"):
             config_value = config_entry.get(key)

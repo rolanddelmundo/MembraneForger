@@ -1,0 +1,44 @@
+title           = Final unrestrained NPT bridge at 2 fs
+integrator      = md
+nsteps          = 2500000
+dt              = 0.002
+
+nstxout         = 100000
+nstvout         = 100000
+nstenergy       = 1000
+nstlog          = 1000
+
+continuation         = yes
+constraint_algorithm = lincs
+constraints          = h-bonds
+lincs_iter           = 2
+lincs_order          = 6
+
+nstlist         = 20
+rlist           = 1.2
+rcoulomb        = 1.2
+rvdw            = 1.2
+cutoff-scheme   = Verlet
+
+coulombtype     = PME
+pme_order       = 4
+fourierspacing  = 0.16
+
+tcoupl          = V-rescale
+tc-grps         = Protein_LIG MEMB SOL_ION
+tau_t           = 1.0 1.0 1.0
+ref_t           = 310 310 310
+
+pcoupl          = C-rescale
+pcoupltype      = semiisotropic
+tau_p           = 10.0
+ref_p           = 1.0 1.0
+compressibility = 4.5e-5 4.5e-5
+
+pbc             = xyz
+DispCorr        = EnerPres
+gen_vel         = no
+
+nstcomm         = 100
+comm-mode       = Linear
+comm-grps       = System

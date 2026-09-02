@@ -16,6 +16,7 @@ from typing import Any, Iterable
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 from membraneforger_paths import (  # noqa: E402
     PathResolutionError,
@@ -25,10 +26,45 @@ from membraneforger_paths import (  # noqa: E402
     resolve_config_path,
     resolve_mstool,
 )
-from external_dependencies import DependencyError, resolve_stage4_dependencies  # noqa: E402
+from membraneforger.config import ConfigError, normalize_config  # noqa: E402
+from membraneforger.chemistry import ChemistryError, validate_membrane_composition  # noqa: E402
+from external_dependencies import DependencyError, preflight_stage4_charmm_resources, resolve_stage4_dependencies, resolve_stage4_resource_paths  # noqa: E402
+from membraneforger.stages.legacy_impl import (  # noqa: E402
+    ValidationError,
+    charmm_terminal_patches,
+    protein_chains_for_terminal_patches,
+    selected_terminal_patch_chains,
+)
 
 STAGE_NAMES = ("stage1", "stage2", "stage3", "stage4")
 ATOM_RECORDS = ("ATOM  ", "HETATM")
+
+
+def configure_local_resources(argv: list[str]) -> None:
+    threads = os.environ.get("MEMBRANEFORGER_LOCAL_THREADS") or str(os.cpu_count() or 1)
+    for key in (
+        "OMP_NUM_THREADS",
+        "OPENMM_CPU_THREADS",
+        "VECLIB_MAXIMUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+    ):
+        os.environ[key] = threads
+    if argv and argv[0] == "stage3":
+        requested_platform = os.environ.get("MEMBRANEFORGER_OPENMM_PLATFORM")
+        try:
+            from openmm import Platform
+
+            names = {Platform.getPlatform(i).getName() for i in range(Platform.getNumPlatforms())}
+            if requested_platform:
+                os.environ["OPENMM_DEFAULT_PLATFORM"] = requested_platform
+            elif "OpenCL" in names:
+                os.environ["OPENMM_DEFAULT_PLATFORM"] = "OpenCL"
+        except Exception:
+            if requested_platform:
+                os.environ["OPENMM_DEFAULT_PLATFORM"] = requested_platform
+            pass
 
 
 class ContractError(RuntimeError):
@@ -58,6 +94,17 @@ def scalar(value: str) -> Any:
 
 
 def load_simple_yaml(path: Path) -> dict[str, Any]:
+    try:
+        import yaml
+
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if loaded is None:
+            return {}
+        if not isinstance(loaded, dict):
+            raise ContractError(f"{path}: YAML root must be a mapping")
+        return loaded
+    except ImportError:
+        pass
     root: dict[str, Any] = {}
     stack: list[tuple[int, dict[str, Any]]] = [(-1, root)]
     for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
@@ -100,9 +147,15 @@ def load_config(path: Path) -> dict[str, Any]:
     path = path.expanduser().resolve()
     default = load_simple_yaml(ROOT / "config" / "workflow.yaml")
     if path == (ROOT / "workflow.yaml").resolve() or path == (ROOT / "config" / "workflow.yaml").resolve():
+        override = {}
         loaded = default
     else:
-        loaded = deep_merge(default, load_simple_yaml(path))
+        override = load_simple_yaml(path)
+        loaded = deep_merge(default, override)
+    try:
+        loaded = normalize_config(loaded, explicit_config=override)
+    except ConfigError as exc:
+        raise ContractError(str(exc)) from exc
     loaded.setdefault("_meta", {})["config_path"] = str(path)
     return loaded
 
@@ -220,6 +273,13 @@ def check_stage1(config: dict[str, Any], run_id: str) -> list[str]:
 
 def check_stage2(config: dict[str, Any], run_id: str) -> list[str]:
     errors: list[str] = []
+    simulation = config.get("simulation", {})
+    if isinstance(simulation, dict):
+        for key in ("run_cg_minimization", "run_cg_equilibration"):
+            if key in simulation and not isinstance(simulation[key], bool):
+                errors.append(f"simulation.{key} must be true or false")
+        if simulation.get("run_cg_production"):
+            errors.append("simulation.run_cg_production is not implemented; set it false")
     mode = config.get("stage2", {}).get("mode", "smoke")
     handoff_mode = config.get("stage2", {}).get("handoff", {}).get("mode")
     if mode not in {"smoke", "production", "replace-protein-handoff", "scaffold-cg-smoke", "run-cg-scaffold-smoke"}:
@@ -232,11 +292,30 @@ def check_stage2(config: dict[str, Any], run_id: str) -> list[str]:
         require_path_if_selected(resolve_path(cfg.get("scaffold_coordinates", ""), config), "stage2 scaffold_coordinates", require_inputs, errors)
         require_path_if_selected(resolve_path(cfg.get("scaffold_topology", ""), config), "stage2 scaffold_topology", require_inputs, errors)
         require_path_if_selected(resolve_path(cfg.get("scaffold_toppar", ""), config), "stage2 scaffold_toppar", require_inputs, errors)
+    build_mode = config.get("stage2", {}).get("build_mode") or config.get("membrane", {}).get("build_mode")
+    if build_mode == "de_novo_insane":
+        membrane = config.get("membrane", {})
+        try:
+            validate_membrane_composition(config)
+        except ChemistryError as exc:
+            errors.append(str(exc))
+        composition = membrane.get("composition", {}) if isinstance(membrane, dict) else {}
+        upper = composition.get("upper", {}) if isinstance(composition, dict) else {}
+        lower = composition.get("lower", {}) if isinstance(composition, dict) else {}
+        if not upper and not lower:
+            errors.append("membrane.composition.upper/lower is required for Stage 2 de_novo_insane")
+        box = membrane.get("box", {}) if isinstance(membrane, dict) else {}
+        has_box = isinstance(box, dict) and all(box.get(key) is not None for key in ("x_nm", "y_nm", "z_nm"))
+        has_distance = isinstance(membrane, dict) and membrane.get("protein_image_distance_nm") is not None
+        if not has_box and not has_distance:
+            errors.append("membrane.box.x_nm/y_nm/z_nm or membrane.protein_image_distance_nm is required for Stage 2 de_novo_insane")
     return errors
 
 
 def check_stage3(config: dict[str, Any], run_id: str) -> list[str]:
     errors: list[str] = []
+    if config.get("backmapping", {}).get("enabled") is False:
+        errors.append("stage3 was requested but backmapping.enabled is false")
     cfg = config.get("stage3", {})
     placement = cfg.get("placement", {})
     if placement.get("mode") != "aa_reference_to_backmapped":
@@ -263,7 +342,36 @@ def check_stage3(config: dict[str, Any], run_id: str) -> list[str]:
 
 def check_stage4(config: dict[str, Any], run_id: str) -> list[str]:
     errors: list[str] = []
+    if config.get("all_atom", {}).get("enabled") is False:
+        errors.append("stage4 was requested but all_atom.enabled is false")
     cfg = config.get("stage4", {})
+    charmm_required = bool(cfg.get("charmm36_required", False))
+    membrane_required = bool(cfg.get("membrane_toppar_required", charmm_required))
+    try:
+        stage4_paths = resolve_stage4_resource_paths(config, root=ROOT)
+        if charmm_required or membrane_required:
+            preflight = preflight_stage4_charmm_resources(config, root=ROOT, required=True)
+            errors.extend(preflight.errors)
+        aa_mdp = stage4_paths.aa_mdp
+    except (PathResolutionError, DependencyError) as exc:
+        if charmm_required or membrane_required:
+            errors.append(f"stage4 external resources are not configured: {exc}")
+        aa_mdp = resolve_path("resources/aa_mdp", config)
+    for mdp_name in ("ions.mdp", "minim.mdp"):
+        require_path_if_selected(aa_mdp / mdp_name, f"stage4 {mdp_name}", True, errors)
+    for key, default in (("slice_buffer_nm", 1.0), ("salt_concentration_molar", 0.15)):
+        try:
+            if float(cfg.get(key, default)) <= 0.0:
+                errors.append(f"stage4.{key} must be positive")
+        except (TypeError, ValueError):
+            errors.append(f"stage4.{key} must be numeric")
+    try:
+        charmm_terminal_patches(cfg)
+        input_pdb = resolve_path(config.get("stage1", {}).get("input_pdb", "inputs/aa_protein.pdb"), config)
+        if input_pdb.exists():
+            selected_terminal_patch_chains(cfg, protein_chains_for_terminal_patches(input_pdb))
+    except (PathResolutionError, ContractError, ValidationError, ValueError) as exc:
+        errors.append(str(exc))
     ligand_params = cfg.get("ligand_params") or []
     if not isinstance(ligand_params, list):
         errors.append("stage4.ligand_params must be a list")
@@ -311,7 +419,11 @@ def dry_run(config: dict[str, Any], run_id: str, stages: Iterable[str], output_d
             print(f"{stage}: martinize2 -ff {s1.get('martinize_forcefield', 'martini3001')} [preserve conditional -noscfix]")
         elif stage == "stage2":
             handoff = config["stage2"].get("handoff", {})
-            if handoff.get("mode") == "replace_protein_in_equilibrated_scaffold":
+            build_mode = config["stage2"].get("build_mode") or config.get("membrane", {}).get("build_mode")
+            if build_mode == "de_novo_insane":
+                print(f"{stage}: build de novo membrane with scripts/insane_M3_lipids_new.py")
+                print(f"{stage}: consume outputs/{run_id}/stage1/replacement_protein_cg.pdb")
+            elif handoff.get("mode") == "replace_protein_in_equilibrated_scaffold":
                 print(f"{stage}: remove original scaffold protein and insert outputs/{run_id}/stage1/replacement_protein_cg.pdb")
                 print(f"{stage}: scaffold={config['stage2'].get('scaffold_coordinates')} topology={config['stage2'].get('scaffold_topology')}")
             elif config["stage2"].get("mode") in {"scaffold-cg-smoke", "run-cg-scaffold-smoke"}:
@@ -472,7 +584,8 @@ def stage_main(stage: str, argv: list[str]) -> int:
     if args.dry_run:
         rc = check_contract(config, run_id, [stage])
         return rc if rc else dry_run(config, run_id, [stage])
-    from test_membrane_workflow import run_stage
+    from membraneforger.stages.legacy_impl import run_stage
+
     return run_stage(ROOT, stage, config, run_id, bool(config.get("run", {}).get("overwrite", False)), args.mode)
 
 
@@ -554,6 +667,7 @@ def completion_status(static_pass: bool = False, dry_run_pass: bool = False) -> 
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    configure_local_resources(argv)
     try:
         if argv and argv[0] in STAGE_NAMES:
             stage = argv.pop(0)

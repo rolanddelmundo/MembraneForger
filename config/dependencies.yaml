@@ -11,14 +11,17 @@ vermouth:
   python_module: vermouth
   required: false
 insane:
-  env: INSANE_BIN
-  required: false
+  path: scripts/insane_M3_lipids_new.py
+  required: true
 mstool:
   python_module_path: resources/vendor/mstool
   required: false
 openmm:
   python_module: openmm
   required: false
+cython:
+  python_module: Cython
+  required: true
 dssp:
   env: DSSP_BIN
   required: false

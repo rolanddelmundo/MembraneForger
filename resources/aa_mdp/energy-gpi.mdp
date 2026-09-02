@@ -1,0 +1,56 @@
+include					= -I../eq_and_md*/
+
+; Run parameters
+integrator				= md		; leap-frog integrator
+nsteps				  	= 5000000	; (this is 5ns) 2 * 50,000,000 = 100,000,000 ps
+dt		    			= 0.002		; 2 fs
+
+; Output control
+nstxout-compressed			= 10000				; xtc compressed trajectory output every 20 ps
+nstenergy				= 10000				; save energies every 20 ps
+nstlog					= 10000				; update log file every 20 ps
+
+; Bond parameters
+continuation				= yes				; Restarting after previous noRes run
+constraints				= all-bonds			; all bonds (even heavy atom-H bonds) constrained
+constraint_algorithm			= lincs				; holonomic constraints
+lincs_order				= 4					; also related to accuracy
+lincs_iter				= 1					; accuracy of LINCS
+
+; Parameters describing how to find the neighbors of each atom and how to calculate the interactions
+ns_type					= grid				; Method to determine neighbor list (simple, grid)
+fourierspacing				= 0.16				; grid spacing for FFT
+cutoff-scheme				= Verlet			; uses Verlet scheme for searching neighboring grid cells
+verlet-buffer-tolerance			= 0.005				; target energy drift per particle cause by the buffer (in kJ/mol/ps)
+nstlist					= 20				; Frequency to update the neighbor list and long range forces; 10 fs
+rlist					= 1.2				; Cut-off for making neighbor list (short range forces) in nm
+coulombtype				= PME				; Particle Mesh Ewald for treatment of long range electrostatic interactions
+pme_order				= 4					; cubic interpolation
+rcoulomb				= 1.2				; short-range electrostatic cutoff (in nm)
+rvdw					= 1.2				; short-range van der Waals cutoff (in nm)
+DispCorr				= EnerPres			; Dispersion correction ; account for cut-off vdW scheme
+pbc					= xyz				; periodic boundary conditions
+
+; Temperature coupling is on
+tcoupl					= Nose-Hoover		; Modified Berendsen
+tau_t					= 0.8				; time constant, in ps
+ref_t					= 310 			    ; reference temperature, one for each group, in K
+
+; Pressure coupling is on
+pcoupl					= Parrinello-Rahman	; Pressure coupling on in NPT
+pcoupltype				= semiisotropic		; uniform scaling of x-y box vectors, independent z
+refcoord-scaling 			= com
+tau_p					= 5.0				; time constant, in ps
+ref_p					= 1.0    1.0		; reference pressure, x-y, z (in bar)
+compressibility				= 4.5e-5    4.5e-5	; isothermal compressibility, bar^-1
+
+; center of mass (COM) motion removal (remove motion of the protein/bilayer relative to the solvent/ions)
+nstcomm					= 1
+comm-mode				= Linear
+tc-grps					= System
+comm-grps				= System
+energy-grps				= A-contact R-contact
+
+; Velocity generation
+gen_vel					= no			    ; Velocity generation is off
+

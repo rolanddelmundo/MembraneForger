@@ -1,6 +1,14 @@
 # Third-Party Notices
 
-Detailed file-level records are in `docs/third_party_inventory.tsv`.
+Detailed file-level records are in `docs/third_party_inventory.tsv` and the
+concise runtime inventory is in `docs/runtime_provenance.tsv`.
+
+## Effective Combined Pipeline License
+
+MembraneForger-authored files remain MIT-licensed. The bundled runnable
+pipeline imports GPL-3.0-only mstool and includes GPL-2.0-or-later
+INSANE-derived code. The combined bundled MembraneForger pipeline is therefore
+distributed under GPL-3.0-only terms. Full texts are retained in `LICENSES/`.
 
 ## Martini Force Fields
 
@@ -19,11 +27,23 @@ Detailed file-level records are in `docs/third_party_inventory.tsv`.
 - License: GPL-3.0-only
 - Version/commit: `2d37f9d3e89279ddd9125cc74da1f5e01153586c`
 - Source: `https://github.com/ksy141/mstool.git`
-- Local modifications: none
-- Status: bootstrap installation into `resources/vendor/mstool/`
+- Local modifications: no upstream source-code changes; MembraneForger adds
+  `MODIFICATIONS.md` and copies the upstream license into the package
+  directory. Local generated C extension outputs are ignored, and native
+  extensions build from vendored `.pyx` source into an external cache.
+- Status: vendored source under `resources/vendor/mstool/`
 
-The public repository does not contain mstool source and the MembraneForger MIT
-license does not relicense mstool.
+See `resources/vendor/mstool/MODIFICATIONS.md`.
+
+## INSANE-Derived Membrane Builder
+
+- License: GPL-2.0-or-later
+- Script metadata: `previous = "20140603.11.TAW"`
+- Source lineage: INSert membrAN by Tsjerk A. Wassenaar, with local
+  lipid-template modifications marked in the script header
+- Local path: `scripts/insane_M3_lipids_new.py`
+- Modification notice: script header and `docs/insane_modifications.md`
+- Status: bundled exact script used by Stage 2 de novo membrane construction
 
 ## Restricted External Dependencies
 

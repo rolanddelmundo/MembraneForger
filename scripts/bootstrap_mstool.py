@@ -38,6 +38,37 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+TREE_SKIP_PARTS = {"__pycache__", "build", ".git"}
+TREE_SKIP_NAMES = {".DS_Store"}
+TREE_SKIP_SUFFIXES = {".pyc", ".pyo", ".so", ".dylib", ".pyd", ".dll", ".o"}
+TREE_SKIP_RELS = {"lib/distancelib.c", "lib/qcprot.c"}
+
+
+def iter_vendored_source_files(root: Path):
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        rel_parts = path.relative_to(root).parts
+        rel = path.relative_to(root).as_posix()
+        if any(part in TREE_SKIP_PARTS for part in rel_parts):
+            continue
+        if rel in TREE_SKIP_RELS or path.name in TREE_SKIP_NAMES or path.suffix in TREE_SKIP_SUFFIXES:
+            continue
+        yield path
+
+
+def tree_stats(root: Path) -> tuple[int, int, str]:
+    h = hashlib.sha256()
+    count = 0
+    size = 0
+    for path in iter_vendored_source_files(root):
+        rel = path.relative_to(root).as_posix()
+        data_hash = sha256(path)
+        file_size = path.stat().st_size
+        count += 1
+        size += file_size
+        h.update(rel.encode("utf-8") + b"\0" + data_hash.encode("ascii") + b"\0" + str(file_size).encode("ascii") + b"\n")
+    return count, size, h.hexdigest()
+
+
 def parse_lock(path: Path = LOCK) -> dict[str, str]:
     data: dict[str, str] = {}
     for raw in path.read_text(encoding="utf-8").splitlines():
@@ -153,16 +184,32 @@ def main(argv: list[str] | None = None) -> int:
         if data.get("exact_commit") != lock["exact_commit"]:
             error("installed mstool commit does not match lock")
             return 1
+        expected_tree = lock.get("vendored_tree_sha256", "")
+        if expected_tree:
+            count, size, actual_tree = tree_stats(destination)
+            if actual_tree != expected_tree:
+                error(f"vendored mstool tree checksum mismatch: expected {expected_tree}, got {actual_tree}")
+                return 1
+            if lock.get("vendored_file_count") and str(count) != lock["vendored_file_count"]:
+                error(f"vendored mstool file count mismatch: expected {lock['vendored_file_count']}, got {count}")
+                return 1
+            if lock.get("vendored_size_bytes") and str(size) != lock["vendored_size_bytes"]:
+                error(f"vendored mstool size mismatch: expected {lock['vendored_size_bytes']}, got {size}")
+                return 1
+            info(f"mstool vendored source tree verified: {count} files, {size} bytes")
         info("mstool install metadata matches lock")
+        return 0
+
+    if args.dry_run:
+        if destination.exists():
+            info("dry-run: mstool destination already exists; no overwrite would be performed")
+        else:
+            info("dry-run: would fetch, verify, and install mstool")
         return 0
 
     if destination.exists() and not args.force:
         error(f"refusing to overwrite existing mstool directory: {destination}; use --force")
         return 1
-
-    if args.dry_run:
-        info("dry-run: would fetch, verify, and install mstool")
-        return 0
 
     temp_parent = Path(tempfile.mkdtemp(prefix="membraneforger-mstool-"))
     try:

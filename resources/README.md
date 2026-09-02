@@ -5,7 +5,6 @@ verified redistribution terms in `docs/third_party_inventory.tsv`.
 
 External resources are not redistributed:
 
-- `MEMBRANEFORGER_MSTOOL_ROOT` or `resources/vendor/mstool/` installed by bootstrap
 - `MEMBRANEFORGER_CHARMM36_ROOT`
 - `MEMBRANEFORGER_CGENFF_ROOT`
 - `MEMBRANEFORGER_LIGAND_PARAMS_ROOT`
@@ -15,5 +14,7 @@ External resources are not redistributed:
 - `ROSETTA_DATABASE`
 - `MOLFILE_TO_PARAMS`
 
-Restricted resources must be supplied by the user from a licensed installation
-and are never copied into Git-controlled locations.
+CHARMM, Rosetta, PyRosetta, and ligand resources must be supplied by the user
+from an installation or distribution whose local redistribution and scientific
+compatibility are established by the user. They are never copied into
+Git-controlled locations by MembraneForger.

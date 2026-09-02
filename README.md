@@ -1,203 +1,285 @@
 # MembraneForger
 
+MembraneForger prepares protein-in-membrane structures through four checked
+stages. The input is a PDB file containing atomic coordinates for the protein or
+protein complex you want to place in a membrane.
 
-<img width="1836" height="770" alt="Artboard 1@3x" src="https://github.com/user-attachments/assets/bc60169c-9c0e-4710-952a-9d64287fe7fa" />
+Stage 1 inspects and prepares the molecular input. It records what chains,
+residues, water molecules, alternate locations, and unsupported nonprotein
+components are present before any scientific assumptions are made.
 
+Stage 2 builds a simplified membrane representation. This uses Martini
+coarse graining: several atoms are grouped into larger particles so large
+molecular systems are easier to construct and manipulate.
 
-MembraneForger is an end-to-end, stage-gated workflow for preparing membrane-protein systems for molecular dynamics simulations. It connects structure generation, Martini 3 coarse-graining, membrane construction, CG simulation handoff, CG-to-AA backmapping, and all-atom system preparation within a single reproducible framework. The workflow integrates Martinize2/Vermouth, INSANE, GROMACS, mstool while retaining intermediate outputs and validation checkpoints at each stage.[1–6]
-
-By replacing a fragmented sequence of manual tools with a traceable pipeline, MembraneForger reduces setup overhead, improves reproducibility, and makes it easier to identify where structural or parameterization issues arise. Automation is applied to routine preparation steps, while users can decide protonation, termini, membrane orientation, ligands, glycans, chain assignments, structural completeness, and force-field coverage.
-
-References
-Souza et al. Martini 3: A General Purpose Force Field for Coarse-Grained Molecular Dynamics. Nature Methods 18, 382–388 (2021).
-Kroon et al. Martinize2 and Vermouth Provide a Unified Framework for Topology Generation. eLife (2025).
-Wassenaar et al. Computational Lipidomics with INSANE: A Versatile Tool for Generating Custom Membranes for Molecular Simulations. J. Chem. Theory Comput. 11, 2144–2155 (2015).
-Kim. Backmapping with Mapping and Isomeric Information. J. Phys. Chem. B (2023).
-Páll et al. Heterogeneous Parallelization and Acceleration of Molecular Dynamics Simulations in GROMACS. J. Chem. Phys. 153, 134110 (2020).
-
-## Quick Start
-
-Check dependencies:
-
-```bash
-./run_pipeline.sh --check-dependencies
-```
-
-Dry-run a user-owned PDB from any directory:
-
-```bash
-/absolute/path/to/MembraneForger/run_pipeline.sh \
-  --pdb /absolute/or/relative/path/to/my_structure.pdb \
-  --config /absolute/path/to/MembraneForger/config/workflow.example.yaml \
-  --output-dir /absolute/or/relative/path/to/output_dir \
-  --dry-run
-```
-
-The command stages `input/original.pdb`, writes `provenance.json`, records the SHA256 checksum of the original PDB, writes `effective_config.yaml` and `effective_config.json`, and prints the planned stage paths. Dry-run mode does not run molecular dynamics.
-
-## Workflow Stages
-
-1. Stage 1: prepare an AA protein input for coarse-graining with martinize2.
-2. Stage 2: run or validate CG preprocessing/equilibration.
-3. Stage 3: backmap accepted CG coordinates to AA coordinates with `mstool`.
-4. Stage 4: prepare AA topology, solvation, index, and minimization files when all required parameters and tools are available.
-
-Production runs should be reviewed one stage at a time:
-
-```bash
-bash stages/stage1_setup_cg/run.sh --config outputs/my_run/effective_config.yaml --run-id my_run
-bash stages/stage2_run_cg/run.sh --config outputs/my_run/effective_config.yaml --run-id my_run
-python stages/stage3_backmap/run.py --config outputs/my_run/effective_config.yaml --run-id my_run
-bash stages/stage4_prepare_aa/run.sh --config outputs/my_run/effective_config.yaml --run-id my_run
-```
-
-## Inputs And Paths
-
-- CLI paths such as `--pdb`, `--config`, and `--output-dir` are resolved relative to the caller's current directory when relative.
-- Repository defaults such as `resources/`, `examples/`, `work/`, `outputs/`, and `logs/` are resolved from the repository root.
-- User inputs belong in `inputs/` or any user-owned external path; `inputs/*` is ignored by Git by default.
-- The original PDB is never modified in place.
-- Output directories are not overwritten unless `--overwrite` is supplied.
-
-## Repository-Local mstool
-
-`resources/vendor/mstool/` is the canonical local `mstool` installation path,
-but the upstream GPL source is not tracked in Git. Install the pinned version:
-
-```bash
-python scripts/bootstrap_resources.py --component mstool
-```
-
-MembraneForger inserts `resources/vendor` ahead of ambient Python paths and
-verifies that `mstool.__file__` resolves below the selected repository-local
-tree. The workflow must not depend on `work/runtime_vendor/mstool` or a
-globally installed `mstool`.
-
-Advanced users may set `MEMBRANEFORGER_MSTOOL_ROOT` to an intentional override. The override is validated and recorded in provenance.
-
-## Installation
-
-Conda:
-
-```bash
-conda env create -f environments/environment.yml
-conda activate membraneforger
-python scripts/check_python_environment.py
-```
-
-Locked Python requirements are listed in:
+Stage 3 converts the simplified model back to individual atoms. This is called
+backmapping. The canonical Stage 3 output is:
 
 ```text
-environments/requirements-lock.txt
-environments/constraints.txt
+outputs/<run_id>/stage3/final_all_atom.pdb
 ```
 
-Docker:
+Stage 4 prepares the atom-by-atom system using CHARMM36-compatible molecular
+parameters. CHARMM36 is a molecular force field: a set of parameters that tells
+simulation software how atoms interact. MembraneForger does not bundle the
+development CHARMM resource set; Stage 4 needs compatible external/user-supplied
+CHARMM36 resources whose exact redistribution rights and compatibility must be
+established. Stage 4 prepares and checks an energy-minimized all-atom system; it
+does not claim production molecular dynamics.
+
+Green software tests mean the workflow code and safeguards passed. They do not
+prove that every biological system, protonation state, ligand, membrane
+composition, or force-field choice is scientifically valid.
+
+## Beginner Workflow
 
 ```bash
-docker build -f containers/Dockerfile -t membraneforger:portable .
+git clone <repository-url> MembraneForger
+cd MembraneForger
+
+./setup.sh --verify
+./run_pipeline.sh doctor
+./run_pipeline.sh dry-run --config config/workflow.yaml
 ```
 
-Apptainer:
+That checks the local software environment, confirms that the public workflow
+can be planned, and does not require external CHARMM36 resources.
+
+To start a real run, stage a PDB and review the generated config:
 
 ```bash
-apptainer build MembraneForger.sif containers/Apptainer.def
+./run_pipeline.sh init \
+  --pdb receptor.pdb \
+  --output-dir runs/receptor
+
+./run_pipeline.sh doctor --config runs/receptor/config/config.yaml
+./run_pipeline.sh validate --config runs/receptor/config/config.yaml
+./run_pipeline.sh dry-run --config runs/receptor/config/config.yaml
 ```
 
-External tools used by enabled stages may include GROMACS, martinize2/Vermouth,
-INSANE, OpenMM, DSSP, Rosetta, and PyRosetta. DSSP is installable in public CI
-and configurable with `DSSP_BIN`. Rosetta, PyRosetta, Rosetta databases,
-`molfile_to_params.py`, CHARMM36, CGenFF, and ligand parameter directories are
-user-supplied licensed resources and are not bundled.
+Then fill in the membrane composition, box/orientation assumptions, and any
+external Stage 4 resource paths. When the configuration-specific doctor passes,
+launch the supported stage-gated workflow:
 
-Relevant variables:
+```bash
+./run_pipeline.sh run --config runs/receptor/config/config.yaml --through stage4
+```
 
-- `MEMBRANEFORGER_MSTOOL_ROOT`
-- `MEMBRANEFORGER_CACHE_DIR`
-- `MEMBRANEFORGER_CHARMM36_ROOT`
-- `MEMBRANEFORGER_CGENFF_ROOT`
-- `MEMBRANEFORGER_LIGAND_PARAMS_ROOT`
-- `DSSP_BIN`
-- `PYROSETTA_PYTHON`
-- `ROSETTA_BIN`
-- `ROSETTA_DATABASE`
-- `MOLFILE_TO_PARAMS`
+If a stage requires scientific review, the run stops with `REVIEW_REQUIRED` and
+prints the exact `resume` command.
 
-MembraneForger builds required `mstool` compiled extensions into an external
-cache under `${MEMBRANEFORGER_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/membraneforger}/mstool/<python-tag>/<platform-tag>/`;
-compiled binaries should not appear in the source tree.
+## Public Commands
+
+```bash
+./setup.sh --sync
+./setup.sh --verify
+
+./run_pipeline.sh doctor [--config CONFIG]
+./run_pipeline.sh init --pdb receptor.pdb --output-dir runs/receptor
+./run_pipeline.sh validate --config runs/receptor/config/config.yaml
+./run_pipeline.sh dry-run --config runs/receptor/config/config.yaml
+./run_pipeline.sh run --config runs/receptor/config/config.yaml --through stage4
+./run_pipeline.sh resume --run-dir runs/receptor --accept-review
+./run_pipeline.sh stage stage3 --run-dir runs/receptor
+./run_pipeline.sh status --run-dir runs/receptor
+./run_pipeline.sh clean --run-dir runs/receptor --confirm
+```
+
+Legacy stage wrappers under `stages/` remain available for advanced users, but
+new runs should use `run_pipeline.sh`.
+
+## Inputs
+
+Required input is a readable PDB with `ATOM` or `HETATM` records. `init` copies
+the original file to `runs/<name>/input/original.pdb` and records its SHA256.
+The original PDB is never modified.
+
+Before computation, MembraneForger reports chain IDs, residue counts, alternate
+locations, waters, heteroatoms, and missing backbone atoms. Scientifically
+ambiguous choices such as membrane orientation, termini, nonstandard residues,
+ligands, glycans, metals, and missing heavy atoms must be resolved by the user.
+
+## Configuration
+
+`runs/<name>/config/config.yaml` is organized around user concepts:
+
+```text
+input
+membrane
+coarse_grained
+simulation
+backmapping
+all_atom
+compute
+review
+advanced
+```
+
+The generated file also contains legacy `stage1` through `stage4` sections for
+compatibility. Public sections are normalized once before execution and are
+authoritative; conflicting explicit legacy duplicates fail validation.
+
+## Stages
+
+- `stage1`: prepare the protein for Martini CG with Martinize2.
+- `stage2`: build and equilibrate the CG membrane system. De novo INSANE-driven
+  setup is the normal path; scaffold replacement remains an advanced mode.
+- `stage3`: backmap the accepted CG structure with mstool and validate mappings.
+- `stage4`: prepare CHARMM36 all-atom topology, solvent, ions, index, and
+  minimization-ready files.
+
+For CHARMM36 terminal capping, MembraneForger uses CHARMM's native terminal
+patch system. An acetylated N-terminus uses the `ACE` patch, while an
+N-methylamide C-terminus uses the `CT3` patch. These modify the terminal amino
+acid in the CHARMM topology rather than being treated as ordinary extra protein
+residues. Do not add standalone `NME` residues for the CHARMM36 workflow.
+
+Stage states are written to `status.json`:
+
+```text
+NOT_STARTED READY RUNNING COMPLETE FAILED BLOCKED REVIEW_REQUIRED
+```
 
 ## Outputs
 
-For `--output-dir outputs/my_run`, dry-run/staging writes:
+Run output is predictable:
 
 ```text
-outputs/my_run/
-  effective_config.json
-  effective_config.yaml
-  input/original.pdb
-  provenance.json
+runs/my_system/
+  input/
+  config/
+  logs/
+  provenance/
+  stage1_cg_setup/
+  stage2_cg_simulation/
+  stage3_backmapping/
+  stage4_all_atom/
+  final/
+    cg/
+    all_atom/
+  status.json
 ```
 
-Stage execution may additionally create:
+Stable final aliases are created only after the corresponding stage validates:
 
 ```text
-outputs/my_run/stage1/
-outputs/my_run/stage2/
-outputs/my_run/stage3/
-outputs/my_run/stage4/
-outputs/my_run/work/
-outputs/my_run/logs/
+final/cg/backmap_input.gro
+final/cg/structure.gro
+final/cg/topology.top
+outputs/<run_id>/stage3/final_all_atom.pdb
+final/all_atom/backmapped.pdb
+final/all_atom/backmapped.dms
+final/all_atom/minimized_all_atom.gro
+final/all_atom/topology.top
 ```
 
-Generated runtime products are ignored by Git. Preserve selected outputs outside the repository or document them as immutable references before publication.
+## Dependencies
 
-## Examples
+`./run_pipeline.sh doctor --config CONFIG` distinguishes globally required,
+configuration-required, optional, disabled, licensed, and missing-but-not-needed
+dependencies.
 
-Minimal public dry-run:
+Core open dependencies:
+
+```text
+Python, PyYAML, NumPy, OpenMM, Vermouth/martinize2, GROMACS, bundled INSANE
+script, Martini resources, vendored mstool source
+```
+
+Optional or external/user-supplied dependencies:
+
+```text
+DSSP/mkdssp, CHARMM36, membrane toppar resources, CGenFF, ligand parameters,
+PyRosetta, Rosetta, Rosetta database, molfile_to_params.py
+```
+
+Current generic Stage 4 terminates at an energy-minimized all-atom system.
+Restrained all-atom equilibration and production are not claimed as completed
+outputs by the public workflow.
+
+External/user-supplied resources are not bundled. Configure them with
+environment variables or absolute paths in the run config:
 
 ```bash
-./run_pipeline.sh \
-  --pdb examples/minimal/inputs/minimal.pdb \
-  --config config/workflow.example.yaml \
-  --output-dir outputs/minimal \
-  --dry-run
+export MEMBRANEFORGER_CHARMM36_ROOT=/path/to/charmm36.ff
+export MEMBRANEFORGER_MEMBRANE_TOPPAR=/path/to/membrane/toppar
+export MEMBRANEFORGER_CGENFF_ROOT=/path/to/cgenff
+export MEMBRANEFORGER_LIGAND_PARAMS_ROOT=/path/to/ligand_params
 ```
+
+## Containers
+
+Containers provide the open-source runtime only. External/user-supplied
+resources must be mounted and configured at run time.
+
+```bash
+docker build -f containers/Dockerfile -t membraneforger:portable .
+docker run --rm -it \
+  -v "$PWD:/workspace/MembraneForger" \
+  -v "$PWD/runs:/workspace/MembraneForger/runs" \
+  membraneforger:portable ./run_pipeline.sh doctor
+
+apptainer build MembraneForger.sif containers/Apptainer.def
+apptainer exec --bind "$PWD:/workspace/MembraneForger" \
+  MembraneForger.sif ./run_pipeline.sh doctor
+```
+
+## Reproducibility
+
+Each run records:
+
+```text
+MembraneForger commit, command line, input checksum, effective config,
+dependency paths/versions, resource checksums, stage timestamps, warnings,
+stage states, and final output checksums
+```
+
+Resource provenance is tracked in `resources/RESOURCE_MANIFEST.tsv`,
+`config/resources.lock.yaml`, `docs/third_party_inventory.tsv`, and
+`docs/runtime_provenance.tsv`.
+
+Maintainers with local CHARMM resources can record Stage 4 resource preflight
+metadata and tree hashes before a real scientific run:
+
+```bash
+./run_pipeline.sh scientific-integration \
+  --config runs/receptor/config/config.yaml \
+  --run-dir runs/receptor \
+  --preflight-only
+```
+
+This command does not copy restricted resources into the repository or into
+public artifacts.
+
+## Troubleshooting
+
+See `docs/troubleshooting.md` for common failures, including missing GROMACS,
+missing CHARMM36 or membrane parameters, unsupported chemistry, unknown or
+conflicting config keys, ambiguous Stage 4 atom matching, unsupported
+`run_cg_production: true`, and cleanup refusals.
 
 ## Tests
 
 ```bash
-bash -n setup.sh
-bash -n run_pipeline.sh
-find stages -type f -name '*.sh' -exec bash -n {} \;
-python -m compileall scripts stages tests
+bash -n run_pipeline.sh setup.sh stages/stage1_setup_cg/run.sh \
+  stages/stage2_run_cg/run.sh stages/stage4_prepare_aa/run.sh
+python -m compileall -q membraneforger scripts stages tests
 python -m pytest -q
 ```
 
-Optional when installed:
-
-```bash
-shellcheck setup.sh run_pipeline.sh stages/*/*.sh
-ruff check scripts stages tests
-```
+Real Stage 1-4 and full CG-to-AA validation must be reported as `BLOCKED`, not
+`PASS`, when required external scientific resources are unavailable.
 
 ## Citation And Licensing
 
-If you use MembraneForger, cite this repository and the upstream tools listed in `THIRD_PARTY_NOTICES.md`. Repository source is covered by `LICENSE`. Optional licensed dependencies are documented in `LICENSE_DEPENDENCIES.md`.
+If you use MembraneForger, cite this repository and the upstream tools listed
+in `THIRD_PARTY_NOTICES.md`.
 
-Resource provenance is tracked in `resources/RESOURCE_MANIFEST.tsv`,
-`docs/third_party_inventory.tsv`, and `docs/publication_audit.md`.
-
-## Known Limitations
-
-- The public controller performs staging, validation, and dry-run planning; long MD stages remain explicit and stage-gated.
-- Full production modes require user-supplied external scientific resources when
-  the selected mode depends on CHARMM/CGenFF, GLPA ligand parameters, DSSP,
-  Rosetta, or PyRosetta.
-
-## Troubleshooting
-
-- `ERROR: input PDB does not exist`: check the `--pdb` path relative to the directory where you launched the command.
-- `ERROR: output directory already exists`: choose a new `--output-dir` or pass `--overwrite`.
-- `repository-local mstool is not installed`: run `python scripts/bootstrap_resources.py --component mstool`.
-- `GROMACS executable not found`: set `GMX_BIN` or expose `gmx` on `PATH`.
+MembraneForger-authored source files remain MIT-licensed. The distributed
+bundled pipeline also includes GPL-covered scientific components:
+`resources/vendor/mstool` is GPL-3.0-only, and
+`scripts/insane_M3_lipids_new.py` is GPL-2.0-or-later. Because the runnable
+bundled pipeline imports and uses these components, the combined source
+distribution is provided under GPL-3.0-only terms while preserving the MIT grant
+for MembraneForger-authored files used separately. See `LICENSE`,
+`LICENSE_DEPENDENCIES.md`, and `THIRD_PARTY_NOTICES.md`.

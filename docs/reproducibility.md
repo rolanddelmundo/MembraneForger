@@ -20,9 +20,10 @@ bash run_pipeline.sh --pdb examples/minimal/inputs/minimal.pdb --config config/w
 python3 -m pytest -q
 ```
 
-The public workflow records missing `mstool` as a bootstrap action during
-minimal dry-runs. Full Stage 3 backmapping requires:
+The public workflow resolves `mstool` from `resources/vendor/mstool` and records
+the source path, upstream commit, and native-extension cache mode. Verify the
+vendored source with:
 
 ```bash
-python scripts/bootstrap_resources.py --component mstool
+python scripts/bootstrap_mstool.py --verify
 ```

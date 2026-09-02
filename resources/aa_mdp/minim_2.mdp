@@ -1,0 +1,18 @@
+; minim_2.mdp - conservative minimization before early equilibration
+integrator      = steep
+emtol           = 1000.0
+emstep          = 0.005
+nsteps          = 500000
+
+cutoff-scheme   = Verlet
+nstlist         = 10
+rlist           = 1.2
+coulombtype     = PME
+rcoulomb        = 1.2
+rvdw            = 1.2
+pbc             = xyz
+
+constraints     = none
+continuation    = no
+
+define          = -DPOSRES -DPOSRES_FC_BB=10000.0 -DPOSRES_FC_SC=10000.0 -DPOSRES_FC_LIG=10000.0 -DPOSRES_FC_LIPID=10000.0 -DDIHRES -DDIHRES_FC=4.0
