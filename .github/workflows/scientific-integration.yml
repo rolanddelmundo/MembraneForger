@@ -2,15 +2,6 @@ name: External Resource Scientific Integration
 
 on:
   workflow_dispatch:
-    inputs:
-      run_extended_smoke:
-        description: "Run an authorized larger internal smoke test"
-        required: true
-        default: "false"
-        type: choice
-        options:
-          - "false"
-          - "true"
 
 permissions:
   contents: read
@@ -32,9 +23,9 @@ jobs:
       - name: Refuse untrusted branch
         run: test "$GITHUB_REF" = "refs/heads/main"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
@@ -66,8 +57,3 @@ jobs:
             --config "$tmp_config" \
             --run-dir runs/external-resource-scientific-integration \
             --preflight-only
-
-      - name: Optional authorized internal smoke
-        if: ${{ github.event.inputs.run_extended_smoke == 'true' }}
-        run: |
-          echo "Extended internal smoke must be implemented by the authorized self-hosted environment."
