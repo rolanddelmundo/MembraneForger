@@ -30,9 +30,10 @@ def main(argv: list[str] | None = None) -> int:
     for module in OPTIONAL:
         print(f"{'PASS' if available(module) else 'OPTIONAL_MISSING'} optional import {module}")
     if (vendor / "mstool").is_dir():
-        print("PASS bootstrapped mstool resources/vendor/mstool")
+        print("PASS vendored mstool resources/vendor/mstool")
     else:
-        print("OPTIONAL_BOOTSTRAP_REQUIRED mstool: python scripts/bootstrap_resources.py --component mstool")
+        print("FAIL missing vendored mstool resources/vendor/mstool")
+        failed = True
     return 1 if failed else 0
 
 

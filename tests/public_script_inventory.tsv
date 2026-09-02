@@ -11,7 +11,11 @@ scripts/bootstrap_resources.py	public_cli
 scripts/dependency_resolver.py	public_cli
 scripts/insane_M3_lipids_new.py	public_cli
 scripts/restore_archive.py	public_cli
+scripts/verify_runtime_provenance.py	public_cli
+scripts/build_topol.sh	internal_helper
 scripts/membraneforger_workflow.py	internal_helper
 scripts/membraneforger_paths.py	library_module
 scripts/external_dependencies.py	library_module
 scripts/test_membrane_workflow.py	internal_helper
+scripts/aa_stage4.py	library_module
+scripts/finalize_membrane_templates.py	library_module

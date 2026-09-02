@@ -18,10 +18,27 @@ fi
 usage() {
   cat <<'EOF'
 Usage:
-  bash setup.sh --check
-  bash setup.sh --conda
-  bash setup.sh --container
+  ./setup.sh --auto
+  ./setup.sh --sync
+  ./setup.sh --verify
+  ./setup.sh --bootstrap mstool
+  ./setup.sh --bootstrap martini
+  ./setup.sh --check
+  ./setup.sh --conda
+  ./setup.sh --container
 EOF
+}
+
+conda_frontend() {
+  if command -v micromamba >/dev/null 2>&1; then
+    echo micromamba
+  elif command -v mamba >/dev/null 2>&1; then
+    echo mamba
+  elif command -v conda >/dev/null 2>&1; then
+    echo conda
+  else
+    return 1
+  fi
 }
 
 check_resources() {
@@ -55,8 +72,68 @@ sys.exit(1 if failed else 0)
 PY
 }
 
-mode="${1:---check}"
+verify_installation() {
+  mkdir -p work outputs logs inputs runs .local
+  "$PYTHON_BIN" scripts/bootstrap_mstool.py --verify
+  "$PYTHON_BIN" scripts/verify_runtime_provenance.py
+  "$PYTHON_BIN" -m membraneforger.cli doctor
+}
+
+sync_environment() {
+  frontend="$(conda_frontend || true)"
+  if [[ -z "${frontend:-}" ]]; then
+    echo "WARN: no conda/mamba/micromamba executable found; skipping environment synchronization"
+    echo "Fix: install Mambaforge/Micromamba, then rerun ./setup.sh --sync"
+    return 0
+  fi
+  case "$frontend" in
+    micromamba)
+      "$frontend" env update -n membraneforger -f environments/environment.yml
+      ;;
+    mamba|conda)
+      "$frontend" env update -n membraneforger -f environments/environment.yml --prune
+      ;;
+  esac
+}
+
+bootstrap_component() {
+  component="${1:-}"
+  case "$component" in
+    martini)
+      "$PYTHON_BIN" scripts/bootstrap_resources.py --component martini --verify
+      ;;
+    mstool)
+      "$PYTHON_BIN" scripts/bootstrap_resources.py --component mstool
+      "$PYTHON_BIN" scripts/bootstrap_mstool.py --verify
+      ;;
+    *)
+      echo "ERROR: unknown bootstrap component: ${component:-<missing>}" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+}
+
+mode="${1:---verify}"
 case "$mode" in
+  --auto)
+    sync_environment
+    bootstrap_component martini
+    if ! "$PYTHON_BIN" scripts/bootstrap_mstool.py --verify >/dev/null 2>&1; then
+      bootstrap_component mstool
+    fi
+    verify_installation
+    ;;
+  --sync)
+    sync_environment
+    ;;
+  --verify)
+    verify_installation
+    ;;
+  --bootstrap)
+    shift
+    bootstrap_component "${1:-}"
+    ;;
   --check)
     mkdir -p work outputs logs inputs
     check_resources
@@ -66,9 +143,9 @@ case "$mode" in
   --conda)
     cat <<'EOF'
 Run this from the repository root with any Conda-compatible frontend:
-  conda env create -f environments/environment.yml
+  conda env create -n membraneforger -f environments/environment.yml
   conda activate membraneforger
-  python scripts/check_python_environment.py
+  ./setup.sh --verify
 EOF
     ;;
   --container)

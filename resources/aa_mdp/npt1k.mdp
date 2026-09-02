@@ -2,7 +2,7 @@ title		= NPT EQ
 define = -DPOSRES -DPOSRES_FC_BB=1000.0 -DPOSRES_FC_SC=1000.0 -DPOSRES_FC_LIPID=1000.0 -DDIHRES_FC=1000.0
 ; Run parameters
 integrator	= md		; leap-frog integrator
-nsteps		= 2500000	; 2 * 100000 = 200 ps (not 1 ns)
+nsteps        = 500000
 dt		    = 0.002		; 2 fs
 ; Output control
 nstxout		= 100000		; save coordinates every 0.2 ps

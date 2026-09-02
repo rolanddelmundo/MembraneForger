@@ -18,6 +18,9 @@ stage2:
 stage3:
   input_aa_protlig: examples/minimal/inputs/minimal.pdb
   input_opm_reference: null
+  resources:
+    membrane_templates: resources/templates
+    membrane_toppar: resources/external/charmm36_membrane
   placement:
     mode: aa_reference_to_backmapped
     use_opm: false
@@ -30,6 +33,10 @@ stage3:
       enabled: false
 
 stage4:
+  resources:
+    aa_mdp: resources/aa_mdp
+    charmm36_forcefield: resources/external/charmm36.ff
+    membrane_toppar: resources/external/charmm36_membrane
   ligand_params: []
   dssp_required: false
   charmm36_required: false
@@ -37,3 +44,8 @@ stage4:
   ligand_params_required: false
   parameter_generation_enabled: false
   pyrosetta_plugins_enabled: false
+  n_terminal_patch: ACE
+  c_terminal_patch: CT3
+  slice_buffer_nm: 1.0
+  z_slab_padding_nm: 1.5
+  salt_concentration_molar: 0.15

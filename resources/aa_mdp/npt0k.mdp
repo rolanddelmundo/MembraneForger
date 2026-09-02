@@ -2,7 +2,7 @@ title		= NPT EQ
 define = -DLIG_CONSTRAINTS -DFORCE=100.0
 ; Run parameters
 integrator	= md		; leap-frog integrator
-nsteps		= 25000000	; 2 * 100000 = 200 ps (not 1 ns)
+nsteps        = 500000
 dt		    = 0.002		; 2 fs
 ; Output control
 nstxout		= 100000		; save coordinates every 0.2 ps

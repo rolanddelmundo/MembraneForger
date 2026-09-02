@@ -1,20 +1,34 @@
-MIT License
+MembraneForger Source Distribution License Notice
 
-Copyright (c) 2026 MembraneForger contributors
+This repository is a combined source distribution. MembraneForger-authored
+files remain MIT-licensed. The bundled runnable pipeline also includes and
+directly uses GPL-covered scientific components:
 
-This license covers MembraneForger project-authored code and documentation
-only. It does not relicense separately licensed dependencies, user-supplied
-force fields, bootstrapped GPL dependencies, Martini force-field files, DSSP,
-GROMACS, Rosetta, PyRosetta, CHARMM, CGenFF, ligand parameters, or private
-regression fixtures. See `THIRD_PARTY_NOTICES.md`,
-`LICENSE_DEPENDENCIES.md`, and `docs/third_party_inventory.tsv`.
+- `resources/vendor/mstool/`: GPL-3.0-only
+- `scripts/insane_M3_lipids_new.py`: GPL-2.0-or-later
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software.
+Because MembraneForger imports the vendored GPL-3.0-only `mstool` package into
+the Python process and distributes it with the runnable pipeline, the combined
+bundled MembraneForger pipeline is distributed under GPL-3.0-only terms. The
+GPL-2.0-or-later INSANE-derived component is distributed, for the combined
+pipeline, under its GPL-3.0-compatible option.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+This notice does not remove or narrow the MIT license grant for
+MembraneForger-authored files when those files are used separately from the
+combined bundled GPL-covered pipeline.
+
+Full license texts are retained here:
+
+- `LICENSES/MIT.txt`
+- `LICENSES/GPL-3.0-only.txt`
+- `LICENSES/GPL-2.0-or-later.txt`
+- `LICENSES/Apache-2.0.txt`
+- `resources/vendor/mstool/LICENSE`
+
+Third-party provenance and modification notices are recorded in
+`THIRD_PARTY_NOTICES.md`, `LICENSE_DEPENDENCIES.md`,
+`resources/vendor/mstool/MODIFICATIONS.md`, `docs/insane_modifications.md`,
+`docs/runtime_provenance.tsv`, and `docs/third_party_inventory.tsv`.
+
+External CHARMM, CGenFF, Rosetta, PyRosetta, ligand, and local scientific
+resource trees are not part of this source distribution.
