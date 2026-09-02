@@ -2,7 +2,7 @@ title		= NVT EQ for b2arWT
 define = -DPOSRES -DPOSRES_FC_BB=10000.0 -DPOSRES_FC_SC=10000.0 -DPOSRES_FC_LIPID=10000.0 -DDIHRES_FC=10000.0 -DDIHRES -DDIHRES_FC=4.0 
 ; Run parameters
 integrator	= md		; leap-frog integrator
-nsteps		= 500000		; 2 * 100000 = 200 ps
+nsteps        = 300000
 dt		    = 0.001	; 2 fs
 ; Output control
 nstxout		= 50000		; save coordinates every 0.2 ps

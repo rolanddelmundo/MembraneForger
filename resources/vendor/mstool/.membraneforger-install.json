@@ -1,0 +1,1455 @@
+{
+  "exact_commit": "2d37f9d3e89279ddd9125cc74da1f5e01153586c",
+  "installed_files": [
+    {
+      "path": "FF/amber14/DNA.OL15.xml",
+      "sha256": "200e7cd116481fb47ed50bfd29deefb84a1e488d73d262c3f3f278b36b80ffa5",
+      "size_bytes": 105594
+    },
+    {
+      "path": "FF/amber14/DNA.bsc1.xml",
+      "sha256": "4ef74475a35fa6a2ae016df926c25eec6ad86a5b15c7e41820b64dd278a0e122",
+      "size_bytes": 102752
+    },
+    {
+      "path": "FF/amber14/RNA.OL3.xml",
+      "sha256": "61b793a49ded3c9c3bd9fbab328bc1b20b2b4ce7bc2358d537892ca64b085127",
+      "size_bytes": 97695
+    },
+    {
+      "path": "FF/amber14/amber14-all.xml",
+      "sha256": "2a58336a588cda529c1eefbc78c3fe5ec2ae01ec6ed1acf6e1b59ec7410baeb7",
+      "size_bytes": 158
+    },
+    {
+      "path": "FF/amber14/lipid17.xml",
+      "sha256": "f974506df14202973637cf5e1d094af5e6098eb04afd2b68c523589ffcf2e780",
+      "size_bytes": 534086
+    },
+    {
+      "path": "FF/amber14/protein.ff14SB.xml",
+      "sha256": "d9f9779c09d67cd5f8bc657692f174ffab14c469dfd06d560ac1899fa7e976b8",
+      "size_bytes": 224056
+    },
+    {
+      "path": "FF/amber14/protein.ff15ipq.xml",
+      "sha256": "0085c9dc2818a28501f6074a0bb46b994a9787bf4010ff86417fe014b11ab622",
+      "size_bytes": 298257
+    },
+    {
+      "path": "FF/amber14/spce.xml",
+      "sha256": "b964862a2f11f30bff45d2e0cfad6edea98d96ad701078e5eb1bb8ae258a4577",
+      "size_bytes": 18755
+    },
+    {
+      "path": "FF/amber14/tip3p.xml",
+      "sha256": "3f4b188dbcb6c02863230eaca231e927fb6bf3307ce947d8a50d0f46f6dd83d9",
+      "size_bytes": 19070
+    },
+    {
+      "path": "FF/amber14/tip3pfb.xml",
+      "sha256": "6d8e47161b69da99d1f01982939ae078cd7399a5344c7513eef3a207ca6f6128",
+      "size_bytes": 19596
+    },
+    {
+      "path": "FF/amber14/tip4pew.xml",
+      "sha256": "0638b2492b0be288a63d8ba81e1d98091d9847b09b5598e8fa2cff1123c83546",
+      "size_bytes": 20076
+    },
+    {
+      "path": "FF/amber14/tip4pfb.xml",
+      "sha256": "b965f0aaa584255e485b4fd3b7448e0848326493d3c8a3dde2a3addbe7c0421c",
+      "size_bytes": 19897
+    },
+    {
+      "path": "FF/amber99/amber99sbildn.xml",
+      "sha256": "27b79a1ff342d95d6347f3f4797b4c84dbdf98e2c838d1b6b18979f77b04110d",
+      "size_bytes": 473784
+    },
+    {
+      "path": "FF/amber99/tip3p.xml",
+      "sha256": "607f0fc9566c3770db2d9eb579fed68c4157578445eed1ec0aa7dccc23d57a6c",
+      "size_bytes": 891
+    },
+    {
+      "path": "FF/charmm36/charmm36.xml",
+      "sha256": "133ad1c14d672ce054cfec3f8ebf5f0e72a452b0121ca0d40fd627c27d296117",
+      "size_bytes": 5891720
+    },
+    {
+      "path": "FF/charmm36/chyo.xml",
+      "sha256": "76d3d95b561cafe26a8efa5702663f0155ecf1b93fbd820d90738ca2de4daef2",
+      "size_bytes": 12485
+    },
+    {
+      "path": "FF/charmm36/clol.xml",
+      "sha256": "ab9b13993aa0133f17ffd04dcf2fc1f3c9d412795bd168b388eacdc015700505",
+      "size_bytes": 7480
+    },
+    {
+      "path": "FF/charmm36/pip.xml",
+      "sha256": "eee7903cf3e8b6f073a90acd9339f063752104d701424523b75eaf38ed01c4c3",
+      "size_bytes": 75582
+    },
+    {
+      "path": "FF/charmm36/water.xml",
+      "sha256": "46215f85e84bde99ab49b2557f79541d1fb22d193c2b09c41915e3ae1002284c",
+      "size_bytes": 7889
+    },
+    {
+      "path": "FF/martini2.2/martini_lipids_add.itp",
+      "sha256": "4bec7a9e51236b4266a973dab952afd5a1a724fbe4f0e0b2e246b76ff04a0136",
+      "size_bytes": 24164
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.0_ions.itp",
+      "sha256": "6ffff5b22d82bc1daf30abdbdb689b52eff68aa3c9e1f2703afc947bfb923922",
+      "size_bytes": 1456
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.0_lipids_all_201506.itp",
+      "sha256": "7dd73a43ea827bb7c0bf6eaade11d62874dbdfd97dd5a1472a8e28731fb5faff",
+      "size_bytes": 1185038
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2.itp",
+      "sha256": "6caa464cdd21d8c4e24740080ede8dcb0bbacfd0cca700fd4f3f1067e78f975d",
+      "size_bytes": 50916
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2.modified.LJ.itp",
+      "sha256": "8de6898851033a0e12892808f8e06cd1d85a72ad89d78c46c79071d969133da8",
+      "size_bytes": 45907
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2.modified.itp",
+      "sha256": "c31a114999b5ed5015ac61724a5e9471aeffcd3955c4554657d9bb8776c4611a",
+      "size_bytes": 52595
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/ALA/ALA.itp",
+      "sha256": "220458075806e32e8a9e1da4c08c578d1c0b3c6853c8dd3e4fbdbcc7054cec56",
+      "size_bytes": 526
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/ALA/input.pdb",
+      "sha256": "fe019ff5896381099f61f183c5069f9984c7e76701b868e7569152c8293c8348",
+      "size_bytes": 1241
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/ALA/input_cg.pdb",
+      "sha256": "557a2aa73c24a145fcc3384496e94a531e174a73cb528cd214c5e52a3051fd7a",
+      "size_bytes": 216
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/ARG/ARG.itp",
+      "sha256": "ad385549729412e69ad0fd32c03c7468b6e9fcb0088cf9eed06b85de0c315594",
+      "size_bytes": 766
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/ARG/input.pdb",
+      "sha256": "a5bd7a46440bd1414b5854b1a68c59a1171c481f17e310ebd1943593442b6082",
+      "size_bytes": 2347
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/ARG/input_cg.pdb",
+      "sha256": "ac61598e6eca890f33f116d4dd896c88f01106388a672e1d0c0323bc40d107f2",
+      "size_bytes": 374
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/ASN/ASN.itp",
+      "sha256": "e232602c80eeaac9da9594a709c2a7855f7b4cda357fad6c7bd3a4235e0d3130",
+      "size_bytes": 633
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/ASN/input.pdb",
+      "sha256": "8681201b6185b8beb6972e5cd49d20bc1f17c6cbcc243ae9b25d765b81a7ef99",
+      "size_bytes": 1557
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/ASN/input_cg.pdb",
+      "sha256": "f09237a289cd9d097d08866ce753ab4eed7245a47012cfdbbeb473cda497a010",
+      "size_bytes": 308
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/ASP/ASP.itp",
+      "sha256": "0b847bff6a88ca80a142fa8424bb8cab108137b36a34f198ca38f20ac3935d6f",
+      "size_bytes": 633
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/ASP/input.pdb",
+      "sha256": "ad0c84c5659d247ff0464848f3546f757f42147f0a18b84653b88581073a3e5d",
+      "size_bytes": 1399
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/ASP/input_cg.pdb",
+      "sha256": "e9335936d6d8859fb25fa9a1c8790e10d9aad7ea0928ced779dfca2b16b73c69",
+      "size_bytes": 308
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/CYS/CYS.itp",
+      "sha256": "876144a73af0808924fb1ed0b97515e15e8dd1add14164ffc5aa1168965dff36",
+      "size_bytes": 633
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/CYS/input.pdb",
+      "sha256": "e385f91e7f8f6d31428889801b5f54077b03ecb9d149b82e69dd535ec5b99178",
+      "size_bytes": 1320
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/CYS/input_cg.pdb",
+      "sha256": "b7d28a4907708d36bcb7e9635ca41a0b7e5bed7ffeac565d52b99bd005d0fc1a",
+      "size_bytes": 308
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/GLN/GLN.itp",
+      "sha256": "6e4aec45c723f1235a72eb7d9a88e9fa8282a07210277c18a9f2c9cc6edf65fe",
+      "size_bytes": 633
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/GLN/input.pdb",
+      "sha256": "828f06897b697ff62bda5cce4a4269c1db8689628b9597a4709f11c2d29ba880",
+      "size_bytes": 1794
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/GLN/input_cg.pdb",
+      "sha256": "f82367514a4ba0b55c77b2a9d1654a3bce9b3fa7aa4ad175a6f8d0948792fb73",
+      "size_bytes": 308
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/GLU/GLU.itp",
+      "sha256": "b1e830c4b2ac964faaf04ad01a487a94f7d8c2b02580a67ca88a7af065af0569",
+      "size_bytes": 633
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/GLU/input.pdb",
+      "sha256": "b68f691351dbe7ef0cbba32a577df571d6714437caaf20bd5d84cd1f1a8bd9f9",
+      "size_bytes": 1636
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/GLU/input_cg.pdb",
+      "sha256": "b91eb411ce941d5afc889be5e00e555455efa9c3d3131dad9f68118d7b36d246",
+      "size_bytes": 308
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/GLY/GLY.itp",
+      "sha256": "89cd5589f65400f304a3cead384e27a3865b401fa80966c8f33db0ad0037a0b2",
+      "size_bytes": 526
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/GLY/input.pdb",
+      "sha256": "eadc925b83832352ceba55cf358a9db0dadde3c815973e852cf6c6a5f4780b26",
+      "size_bytes": 1004
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/GLY/input_cg.pdb",
+      "sha256": "171690dec7cd0671c5c1fe8f9759122af7b3e06c6f2f38ad8c5858eee193b7f4",
+      "size_bytes": 228
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/HIE/input.pdb",
+      "sha256": "a51b3928ced56903e98e65027450a7303872965dbf31a39276573389705e2d57",
+      "size_bytes": 1715
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/HIE/input_cg.pdb",
+      "sha256": "c5e3c21095f5f0af283b4e8370a86e158349e4216c870f120d5797f6e9dd4061",
+      "size_bytes": 144
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/HIS/HIS.itp",
+      "sha256": "f2a2ed06466543934949530311ec085afdf817ec26c7e07ce3944cceb84a2315",
+      "size_bytes": 972
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/HIS/input.pdb",
+      "sha256": "a48622557e7b7a2817c5a70b4970213ef3cce5e702151153ce87ea062ddec5e9",
+      "size_bytes": 1794
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/HIS/input_cg.pdb",
+      "sha256": "bf0fccfd45d50243d782b326d8b46e5f37b8640f5c73c86f0164be63a91132a9",
+      "size_bytes": 468
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/ILE/ILE.itp",
+      "sha256": "76c61420a178962639682413d93a2c6b6ba82edda8ddfd34c0a00f1634dcbea0",
+      "size_bytes": 609
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/ILE/input.pdb",
+      "sha256": "c636485902829b34dfeb71cf46906aa3f615458efb9adaec4aead1499248f912",
+      "size_bytes": 1952
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/ILE/input_cg.pdb",
+      "sha256": "bd4a0eee2dff1e5d45cad1d5500fa9a4410973761c5c0a74220d4478a2f18bc0",
+      "size_bytes": 308
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/LEU/LEU.itp",
+      "sha256": "30dd3c6c18b24dcd362d8b1b4912993ea387e9d25b1567b0f9fe3a949b406bfd",
+      "size_bytes": 633
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/LEU/input.pdb",
+      "sha256": "51e3fed49613be6630c9ebd332a45ea126d0388426b601b56e6f486cd41bd722",
+      "size_bytes": 1952
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/LEU/input_cg.pdb",
+      "sha256": "0d268f976ab17253dee39b535d1fef31d15276adc01da8c001af02d79906e485",
+      "size_bytes": 308
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/LYS/LYS.itp",
+      "sha256": "60ccd66498eafd0a2f3e17716a2af2a72dacce871b7deb4ca7a24bad37691fa8",
+      "size_bytes": 766
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/LYS/input.pdb",
+      "sha256": "67686cd66853e90206927af8d66d04a5f4606f63bbacab90689406f153014150",
+      "size_bytes": 2189
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/LYS/input_cg.pdb",
+      "sha256": "e3a37ef94ee02299d6fd72a21d3f3b073d8a8bc1775b5252cf1d2b791acab75c",
+      "size_bytes": 388
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/MET/MET.itp",
+      "sha256": "0eb99b31d261acc9f12e0e4aac830a351adb4d0fa1c8d7f8409bf0eb2c68ae52",
+      "size_bytes": 633
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/MET/input.pdb",
+      "sha256": "bae0e3b4d036fa03ffbaadae1f66a29074c20aa42c5fa1ed3fcf4721ace977af",
+      "size_bytes": 1794
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/MET/input_cg.pdb",
+      "sha256": "7d3f36755a8fc36fd169642429eb965e6d90b8cce04d90067babe083e128490b",
+      "size_bytes": 308
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/PHE/PHE.itp",
+      "sha256": "d41af2db8adbccbd68e71a8ab8af1cc83b3ba14b096fee84daad59a28022ab5c",
+      "size_bytes": 972
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/PHE/input.pdb",
+      "sha256": "b78d2d05b662698bbf64526a195b62889051c3b25f9dee7661998016bee6a173",
+      "size_bytes": 2031
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/PHE/input_cg.pdb",
+      "sha256": "c5f4af364d973d32c97e0cc55e5f9fca571f4422840bce62bfc14ee9d03fbb57",
+      "size_bytes": 468
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/PRO/PRO.itp",
+      "sha256": "5e1da8de2a64bd8980114c05f9997ce7c45a8609ed9eb11b93de87733d62e044",
+      "size_bytes": 633
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/PRO/input.pdb",
+      "sha256": "b291d33aa323badbadeb2e9d54c1112b911f09af0cab1dc2fcf4fecb0f41ba1a",
+      "size_bytes": 1557
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/PRO/input_cg.pdb",
+      "sha256": "991a474451c4f8750ee5e879c5d978065c6b1fa44469e6e8fa3eea30be651848",
+      "size_bytes": 308
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/SER/SER.itp",
+      "sha256": "e6d77eb0fb9b7076769e40ceb915986cc2c8848e88b1a000d592f9c8d5a69822",
+      "size_bytes": 633
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/SER/input.pdb",
+      "sha256": "06b3e307e2268aeb922c287d41182971bea22380b00b3886fb7a837612adbcf6",
+      "size_bytes": 1320
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/SER/input_cg.pdb",
+      "sha256": "9a37d3513d6e37027e991fcda8efbb6e12ece2200f01f1a0763ee296fdbbee01",
+      "size_bytes": 308
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/THR/THR.itp",
+      "sha256": "8fa6d636a4599ca845c093ab63c6eb95c8a0f87299e87c62af460c812c89ebb8",
+      "size_bytes": 609
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/THR/input.pdb",
+      "sha256": "1663b06eae822edc70f7f8d8bfce19cab723c9597157a5ddf8e93903f76218c6",
+      "size_bytes": 1557
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/THR/input_cg.pdb",
+      "sha256": "20e78a9480a369c0692de8bc9cfc410c09808ddecbc7650af879b6dc9ffa5f19",
+      "size_bytes": 308
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/TRP/TRP.itp",
+      "sha256": "28a31161609f4cc054c3389b765ad9bb6e33da42e898cf8196539fcc811c249c",
+      "size_bytes": 1140
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/TRP/input.pdb",
+      "sha256": "107b947e0958a45fceaea7ef3951927d2360d91cd0fc86abd6d50dd2184cba0d",
+      "size_bytes": 2347
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/TRP/input_cg.pdb",
+      "sha256": "3841a33b11881cb0088f38348cea4ab32f81f00bc899c81758365f90981e0555",
+      "size_bytes": 548
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/TYR/TYR.itp",
+      "sha256": "eadb1abc8f9c7966d86b9498d0b7e2fe3dce52361e62e46d58a095259cf23543",
+      "size_bytes": 972
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/TYR/input.pdb",
+      "sha256": "93eae2394705d5334b1e09c85ed2218e5d0f1a8c37833ee998aa914af721f8dd",
+      "size_bytes": 2110
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/TYR/input_cg.pdb",
+      "sha256": "219dd73a30dc9c1a01ab3473cbfe49cd7e9d21f1af49eba2d6acc37f9472381b",
+      "size_bytes": 468
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/VAL/VAL.itp",
+      "sha256": "1f0252d0be5a82a9ec0be44d8d8831be3619b20d7beeb2ebd96a726c379c59a5",
+      "size_bytes": 609
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/VAL/input.pdb",
+      "sha256": "320531be7fe14a217b2105008a9a0bf24a3b8538b948e55a5c73d2280bac0fd9",
+      "size_bytes": 1715
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/VAL/input_cg.pdb",
+      "sha256": "d023b1d92b812fc22f932e65ed3201df6655ff149c08de2032a4fcb959cf1e0f",
+      "size_bytes": 308
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/martinize_v2.6.py",
+      "sha256": "6c7551a9bd1b8bb676ae5f1884cbe2b7d20c421e66177247ed4b0ab78c27e591",
+      "size_bytes": 370823
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/protein.gro",
+      "sha256": "f368f0b4a09d1fb5c0a65da382dfb953c110289c483c84458604b505a2acf54b",
+      "size_bytes": 410954
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/proteins.itp",
+      "sha256": "8b44e5f8656579457516e8cd87ac4304325a5708dce09ab4cef1862b242fa575",
+      "size_bytes": 14164
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/proteins_HIS.itp",
+      "sha256": "34a3185d7547db8f56eb686938aa0fc1647ba2a7d0f6368d722e0931137f07ff",
+      "size_bytes": 3247
+    },
+    {
+      "path": "FF/martini2.2/martini_v2.2_proteins/run_martinize.sh",
+      "sha256": "cd25edeb63ad2e4ad2c639e24c8fcb819d2b93d503827eb0803678b84d4898ca",
+      "size_bytes": 642
+    },
+    {
+      "path": "FF/martini2.2/martinize.py",
+      "sha256": "446c096cafd859e3a5aeb86dc1bd7904c04798257fd0e69135f8b85acaf224a9",
+      "size_bytes": 271515
+    },
+    {
+      "path": "FF/martini2.2/martinize_v2.5.py",
+      "sha256": "446c096cafd859e3a5aeb86dc1bd7904c04798257fd0e69135f8b85acaf224a9",
+      "size_bytes": 271515
+    },
+    {
+      "path": "FF/martini2.2/martinize_v2.6.py",
+      "sha256": "6c7551a9bd1b8bb676ae5f1884cbe2b7d20c421e66177247ed4b0ab78c27e591",
+      "size_bytes": 370823
+    },
+    {
+      "path": "FF/martini2.2/nonbond_params",
+      "sha256": "bd0ea56d7ac79beecac515c71544a8b29621c345471e58f5e7f87afd0cc12750",
+      "size_bytes": 47712
+    },
+    {
+      "path": "FF/martini2.2/nonbond_params.py",
+      "sha256": "5d0f55209a60e2ad68527c97cf41697ec477c7791b17efbdaa6c462c48d193d3",
+      "size_bytes": 506
+    },
+    {
+      "path": "FF/martini2.2/nonbond_params_LJ",
+      "sha256": "398782681c782479eabd7e54d62e63b504ba798f7f8570d3a0508b9f2e4c90b7",
+      "size_bytes": 40990
+    },
+    {
+      "path": "FF/martini2.2/structures/CHL1.pdb",
+      "sha256": "abec2dfb2010423b523614133a6df74e6fd239af6172686ee3cb7bc8678b2d7d",
+      "size_bytes": 615
+    },
+    {
+      "path": "FF/martini2.2/structures/CHOL.pdb",
+      "sha256": "73a74cda279aa53c044ae9fd9d102756e799d147595d2d8e39487d17c208059e",
+      "size_bytes": 607
+    },
+    {
+      "path": "FF/martini2.2/structures/P005.itp",
+      "sha256": "d592a43c17c2302078ae2dc141e9234a44dcf147deae1cca058267d4237e5dc3",
+      "size_bytes": 22137
+    },
+    {
+      "path": "FF/martini2.2/structures/P005.pdb",
+      "sha256": "4ffaf6bc724537139ef1bc3b58eebb93c8ddb93015ae75b8266c603b8eb895e2",
+      "size_bytes": 4337
+    },
+    {
+      "path": "FF/martini2.2/structures/P006.itp",
+      "sha256": "d8c1d2c634057bb10cad6d98d93e67fdce6f422db41bfca486bf70550f582e49",
+      "size_bytes": 24771
+    },
+    {
+      "path": "FF/martini2.2/structures/P006.pdb",
+      "sha256": "a55758f7835af0a90589328c3bfcf880d6640335c51c6090ee5b682affe8952b",
+      "size_bytes": 5048
+    },
+    {
+      "path": "FF/martini2.2/structures/P007.itp",
+      "sha256": "d9e1ee8a7b5e06922af38780d8e7ee70589f1e24da357c6d20a75297cce6af29",
+      "size_bytes": 28287
+    },
+    {
+      "path": "FF/martini2.2/structures/P007.pdb",
+      "sha256": "5fb5260e3c0cbb43658fbd333c1eda2492799d579e4c5ca70bee4b91377ef825",
+      "size_bytes": 5759
+    },
+    {
+      "path": "FF/martini2.2/structures/P008.itp",
+      "sha256": "5bcc0cfb8e350d54047d5bac08ff1d7383e3a46e76c7e2c9c7da82cd416ff209",
+      "size_bytes": 35319
+    },
+    {
+      "path": "FF/martini2.2/structures/P008.pdb",
+      "sha256": "92c3770b9e16be569825f0de9b04bf0f1bf10582ca9bcfc79f62721882766d1d",
+      "size_bytes": 7181
+    },
+    {
+      "path": "FF/martini2.2/structures/P010.itp",
+      "sha256": "f465f02022afd846e0de9db2ab700d91c85a5879ae2ae6af68e21be37f69d804",
+      "size_bytes": 40587
+    },
+    {
+      "path": "FF/martini2.2/structures/P010.pdb",
+      "sha256": "4b00e0d098a43ef243af9b0d486cb5903b1014814ed8f218dc4549807fba6bc3",
+      "size_bytes": 8603
+    },
+    {
+      "path": "FF/martini2.2/structures/chol_test/chol.EM.pdb",
+      "sha256": "26c7ab6ef00bd162aa5d67063ee4d88bd79945f61dc866042ccf349464d2a01c",
+      "size_bytes": 703
+    },
+    {
+      "path": "FF/martini2.2/structures/chol_test/chol.EM2.pdb",
+      "sha256": "26c7ab6ef00bd162aa5d67063ee4d88bd79945f61dc866042ccf349464d2a01c",
+      "size_bytes": 703
+    },
+    {
+      "path": "FF/martini2.2/structures/chol_test/chol.martini.dms",
+      "sha256": "de3688972c248abe74b87089a6f2173cf347e430364c18a7792be940111ece33",
+      "size_bytes": 126976
+    },
+    {
+      "path": "FF/martini2.2/structures/chol_test/chol.martini2.dms",
+      "sha256": "51a20c407f5e4ce9a2d1bf68ff455e43cb52cb883b309361a05c7f33f9ccfbd0",
+      "size_bytes": 126976
+    },
+    {
+      "path": "FF/martini2.2/structures/chol_test/run.py",
+      "sha256": "d794bb9144be6d77733eb321b65829c09ce178d950edae9204f1c097553f222c",
+      "size_bytes": 541
+    },
+    {
+      "path": "FF/martini2.2/structures/chol_test/topol.top",
+      "sha256": "4ce787240939c019d8e2327895228aff9e15180b3853c782b240194421b58ed1",
+      "size_bytes": 1256
+    },
+    {
+      "path": "FF/martini2.2/structures/makepore.py",
+      "sha256": "1c2662b2a9b2b6d7a4e6957248cf9072fb6e62ebea669d72f8a32cfa67718f15",
+      "size_bytes": 3699
+    },
+    {
+      "path": "FF/martini2.2/structures/waterpore_test/P008.EM.dms",
+      "sha256": "9ad4a53e4f80f854a03ac355860db9303f7fa441ed0563072a948e291a33ad0f",
+      "size_bytes": 143360
+    },
+    {
+      "path": "FF/martini2.2/structures/waterpore_test/P008.dms",
+      "sha256": "82412a324eb882d74d647b258bd436d089b873ef059e4d256e9c6dfc645da5e6",
+      "size_bytes": 196608
+    },
+    {
+      "path": "FF/martini2.2/structures/waterpore_test/P008.itp",
+      "sha256": "5698cbcc684ddb5886d9e3941668d9e8e388d464910fa9d94c71dadab80f9497",
+      "size_bytes": 39389
+    },
+    {
+      "path": "FF/martini2.2/structures/waterpore_test/P008.pdb",
+      "sha256": "61d48308deabfe26684ea4cab4db95ac39454131f5ca55695a2a12f37129f15d",
+      "size_bytes": 7971
+    },
+    {
+      "path": "FF/martini2.2/structures/waterpore_test/run.py",
+      "sha256": "249b32c80e9e6b8a64c8ea2cf8236a75a7b5c1ed24e2b8d63b96c86ac8bada83",
+      "size_bytes": 385
+    },
+    {
+      "path": "FF/martini2.2/structures/waterpore_test/topol.top",
+      "sha256": "5db39cab5ef758dcf9cca3e0f11859daf30aec97e1fe16d4afe5f2631c686510",
+      "size_bytes": 97
+    },
+    {
+      "path": "FF/martini2.2/ti.itp",
+      "sha256": "02e8304ca4425bff84f954a9910541386edf073f344a2344bf004769ce424ae6",
+      "size_bytes": 583
+    },
+    {
+      "path": "FF/martini2.2/toy.itp",
+      "sha256": "1955a975f883cc16e76bb10628a40a83d9203a425118de964d17746c9b742ef9",
+      "size_bytes": 424
+    },
+    {
+      "path": "FF/martini2.2/tp.itp",
+      "sha256": "5a096a928ecd7d1307ae27b34feabaede2529632572f547e86abf6251e842ca2",
+      "size_bytes": 612
+    },
+    {
+      "path": "FF/martini3.0.0/lipids.itp",
+      "sha256": "eb3aceb73a28063fe2482a4bb5471694c0c2b02596af6c60af39833aa12b10da",
+      "size_bytes": 3024
+    },
+    {
+      "path": "FF/martini3.0.0/martini.itp",
+      "sha256": "8392fdd72e9c2fb8ef0e20967868a57ac237c24fa569d6963592909796a7e39a",
+      "size_bytes": 16031459
+    },
+    {
+      "path": "FF/martini3.0.0/phospholipids.itp",
+      "sha256": "4567922a7d702d0631f426647eb3c0ee8be3164588b64d007269f088da420d13",
+      "size_bytes": 207829
+    },
+    {
+      "path": "FF/martini3.0.0/protein.itp",
+      "sha256": "8559f7b7c7e8a2cf6461d4a440ebcdff292e1e2edab5f3c765ce322179047c61",
+      "size_bytes": 9372
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "c53a65c2fd561c87eaabf1072ef5dcab8653042bc15308465f52413585eb6271",
+      "size_bytes": 35146
+    },
+    {
+      "path": "__init__.py",
+      "sha256": "5d2b144615c7fc9018d645acf8f9839a4e96eb8fd04e05ad088134bb2a014a68",
+      "size_bytes": 2886
+    },
+    {
+      "path": "authors.py",
+      "sha256": "f12dcbe3ecf76c312ba5fa72cd151587ca15c3723da5b22d62513d0f78f0621f",
+      "size_bytes": 31
+    },
+    {
+      "path": "backup/amberselection_20240510.py",
+      "sha256": "ef02d650b59ec012cd43c33df976ec6c20530703e67ac60a659e3c123b530578",
+      "size_bytes": 966
+    },
+    {
+      "path": "backup/backmap.py",
+      "sha256": "f806b67e2a9df50f2788501da14e4ffc1a450d037f1ea91230872fe3bb4a01ab",
+      "size_bytes": 12487
+    },
+    {
+      "path": "backup/bilayer_240429.py",
+      "sha256": "f7fac02b64293d8126808a94e680af467741f5f962bcb5591a1abefe1e86d4ce",
+      "size_bytes": 12539
+    },
+    {
+      "path": "backup/bilayerbuilder_240429.py",
+      "sha256": "3320575b76b65cb70d469201598e3055429abfb9a6699cf3195efc8c14117a1c",
+      "size_bytes": 15739
+    },
+    {
+      "path": "backup/cg2aa/cg2aa.py",
+      "sha256": "a64df0d9e178b3dbe7c53e3090812ec08feeaaadc8f20014e1dda28d64017459",
+      "size_bytes": 35682
+    },
+    {
+      "path": "backup/cg2aa/ompfcg.pdb",
+      "sha256": "91013e2e49e64e0ede1b413ad3be36ffa035ffe66969c7122cdba017ec50afc3",
+      "size_bytes": 400746
+    },
+    {
+      "path": "backup/fill.bck.py",
+      "sha256": "311713e8a4ea7e2120f4c89d5088932acc685b138494554fffd1255155178c0b",
+      "size_bytes": 5989
+    },
+    {
+      "path": "backup/fill_loops.py",
+      "sha256": "523035903ebf114703ce7a1fa6cae1b599191b80114dd50eec1c610ef390f719",
+      "size_bytes": 2548
+    },
+    {
+      "path": "backup/fill_side.py",
+      "sha256": "133cb55fcb6c696e6f2500a929aa77270b51103f48a21b81b14cb275e42542ae",
+      "size_bytes": 1942
+    },
+    {
+      "path": "backup/gmx2dms2.py",
+      "sha256": "b935cfd5a5c375694265636905ca09a7a76779c2ec2d674c96b25e2c116d1793",
+      "size_bytes": 12782
+    },
+    {
+      "path": "backup/loopmodeler_230719.py",
+      "sha256": "34ed0c9fdea48d081765ad28edea07791efa63894f9d59f565f49faf46fd134f",
+      "size_bytes": 11808
+    },
+    {
+      "path": "backup/martinizedms.231213.py",
+      "sha256": "7ccd3dd1ea7503d12fa4e1634df8ad15313b50e72329d168a2a876309e13d491",
+      "size_bytes": 18757
+    },
+    {
+      "path": "backup/martinizedms.240309.py",
+      "sha256": "631b351bfecd88bddeb83b834374be56f57d422b8846d23ddf3d7fa72a0d6b02",
+      "size_bytes": 20475
+    },
+    {
+      "path": "backup/openmmutils_230719.py",
+      "sha256": "9c09a2791610fa40818911cca01aebd46726bce17b7455c30dc0a2d448ff0681",
+      "size_bytes": 18834
+    },
+    {
+      "path": "backup/orient_240621.py",
+      "sha256": "9c9b1def94873b9b2b72dec368dbd854fca6e2c8436f23597e2ab9c734c6f51d",
+      "size_bytes": 3885
+    },
+    {
+      "path": "backup/pandas2dict.py",
+      "sha256": "b9a4b1a265de98a2001653c68c72f6f764299fd850799bc5cfbb65f9dbaacff4",
+      "size_bytes": 195
+    },
+    {
+      "path": "backup/rem.bck.py",
+      "sha256": "27ee1c64716c40adb307df7ab0ccaf111e28c5b029dc15a3588477a1848ecb00",
+      "size_bytes": 29602
+    },
+    {
+      "path": "backup/rem_230719.py",
+      "sha256": "808eed913efa40fb57a790dd89a7acadbd9e0ed631c01f06c4fb1af54d56c3f9",
+      "size_bytes": 24079
+    },
+    {
+      "path": "backup/rem_230801.py",
+      "sha256": "23cf34109026d92a9e03d6167954e3b278cf71b15590534d7834fd7e416f38b6",
+      "size_bytes": 12975
+    },
+    {
+      "path": "backup/rock_240306.py",
+      "sha256": "4778d2f950bbced4b31d87399d1318dc1a60ae16538f4df45b889afe74ea7d5c",
+      "size_bytes": 2096
+    },
+    {
+      "path": "backup/sphere_240304.py",
+      "sha256": "6ead59393faf3ed764492c2963999771b8664df866887fe793a3bc18f6c3b992",
+      "size_bytes": 7657
+    },
+    {
+      "path": "backup/ungroup.py",
+      "sha256": "363305e4f4b43ed54fe7a387d1db1fd6834dd612d93c7463d7fa8c70c730a216",
+      "size_bytes": 12487
+    },
+    {
+      "path": "backup/ungroup_240430.py",
+      "sha256": "f3d3bbaba347910bdece3511518bc279021422de7ad56b9fe0999ff89f7136b6",
+      "size_bytes": 18457
+    },
+    {
+      "path": "backup/universe_20240510.py",
+      "sha256": "64fb2ed1b0db1cdb2188012ab495d44b6a050fc549ab2f12c4e92493afbb4587",
+      "size_bytes": 30438
+    },
+    {
+      "path": "backup/universe_20240511.py",
+      "sha256": "c29939824d601569b381b723e4db35bc2f13683c93ac83b9cb3a3b5d4d388f41",
+      "size_bytes": 33104
+    },
+    {
+      "path": "core/__init__.py",
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070",
+      "size_bytes": 2
+    },
+    {
+      "path": "core/backmap.py",
+      "sha256": "6eba066f64c9088dc40d51a2b7305f5266a965264c4f0ea249b0aaceb8e1c7ee",
+      "size_bytes": 8135
+    },
+    {
+      "path": "core/checkstructure.py",
+      "sha256": "a5933ef18cedd9ae2dbfc2ddb3b732012ba58cbd980eff2ae0e2d1a277310e2e",
+      "size_bytes": 14165
+    },
+    {
+      "path": "core/checktetrahedron.py",
+      "sha256": "911181960856b44a8044f26eaaf8a05390802b5d770b0736d1bec0eceae8a0eb",
+      "size_bytes": 1600
+    },
+    {
+      "path": "core/dms2openmm.py",
+      "sha256": "11e66ca503f4950a39e057c65d98d047f9566eb03f907589e42820ac3302ee58",
+      "size_bytes": 8249
+    },
+    {
+      "path": "core/dmsfile.py",
+      "sha256": "680ac57ca368c77d64212bcad5b0f81c30ddbbeff2baa8ba9c426a2e429ef020",
+      "size_bytes": 76494
+    },
+    {
+      "path": "core/fill.py",
+      "sha256": "8d45188e4dd4604e520cdb56779972855b23dcbc1dd61bb5c068bc971c51886c",
+      "size_bytes": 6605
+    },
+    {
+      "path": "core/gmx2dms.py",
+      "sha256": "8f5f8ac00da2a5ef85211156fa1742ecd2cc5d3251e0d40440fdd0ece14e1dc9",
+      "size_bytes": 18510
+    },
+    {
+      "path": "core/loopmodeler.py",
+      "sha256": "49f748c1817cfd8dd754bb9f88f4b0d279cfa18b9953958c54ed02f4a0687240",
+      "size_bytes": 13572
+    },
+    {
+      "path": "core/map.py",
+      "sha256": "14d4ac8a1e8d10326c9239953a10cf4f04efc6e648159f04b3c9cf39515fe7fb",
+      "size_bytes": 4847
+    },
+    {
+      "path": "core/martinizedms.py",
+      "sha256": "fba533245e3922dafd37c02e082a07b97c7286f893b84810d146a497ca7ea654",
+      "size_bytes": 21048
+    },
+    {
+      "path": "core/mutate.py",
+      "sha256": "42de8995c7a1886a912d99e005ebb3c26982f7d4bae0caf5fdbf2290bd4cdf0b",
+      "size_bytes": 2267
+    },
+    {
+      "path": "core/orient.py",
+      "sha256": "6bcdcf8f4ffbc2365e381cd6250ebe545b71d8e10da429f66a05b3dc15815b6e",
+      "size_bytes": 1880
+    },
+    {
+      "path": "core/readmappings.py",
+      "sha256": "7d36d67e9f15eea89bdf02791dfd54d5f6d928c057996a4a872bff0c6664ef3a",
+      "size_bytes": 4763
+    },
+    {
+      "path": "core/readmartini.py",
+      "sha256": "51bbf597d214fd080d7087bc5d7f443fda045456515c1dba6e71ffea8a48eefb",
+      "size_bytes": 18511
+    },
+    {
+      "path": "core/readxml.py",
+      "sha256": "690e1fe1d1c2c553a8a68e43c3913b46e6544b86d8a39d4aca790804e6cea5bb",
+      "size_bytes": 1736
+    },
+    {
+      "path": "core/rem.py",
+      "sha256": "28b54bca9395e45f3f133ec2132681619109409a6c051a8a03510c03bdfad971",
+      "size_bytes": 21706
+    },
+    {
+      "path": "core/seq.py",
+      "sha256": "cd6377c08eb35ee72aaec679f531b69300e2c39b6e5e6f6b4bb60bfbc049f6b5",
+      "size_bytes": 3605
+    },
+    {
+      "path": "core/solvate_martini.py",
+      "sha256": "9c5f2c98095e945d8862853434c75f9ed4c1499db7333f544aaf244e9a84d3ec",
+      "size_bytes": 7395
+    },
+    {
+      "path": "core/truncateprotein.py",
+      "sha256": "da87724a8a8726610141a35e8cc00efbb9769b4e307c91fe46ab99a386a97a88",
+      "size_bytes": 14006
+    },
+    {
+      "path": "core/ungroup.py",
+      "sha256": "61ae2adf64d1544720a27229a5e610d4d0e4eab3f7e2c8d6f40ede89f295314a",
+      "size_bytes": 19991
+    },
+    {
+      "path": "core/universe.py",
+      "sha256": "99b2e1ffcc3b7c0f5377caf7df0d58ae5c28cae6c89b8aaabed0309cd7c1b904",
+      "size_bytes": 29713
+    },
+    {
+      "path": "examples/Backmapping/Example1_methane/cg.pdb",
+      "sha256": "69037005f46cc59a3ec26ad937eaa028b904096c08c4002205b378776058cd23",
+      "size_bytes": 10012
+    },
+    {
+      "path": "examples/Backmapping/Example1_methane/ff.xml",
+      "sha256": "5dd99aeba6ed6bcedeaa3eb4ef9161cdce4dbcb67e4727e994f7908580ece79c",
+      "size_bytes": 520
+    },
+    {
+      "path": "examples/Backmapping/Example1_methane/mapping.dat",
+      "sha256": "e8a804d21560f0c8e23e0c7fa769a927aad049d11980394d17777351446ef8b5",
+      "size_bytes": 32
+    },
+    {
+      "path": "examples/Backmapping/Example1_methane/run.py",
+      "sha256": "3f09c5a427f905dbcaef00f6064b5353fa18d37a2b854f7bc721685f848ae334",
+      "size_bytes": 79
+    },
+    {
+      "path": "examples/Backmapping/Example1_methane/vis.cxc",
+      "sha256": "5dabe27b0357e79a1edfeffdaa2178e466211c2b69d24dcf4e84150297701dab",
+      "size_bytes": 191
+    },
+    {
+      "path": "examples/Backmapping/Example2_ethane/cg.pdb",
+      "sha256": "1587b3326a881a5ddd2ed15e7a9e036b3594a4c549f33455d801b0c30b9fcaf9",
+      "size_bytes": 9946
+    },
+    {
+      "path": "examples/Backmapping/Example2_ethane/mapping.dat",
+      "sha256": "0a76ae75bc4d3d8a586e429d80eab3db7cf954bc26141258fe25864319422a87",
+      "size_bytes": 48
+    },
+    {
+      "path": "examples/Backmapping/Example2_ethane/run.py",
+      "sha256": "49eaf3b1d9632fa2b38f14979f8363fdd73666b056662112021bf61851be1290",
+      "size_bytes": 62
+    },
+    {
+      "path": "examples/Backmapping/Example2_ethane/vis.cxc",
+      "sha256": "5dabe27b0357e79a1edfeffdaa2178e466211c2b69d24dcf4e84150297701dab",
+      "size_bytes": 191
+    },
+    {
+      "path": "examples/Backmapping/Example3_butene/cg.pdb",
+      "sha256": "69037005f46cc59a3ec26ad937eaa028b904096c08c4002205b378776058cd23",
+      "size_bytes": 10012
+    },
+    {
+      "path": "examples/Backmapping/Example3_butene/ff.xml",
+      "sha256": "f9406887a049ef9d41d2f4ffc60ded7ff4fbb25f4a021644117900a2c7626271",
+      "size_bytes": 1200
+    },
+    {
+      "path": "examples/Backmapping/Example3_butene/mapping.dat",
+      "sha256": "302979813f20b1a62655f35daa8c3bc264f293abf9cac01298f811b2272c0198",
+      "size_bytes": 84
+    },
+    {
+      "path": "examples/Backmapping/Example3_butene/run.py",
+      "sha256": "3f09c5a427f905dbcaef00f6064b5353fa18d37a2b854f7bc721685f848ae334",
+      "size_bytes": 79
+    },
+    {
+      "path": "examples/Backmapping/Example4_POPC/cg.pdb",
+      "sha256": "9a2d3e3c4fa4a6da6e8b3c8cef6f3c1b176bce6114ee31cf9ff71423dce7b564",
+      "size_bytes": 93449
+    },
+    {
+      "path": "examples/Backmapping/Example4_POPC/run.py",
+      "sha256": "981f4ea4a70af0744f4d01d660657662629adecc5b970c4380c0c49db77dc601",
+      "size_bytes": 39
+    },
+    {
+      "path": "examples/Backmapping/Example5_Sphere/cg.pdb",
+      "sha256": "93e54c9832a0ac7a7e0c6db9d213f9f52ba7d2c59ec506e0fe20ebd201385fbf",
+      "size_bytes": 1339911
+    },
+    {
+      "path": "examples/Backmapping/Example6_TRIO/cg.pdb",
+      "sha256": "bb0961bf0789aebf46d49db6e5e686f41d9d472c3a120ef9fc4ebdb980f647f3",
+      "size_bytes": 136583
+    },
+    {
+      "path": "examples/Backmapping/Example6_TRIO/ff.xml",
+      "sha256": "583278af8e624e336b4583046bcafa4bc1541f631d94e6c1f00398fd9096eedc",
+      "size_bytes": 33278
+    },
+    {
+      "path": "examples/Backmapping/Example6_TRIO/mapping.5.dat",
+      "sha256": "1e8a412ef43565edca193d4f4f4649a52f6bbc0e8dc4ededce3cf1cb6968f70e",
+      "size_bytes": 1021
+    },
+    {
+      "path": "examples/Backmapping/Example6_TRIO/mapping.dat",
+      "sha256": "a9565ffc9ee27990a0ed212c938cbe15bebbf335afcb3ab9d6c82644ee58754d",
+      "size_bytes": 1033
+    },
+    {
+      "path": "examples/Backmapping/Example6_TRIO/martini.5.itp",
+      "sha256": "f0148232abcbeee87b208cbd7e8a0b35d2444166d1f79aabcdbaa87d01408570",
+      "size_bytes": 1586
+    },
+    {
+      "path": "examples/Backmapping/Example6_TRIO/martini.itp",
+      "sha256": "12137c2726daeed0738b75e637570d41b6c7f5cea926efb93f823681b3949d48",
+      "size_bytes": 1318
+    },
+    {
+      "path": "examples/Backmapping/Example6_TRIO/run.py",
+      "sha256": "c889d21faa5b79e8844ed3959f1d7a553ba98d662e14c6214da661fb6e038805",
+      "size_bytes": 83
+    },
+    {
+      "path": "examples/Backmapping/Example6_TRIO/setup.py",
+      "sha256": "a2d0c7da6d979174adba01286c5de3d9f799efd06bf49fcff587fea82eb25d09",
+      "size_bytes": 217
+    },
+    {
+      "path": "examples/Backmapping/Example7_MembraneProtein/cg.pdb",
+      "sha256": "627abc6bd07b0cae68d65c864230eee445b725565325ec61a3b6cffbd03da2dc",
+      "size_bytes": 735166
+    },
+    {
+      "path": "examples/Backmapping/Example7_MembraneProtein/cg_nonprotein.pdb",
+      "sha256": "fff1de928e115faa37241f73b6d4d700fd9c056a561f2caddcf1befe997dfba2",
+      "size_bytes": 677022
+    },
+    {
+      "path": "examples/Backmapping/Example7_MembraneProtein/protein_AA.pdb",
+      "sha256": "be75b51c70b089dd58f382d378dea4d9dd9336f0ee7cf48e777821c41a025677",
+      "size_bytes": 400680
+    },
+    {
+      "path": "examples/Backmapping/Example7_MembraneProtein/protein_AA2.pdb",
+      "sha256": "8c4ff64388e249061606f0bf165420251517d089e61b03545ea6fc1d104aeb07",
+      "size_bytes": 400746
+    },
+    {
+      "path": "examples/Backmapping/Example7_MembraneProtein/run.py",
+      "sha256": "3f23178122cc796cdc16264e9cb8f7486be85573ee6a726960c0b986d5146ff1",
+      "size_bytes": 81
+    },
+    {
+      "path": "examples/Backmapping/run_all.py",
+      "sha256": "56cb418c6a11ad6f58de463eb7af75288ab4e730b97d10639ce605d8acdd24f8",
+      "size_bytes": 3005
+    },
+    {
+      "path": "examples/BackmappingMartini3/README.md",
+      "sha256": "1f5c87b0b97666532c0bd04dc97d98a37c13898e80ea26c4720f02b9f93b978b",
+      "size_bytes": 773
+    },
+    {
+      "path": "examples/BackmappingMartini3/b2ar_mix8.gro",
+      "sha256": "d502587294089772669c906665cb40a90f99f9cf5e7d1cf7d568501763d0093d",
+      "size_bytes": 13312338
+    },
+    {
+      "path": "examples/BackmappingMartini3/curved.gro",
+      "sha256": "13037008ccc807f7ad86da3e222a0d632841a3fbb1cd04b55cd0dcf3336ed67a",
+      "size_bytes": 1106890
+    },
+    {
+      "path": "examples/BackmappingMartini3/ff.xml",
+      "sha256": "98dbeb367b77180332fe2bed6e3ba08d4f8093267646d322d852431aa6df7245",
+      "size_bytes": 62661
+    },
+    {
+      "path": "examples/BackmappingMartini3/mapping.dat",
+      "sha256": "c72ebb3aceee9dcb6e4b3e6823ddb9712b6a22b59539d6d7e778d8d115c20749",
+      "size_bytes": 7047
+    },
+    {
+      "path": "examples/BackmappingMartini3/mix8_3017lipids.gro",
+      "sha256": "7362a634410144806a14bd2d76bfede7183d8803813a852e3905e69c344684ce",
+      "size_bytes": 5271995
+    },
+    {
+      "path": "examples/BackmappingMartini3/mix8_419lipids.gro",
+      "sha256": "6e772b640d87bcf7ea88c1c0e2b0a875552577e736a33f521bd9db0c450278fa",
+      "size_bytes": 513284
+    },
+    {
+      "path": "examples/BackmappingMartini3/mix8_5111lipids.gro",
+      "sha256": "9366dde07c63d4ef57b9b6edbc270967ba7755b1d1b72ab7be7183f11e20b84a",
+      "size_bytes": 5740845
+    },
+    {
+      "path": "examples/BackmappingMartini3/run.py",
+      "sha256": "4981992fed26c4270bff9e08d3c64bb971a65a1e936c989844582ab91fe88180",
+      "size_bytes": 1362
+    },
+    {
+      "path": "examples/BilayerBuilder/3sn6.pdb",
+      "sha256": "81a27dc593fbea72583c1c37a11fc599dd63c5b5397e46a8432b6cc95f5c8729",
+      "size_bytes": 415196
+    },
+    {
+      "path": "examples/BilayerBuilder/4xnv.pdb",
+      "sha256": "85a46257071cd1b3160f5e6bff2be6ba34e303ce886ff0828a3397683d1abc50",
+      "size_bytes": 456273
+    },
+    {
+      "path": "examples/BilayerBuilder/6ds5.pdb",
+      "sha256": "737af176be392d9a430d3173f27f5119e40e7d30158da3cead38ff6d42a2f55a",
+      "size_bytes": 3445828
+    },
+    {
+      "path": "examples/BilayerBuilder/gpcr/3sn6.pdb",
+      "sha256": "d17f668b75973021814299e4cdb80842860c4c190d74bca6271791349d7a111b",
+      "size_bytes": 1773414
+    },
+    {
+      "path": "examples/BilayerBuilder/gpcr/README",
+      "sha256": "699d17225f363f14dfc764e5927064751c86ff94f4a4a22d6e0075e9356f682a",
+      "size_bytes": 103
+    },
+    {
+      "path": "examples/BilayerBuilder/gpcr/ROCK.xml",
+      "sha256": "844cf0755b6662ea3ce9f3739d88adbb30e68e887b4a4ebee68937b6c699f6c6",
+      "size_bytes": 280859
+    },
+    {
+      "path": "examples/BilayerBuilder/gpcr/gpcr.png",
+      "sha256": "88c7a9b2997a7159e2fc988ab14a7a182152e398e47aaa0a15d07ce16066bcd0",
+      "size_bytes": 1654145
+    },
+    {
+      "path": "examples/BilayerBuilder/gpcr/run.py",
+      "sha256": "d262b6943ae779cb53f260e0afa20b48844d79261f34b304c2de5f474b7c4fb6",
+      "size_bytes": 96
+    },
+    {
+      "path": "examples/BilayerBuilder/gpcr/seq.fasta",
+      "sha256": "1891e8bb239fdf226999095969c779ba169ddd2f36b2acb4af451bec4263c3c5",
+      "size_bytes": 513
+    },
+    {
+      "path": "examples/BilayerBuilder/run_all.py",
+      "sha256": "85c0f1082892ea8c5c01e6b86ff668e9cfa20b32c36219d0904201123d86f87d",
+      "size_bytes": 4458
+    },
+    {
+      "path": "examples/BilayerBuilder/run_martini3.py",
+      "sha256": "213c0ae9df7c97faf114bbf2cb1533952c7b0b2e2a9cee55d65c4f9e3ba09452",
+      "size_bytes": 1884
+    },
+    {
+      "path": "examples/BilayerBuilder/sars/E5.pdb",
+      "sha256": "8e33e143e550894dcecb10e78b22f84134249dbc9cd3ae505666b2a75bb0d0e9",
+      "size_bytes": 374572
+    },
+    {
+      "path": "examples/BilayerBuilder/sars/M2.pdb",
+      "sha256": "c609358e557fb75bf810f4be88a243d3c0d5c1773b6a2fe7662eb9d3587d9770",
+      "size_bytes": 570092
+    },
+    {
+      "path": "examples/BilayerBuilder/sars/S3.pdb",
+      "sha256": "1568c5e5533983ced112e236a91392418dba4a49c6add5697677733369bda6c2",
+      "size_bytes": 4749062
+    },
+    {
+      "path": "examples/BilayerBuilder/sars/run.py",
+      "sha256": "86c8d09218cb0b0b8fb8bdcaac4409f9457ea3c76cd1811d3c070b55e50d2b21",
+      "size_bytes": 486
+    },
+    {
+      "path": "examples/BilayerBuilder/sars_small/E5.pdb",
+      "sha256": "8e33e143e550894dcecb10e78b22f84134249dbc9cd3ae505666b2a75bb0d0e9",
+      "size_bytes": 374572
+    },
+    {
+      "path": "examples/BilayerBuilder/sars_small/M2.pdb",
+      "sha256": "c609358e557fb75bf810f4be88a243d3c0d5c1773b6a2fe7662eb9d3587d9770",
+      "size_bytes": 570092
+    },
+    {
+      "path": "examples/BilayerBuilder/sars_small/S3.pdb",
+      "sha256": "1568c5e5533983ced112e236a91392418dba4a49c6add5697677733369bda6c2",
+      "size_bytes": 4749062
+    },
+    {
+      "path": "examples/BilayerBuilder/sars_small/S3.protein.pdb",
+      "sha256": "cb23b54626d552a63958cdbc0cea734cc1bfd81094993126ae54fba46e2e5a4a",
+      "size_bytes": 4244658
+    },
+    {
+      "path": "examples/BilayerBuilder/sars_small/run.py",
+      "sha256": "19c3c6bc80a78b219eda60dd9af2c99814fe2fe35d07b62d90493d64d56aea2e",
+      "size_bytes": 387
+    },
+    {
+      "path": "examples/BilayerBuilder/showhalf.py",
+      "sha256": "08abc077861d59331530167da9d9575c090dbde78890ed8a20eb318ec98fe390",
+      "size_bytes": 183
+    },
+    {
+      "path": "examples/BilayerBuilder/vis.cxc",
+      "sha256": "c6e59e0e3a26360a8fcf533d7b7db255da14b82c64339ea3c06c40125b759d7a",
+      "size_bytes": 916
+    },
+    {
+      "path": "lib/align.py",
+      "sha256": "63166dc064d0b5ce7fd4faf4f23368bc382e7476841b9b4c6e1c359ef8fb0aac",
+      "size_bytes": 7004
+    },
+    {
+      "path": "lib/distance.memory.py",
+      "sha256": "5868e9992e94818a9089a502beee361476d313b53e9b36678c28ac8cee518156",
+      "size_bytes": 1898
+    },
+    {
+      "path": "lib/distance.py",
+      "sha256": "5030a45edafacf04fcdc0cfe08d500348ccfd86aa67e9a159ad737c2d3e94b62",
+      "size_bytes": 3590
+    },
+    {
+      "path": "lib/distance_matrix.ipynb",
+      "sha256": "4bb98372dd621139e2cb83ed6db9786129fb3d7d4004c64c166d6c80bbc514c2",
+      "size_bytes": 4672
+    },
+    {
+      "path": "lib/distancelib.pyx",
+      "sha256": "888b4230e4ae44c8e726f141310ad854f5f0c023eb33e42c4ffb63743260c1af",
+      "size_bytes": 6430
+    },
+    {
+      "path": "lib/qcprot.pyx",
+      "sha256": "5f93ae9a8eeb6359937f65ef3be5754ce92a14c09c27ed5399a2f6436b576387",
+      "size_bytes": 16595
+    },
+    {
+      "path": "lib/setup.py",
+      "sha256": "9a1d2692fa5980d2c9b2eb36c5e4084fd25dfeb8250fbc6f58c2486f433c7c85",
+      "size_bytes": 205
+    },
+    {
+      "path": "mapping/lipids.afdesign",
+      "sha256": "4e0bf2181cc9da0c4ddd45d8247e56648ee3a74b9217e7bfb4c9ded7ad2facff",
+      "size_bytes": 4401763
+    },
+    {
+      "path": "mapping/lipids.png",
+      "sha256": "fe745245207774914b50e00b0f8a2741c73518c3b835707bdc04618800037fc2",
+      "size_bytes": 421874
+    },
+    {
+      "path": "mapping/martini.amber14.dat",
+      "sha256": "235bc45d93b53637dee765d4665cf910774996d1a1d4a89a01011140245114a8",
+      "size_bytes": 1740
+    },
+    {
+      "path": "mapping/martini.lipid.c36.dat",
+      "sha256": "ca44903b74105fe3317b454458a97688b70c3cf825566c99235592941d09c6e4",
+      "size_bytes": 19336
+    },
+    {
+      "path": "mapping/martini.protein.c36m.dat",
+      "sha256": "b1462cb8768da717d5711eee29657ac45061c9997e6f5ae091de91840d6cf980",
+      "size_bytes": 3451
+    },
+    {
+      "path": "mapping/martini3.protein.c36m.dat",
+      "sha256": "4ad00d21402ec4140c0fa5e00bb3db43428c5a41a2fa6195928e0605a2c332aa",
+      "size_bytes": 3335
+    },
+    {
+      "path": "mapping/protein.afdesign",
+      "sha256": "f228e7bd5e8ebc73a9f922b8efb6caedfc3516471e3dce0825d87aaf060a929a",
+      "size_bytes": 96686
+    },
+    {
+      "path": "mapping/protein.png",
+      "sha256": "1644117172e41fa298d591e11b854367578b55f532f3eae628e5a7be219cb718",
+      "size_bytes": 506638
+    },
+    {
+      "path": "mapping/structures/CHL1.pdb",
+      "sha256": "abec2dfb2010423b523614133a6df74e6fd239af6172686ee3cb7bc8678b2d7d",
+      "size_bytes": 615
+    },
+    {
+      "path": "mapping/structures/CHL1_AA.pdb",
+      "sha256": "8753d1b2bfc7707cf10eba57e380af5cbcc380a9917b2f437cbd9ebb1dfccb26",
+      "size_bytes": 5917
+    },
+    {
+      "path": "mapping/structures/CHYO.bck.pdb",
+      "sha256": "3818506ed2784f1819d0070cc8c4a6832e15ceba8708ad333d422e0ca8a98c0e",
+      "size_bytes": 648
+    },
+    {
+      "path": "mapping/structures/CHYO.pdb",
+      "sha256": "36d6c3e714e7c7358d60a7194e96f37dbe51a7cce1961d4895b6ed87325526fe",
+      "size_bytes": 640
+    },
+    {
+      "path": "mapping/structures/CHYO_AA.bck.pdb",
+      "sha256": "24703f2da34bc8a377d8e553e0ff6dbf7cdcea8ea1619a9ea47052232d00375d",
+      "size_bytes": 5832
+    },
+    {
+      "path": "mapping/structures/CHYO_AA.pdb",
+      "sha256": "8c747fe1229d577a46e7bdd75853a93bc990b4a4c960ee299f10a045dc262b4c",
+      "size_bytes": 5200
+    },
+    {
+      "path": "membrane/bilayer.py",
+      "sha256": "728044b038cfc67f0d8cfd5ac8ac602a1b36b1f44047d86aca65a953679aec5e",
+      "size_bytes": 14329
+    },
+    {
+      "path": "membrane/bilayerbuilder.py",
+      "sha256": "a853fe4532b5803297b5bb8900a699c35730cacfe4cb230b535b5fd4b3a4db79",
+      "size_bytes": 20215
+    },
+    {
+      "path": "membrane/lipid.py",
+      "sha256": "d00a7f0123075d737cbea5c0b6c52a541a4b19096d373811b94ed8336fa580fe",
+      "size_bytes": 4787
+    },
+    {
+      "path": "membrane/sphere.py",
+      "sha256": "959d053afcae9af2f8836618d3b4a6c79ec8bc1938b662f2433be60d0b714a2c",
+      "size_bytes": 12013
+    },
+    {
+      "path": "membrane/spherebuilder.py",
+      "sha256": "6dbb26d59683d32f53099467667941b2d1728190e00b60348790d72b1742d7ac",
+      "size_bytes": 16298
+    },
+    {
+      "path": "membrane/sphereprotein.py",
+      "sha256": "f44eb371919209093e089c86e53914074140fe521eb24cfd3447b516874ce050",
+      "size_bytes": 4580
+    },
+    {
+      "path": "utils/__init__.py",
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070",
+      "size_bytes": 2
+    },
+    {
+      "path": "utils/add_termini_atoms.py",
+      "sha256": "90bd002bda11e72bc1325963f29dff3a7a4c7446dfd37d0cff96441750ec1621",
+      "size_bytes": 3613
+    },
+    {
+      "path": "utils/amberselection.py",
+      "sha256": "71be8db4d4f8fe28c3717b6e0e785a8e72b18de87781d006bd86400d681755e8",
+      "size_bytes": 3169
+    },
+    {
+      "path": "utils/atomic_data.py",
+      "sha256": "6b966e85e03db1b36273dc7ab1a6176bfa9944941e479d3833dc6b99381aa799",
+      "size_bytes": 615
+    },
+    {
+      "path": "utils/cap_termini_residues.py",
+      "sha256": "4566b1c0f6d052cf21820a0d01238cdffa781284bd21e1da54dc358618af66cf",
+      "size_bytes": 9657
+    },
+    {
+      "path": "utils/change_his.py",
+      "sha256": "9bacae7010459bd15e4d6130f5198bbd12b1857a69de876564b393f1de22cf03",
+      "size_bytes": 3709
+    },
+    {
+      "path": "utils/dump.py",
+      "sha256": "bf71f0541fac5fea9ee05e22a0e34bb68792a490968f3d919f2df16dce30ec96",
+      "size_bytes": 619
+    },
+    {
+      "path": "utils/gmx_energy.py",
+      "sha256": "1f7094271b1437d55fb9403c0ceda0f3bb85023cacdd1ce2212951976a1cc95a",
+      "size_bytes": 5873
+    },
+    {
+      "path": "utils/mdautils.py",
+      "sha256": "43964bbb60a8a67eeab037150847d55aa16bccdbc7600f297f42931f0f8a8b17",
+      "size_bytes": 6855
+    },
+    {
+      "path": "utils/openmmutils.py",
+      "sha256": "71852b231d840a2a2e27fb26980be272acd83d17bc9c03f4c3f0af9fdf6195dc",
+      "size_bytes": 43069
+    },
+    {
+      "path": "utils/performance.py",
+      "sha256": "67e8c2bafadfb3bcbe24144ee1ae6bbeb887ba5a63772062a0cedb0ed7ef0134",
+      "size_bytes": 1345
+    },
+    {
+      "path": "utils/protein_sel.py",
+      "sha256": "bbbfe83112ceb09364536464a8cc9a6b0a31c6ede44efea78b7bd7987cc5f054",
+      "size_bytes": 476
+    },
+    {
+      "path": "utils/rock.py",
+      "sha256": "feed53807f12fc5fd4cce126bcba6f4866d6ceecae29707d78f95a7f6133be6f",
+      "size_bytes": 2249
+    },
+    {
+      "path": "utils/rockchain.py",
+      "sha256": "b6eb5b12af04dfe29e6e0067a560250592fea3dbc7957c98342c0c0bdf7969a9",
+      "size_bytes": 1583
+    },
+    {
+      "path": "utils/rockresidue.py",
+      "sha256": "222c511b2220b7c4bba8ac8a967e224657e04f6bdb01f57f3eca51572087f7cf",
+      "size_bytes": 2219
+    },
+    {
+      "path": "utils/saveargs.py",
+      "sha256": "aa276e3a2d9061c69b2c72663cd18cdd239f2db0e7c94ed2a9f7c2cd794c9cad",
+      "size_bytes": 268
+    },
+    {
+      "path": "utils/sdminimizer.py",
+      "sha256": "f217b421f6c18736e13dfbb7d55bd7136fc73736e6c08a828e84cad8a2304455",
+      "size_bytes": 1353
+    },
+    {
+      "path": "utils/sqlcmd.py",
+      "sha256": "ee86a04d4b780466b9b67df13240e9cb5c6ac2507dc25d4424701bd1b1cb0759",
+      "size_bytes": 9158
+    },
+    {
+      "path": "utils/util.py",
+      "sha256": "6b0536d17ef71e04062a5aafa5232f1cf60c15e35dc64e69fb6c67ba9a093068",
+      "size_bytes": 4241
+    },
+    {
+      "path": "utils/vismol.py",
+      "sha256": "39d21bf2c9ef7d66d70d9e6deeeac7c410c7a42b4d0fc03ccce1b7cf962297a4",
+      "size_bytes": 1018
+    },
+    {
+      "path": "version.py",
+      "sha256": "23818311181b7c06020cf30b43f0576742cfac6a5575911b97d8cc076f6070a7",
+      "size_bytes": 23
+    }
+  ],
+  "license_spdx": "GPL-3.0-only",
+  "project": "mstool",
+  "release_if_any": "v0.3.6",
+  "source_archive_sha256": "c9e43e5ae607bdd31b1c86f6e5b0698095010af57210e7b3f6bf4144fb8bebba",
+  "upstream_repository": "https://github.com/ksy141/mstool.git"
+}

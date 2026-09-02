@@ -1,0 +1,73 @@
+name: External Resource Scientific Integration
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_extended_smoke:
+        description: "Run an authorized larger internal smoke test"
+        required: true
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: read
+
+jobs:
+  external-resource-validation:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: [self-hosted, authorized-scientific-integration]
+    environment: authorized-scientific-integration
+    env:
+      MEMBRANEFORGER_CHARMM36_ROOT: ${{ secrets.MEMBRANEFORGER_CHARMM36_ROOT }}
+      MEMBRANEFORGER_MEMBRANE_TOPPAR: ${{ secrets.MEMBRANEFORGER_MEMBRANE_TOPPAR }}
+      PYROSETTA_PYTHON: ${{ secrets.PYROSETTA_PYTHON }}
+      ROSETTA_BIN: ${{ secrets.ROSETTA_BIN }}
+      ROSETTA_DATABASE: ${{ secrets.ROSETTA_DATABASE }}
+      MOLFILE_TO_PARAMS: ${{ secrets.MOLFILE_TO_PARAMS }}
+      DSSP_BIN: ${{ secrets.DSSP_BIN }}
+    steps:
+      - name: Refuse untrusted branch
+        run: test "$GITHUB_REF" = "refs/heads/main"
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Refuse missing local resource paths
+        run: |
+          test -n "$MEMBRANEFORGER_CHARMM36_ROOT"
+          test -n "$MEMBRANEFORGER_MEMBRANE_TOPPAR"
+          test -d "$MEMBRANEFORGER_CHARMM36_ROOT"
+          test -f "$MEMBRANEFORGER_CHARMM36_ROOT/forcefield.itp"
+          test -d "$MEMBRANEFORGER_MEMBRANE_TOPPAR"
+
+      - name: Local dependency validation
+        run: |
+          python -m pip install pytest==8.2.2 numpy==1.26.4 pandas==2.2.2 pyyaml==6.0.2
+          tmp_config="$(mktemp)"
+          python - "$tmp_config" <<'PY'
+          from pathlib import Path
+          import sys
+          import yaml
+
+          cfg = yaml.safe_load(Path("config/workflow.yaml").read_text(encoding="utf-8"))
+          cfg.setdefault("stage4", {})["charmm36_required"] = True
+          cfg.setdefault("stage4", {})["membrane_toppar_required"] = True
+          Path(sys.argv[1]).write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
+          PY
+          ./run_pipeline.sh doctor --config "$tmp_config"
+          ./run_pipeline.sh --config "$tmp_config" --check
+          ./run_pipeline.sh scientific-integration \
+            --config "$tmp_config" \
+            --run-dir runs/external-resource-scientific-integration \
+            --preflight-only
+
+      - name: Optional authorized internal smoke
+        if: ${{ github.event.inputs.run_extended_smoke == 'true' }}
+        run: |
+          echo "Extended internal smoke must be implemented by the authorized self-hosted environment."

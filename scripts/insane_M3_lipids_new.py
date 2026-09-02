@@ -7,6 +7,11 @@ previous = "20140603.11.TAW"
 
 # INSert membrAN by Tsjerk A. Wassenaar
 # Please cite DOI: 10.1021/acs.jctc.5b00209
+#
+# MembraneForger modification notice:
+# Modified by MembraneForger, 2026-09-02.
+# This GPL-2.0-or-later INSANE-derived script is bundled as the exact Stage 2
+# de novo membrane builder. See docs/insane_modifications.md.
 
 # Modify insane to take in arbitary lipid definition strings and use them as a template for lipids
 # Also take in lipid name

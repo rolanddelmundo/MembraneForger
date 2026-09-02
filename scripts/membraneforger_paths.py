@@ -96,8 +96,8 @@ def _mstool_root_from_candidate(candidate: Path) -> Path:
         return (resolved / "mstool").resolve()
     if resolved == (REPO_ROOT / "resources" / "vendor" / "mstool").resolve():
         raise PathResolutionError(
-            "ERROR: repository-local mstool is not installed. Run: "
-            "python scripts/bootstrap_resources.py --component mstool"
+            "ERROR: repository-vendored mstool source is missing. Restore "
+            "resources/vendor/mstool from the MembraneForger repository."
         )
     raise PathResolutionError(f"ERROR: repository-local mstool could not be found under {resolved}")
 
@@ -161,9 +161,13 @@ def _source_sha256(path: Path) -> str:
 
 def _build_fingerprint(mstool_root: Path) -> dict[str, Any]:
     lib = mstool_root / "lib"
+    dist_source = lib / "distancelib.pyx" if (lib / "distancelib.pyx").is_file() else lib / "distancelib.c"
+    qcprot_source = lib / "qcprot.pyx" if (lib / "qcprot.pyx").is_file() else lib / "qcprot.c"
+    if not dist_source.is_file() or not qcprot_source.is_file():
+        raise PathResolutionError(f"ERROR: missing canonical mstool extension source under {lib}")
     sources = {
-        "distancelib.c": _source_sha256(lib / "distancelib.c"),
-        "qcprot.c": _source_sha256(lib / "qcprot.c"),
+        dist_source.name: _source_sha256(dist_source),
+        qcprot_source.name: _source_sha256(qcprot_source),
     }
     setup_py = lib / "setup.py"
     if setup_py.is_file():
@@ -225,18 +229,35 @@ def _build_mstool_extensions(mstool_root: Path, cache_dir: Path, fingerprint: di
     build_temp = temp_parent / "temp"
     setup_script = temp_parent / "build_mstool_extensions.py"
     lib = mstool_root / "lib"
+    dist_source = lib / "distancelib.pyx" if (lib / "distancelib.pyx").is_file() else lib / "distancelib.c"
+    qcprot_source = lib / "qcprot.pyx" if (lib / "qcprot.pyx").is_file() else lib / "qcprot.c"
+    if dist_source.suffix == ".pyx" or qcprot_source.suffix == ".pyx":
+        cython_lines = [
+            "from Cython.Build import cythonize",
+            "sources = cythonize([",
+            f"    Extension('distancelib', [{str(dist_source.resolve())!r}], include_dirs=include_dirs),",
+            f"    Extension('qcprot', [{str(qcprot_source.resolve())!r}], include_dirs=include_dirs),",
+            "])",
+        ]
+        ext_modules_expr = "sources"
+    else:
+        cython_lines = [
+            "sources = [",
+            f"    Extension('distancelib', [{str(dist_source.resolve())!r}], include_dirs=include_dirs),",
+            f"    Extension('qcprot', [{str(qcprot_source.resolve())!r}], include_dirs=include_dirs),",
+            "]",
+        ]
+        ext_modules_expr = "sources"
     setup_script.write_text(
         "\n".join(
             [
                 "from pathlib import Path",
                 "from setuptools import Extension, setup",
                 f"include_dirs = [{_numpy_include()!r}]",
+                *cython_lines,
                 "setup(",
                 "    name='membraneforger-mstool-extensions',",
-                "    ext_modules=[",
-                f"        Extension('distancelib', [{str((lib / 'distancelib.c').resolve())!r}], include_dirs=include_dirs),",
-                f"        Extension('qcprot', [{str((lib / 'qcprot.c').resolve())!r}], include_dirs=include_dirs),",
-                "    ],",
+                f"    ext_modules={ext_modules_expr},",
                 "    script_args=['build_ext', '--build-lib', " + repr(str(build_lib)) + ", '--build-temp', " + repr(str(build_temp)) + "],",
                 ")",
                 "",
@@ -277,9 +298,6 @@ def _build_mstool_extensions(mstool_root: Path, cache_dir: Path, fingerprint: di
 
 
 def ensure_mstool_extensions(mstool_root: Path, *, cache_root: Path | None = None) -> tuple[Path, str, tuple[Path, ...]]:
-    for rel in ("lib/distancelib.c", "lib/qcprot.c"):
-        if not (mstool_root / rel).is_file():
-            raise PathResolutionError(f"ERROR: missing canonical mstool extension source {mstool_root / rel}")
     cache_dir = mstool_extension_cache_dir(cache_root)
     fingerprint = _build_fingerprint(mstool_root)
     if _metadata_matches(cache_dir, fingerprint):
@@ -334,7 +352,7 @@ def resolve_mstool(
         if not candidate.is_absolute():
             candidate = root / candidate
         mstool_root = _mstool_root_from_candidate(candidate)
-        mode = "repository"
+        mode = "repository/vendor"
     parent = mstool_root.parent.resolve()
     extension_cache: Path | None = None
     extension_mode = "not-built"

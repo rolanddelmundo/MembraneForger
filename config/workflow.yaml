@@ -27,6 +27,8 @@ stage3:
   resources:
     mappings: resources/mappings
     templates: resources/templates
+    membrane_templates: resources/templates
+    membrane_toppar: resources/external/charmm36_membrane
     forcefields: resources/forcefields
     vendor_mstool: resources/vendor/mstool
   placement:
@@ -41,11 +43,13 @@ stage3:
       enabled: false
       source_residue: GM3
       target_molecule_type: GLPA
-      target_itp: resources/ligand_params/GLPA/GLPA.itp
+      target_itp: resources/external/GLPA.itp
 
 stage4:
   resources:
     aa_mdp: resources/aa_mdp
+    charmm36_forcefield: resources/external/charmm36.ff
+    membrane_toppar: resources/external/charmm36_membrane
     ligand_params_root_env: MEMBRANEFORGER_LIGAND_PARAMS_ROOT
     charmm36_root_env: MEMBRANEFORGER_CHARMM36_ROOT
     cgenff_root_env: MEMBRANEFORGER_CGENFF_ROOT
@@ -56,3 +60,8 @@ stage4:
   ligand_params_required: false
   parameter_generation_enabled: false
   pyrosetta_plugins_enabled: false
+  n_terminal_patch: ACE
+  c_terminal_patch: CT3
+  slice_buffer_nm: 1.0
+  z_slab_padding_nm: 1.5
+  salt_concentration_molar: 0.15

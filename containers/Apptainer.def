@@ -2,6 +2,7 @@ Bootstrap: docker
 From: mambaorg/micromamba:1.5.8
 
 %files
+    . /workspace/MembraneForger
     environments/environment.yml /tmp/environment.yml
 
 %post
@@ -9,4 +10,5 @@ From: mambaorg/micromamba:1.5.8
     micromamba clean -a -y
 
 %runscript
+    cd /workspace/MembraneForger
     exec "$@"

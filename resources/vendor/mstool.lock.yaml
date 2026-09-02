@@ -6,6 +6,15 @@ license_spdx: GPL-3.0-only
 source_archive_url: https://github.com/ksy141/mstool/archive/2d37f9d3e89279ddd9125cc74da1f5e01153586c.tar.gz
 source_archive_sha256: c9e43e5ae607bdd31b1c86f6e5b0698095010af57210e7b3f6bf4144fb8bebba
 expected_package_path: resources/vendor/mstool
+distribution_mode: VENDORED-MODIFIED
+vendored_file_count: 291
+vendored_size_bytes: 88599506
+vendored_tree_sha256: d238e049d1003054c242352b6df25f229ee498f7b45c98a92ecdbfe1f9617e7b
 required_citations:
   - "mstool upstream documentation and paper cited by upstream project"
-local_patch_list: []
+local_patch_list:
+  - "LICENSE copied from upstream archive root into vendored package directory"
+  - "MODIFICATIONS.md added by MembraneForger, 2026-09-02"
+ignored_local_generated_files:
+  - "lib/distancelib.c"
+  - "lib/qcprot.c"

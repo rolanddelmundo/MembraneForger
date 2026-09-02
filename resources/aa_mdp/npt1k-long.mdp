@@ -1,5 +1,5 @@
 title		= NPT EQ  
-define = -DPOSRES -DPOSRES_FC_BB=1000.0 -DPOSRES_FC_SC=1000.0 -DPOSRES_FC_LIPID=0.0
+define = -DPOSRES -DPOSRES_FC_BB=1000.0 -DPOSRES_FC_SC=1000.0 -DPOSRES_FC_LIG=0.0 -DPOSRES_FC_LIPID=0.0
 ; Run parameters
 integrator	= md		; leap-frog integrator
 nsteps		= 25000000	; 2 * 100000 = 200 ps (not 1 ns)
@@ -51,4 +51,3 @@ gen_vel		= no		; Velocity generation is off
 nstcomm         = 1
 comm-mode       = Linear
 comm-grps	= Protein_LIG MEMB SOL_ION
-

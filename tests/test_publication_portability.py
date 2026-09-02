@@ -8,10 +8,14 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ACTIVE_DIRS = ["config", "stages", "scripts", "resources", "tests", "examples", "inputs", "environments", "containers", "docs", ".github"]
+ACTIVE_DIRS = ["config", "stages", "scripts", "membraneforger", "resources", "tests", "examples", "inputs", "environments", "containers", "docs", ".github"]
 ACTIVE_FILES = ["run_pipeline.sh", "setup.sh", "README.md", "LICENSE", "CITATION.cff", "LICENSE_DEPENDENCIES.md", "THIRD_PARTY_NOTICES.md"]
 FORBIDDEN_FRAGMENTS = ["/" + part + "/" for part in ("Users", "home", "scratch", "packages")]
 FORBIDDEN_REVIEW_WORDS = {"REVIEW", "UNKNOWN", "UNRESOLVED"}
+LOCAL_EXTERNAL_PREFIXES = (
+    "resources/external/",
+    "resources/forcefields/charmm36/toppar/",
+)
 
 
 def iter_active_files():
@@ -26,14 +30,28 @@ def iter_active_files():
         for p in base.rglob("*"):
             if not p.is_file() or p.is_symlink():
                 continue
+            if p.relative_to(ROOT).as_posix().startswith("resources/vendor/mstool/"):
+                continue
+            if p.relative_to(ROOT).as_posix().startswith(LOCAL_EXTERNAL_PREFIXES):
+                continue
             if any(part in {"__pycache__", ".pytest_cache"} for part in p.parts):
                 continue
             yield p
 
 
 def git_ls_files() -> list[str]:
-    result = subprocess.run(["git", "ls-files"], cwd=ROOT, text=True, stdout=subprocess.PIPE, check=True)
-    return [line for line in result.stdout.splitlines() if line]
+    result = subprocess.run(["git", "ls-files"], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if result.returncode == 0:
+        return [line for line in result.stdout.splitlines() if line]
+    files: list[str] = []
+    for path in ROOT.rglob("*"):
+        ignored_parts = {".local", ".git", "__pycache__", ".pytest_cache"}
+        if not path.is_file() or ignored_parts.intersection(path.parts) or path.name == ".DS_Store":
+            continue
+        if path.relative_to(ROOT).as_posix().startswith(LOCAL_EXTERNAL_PREFIXES) and path.name != "README.md":
+            continue
+        files.append(path.relative_to(ROOT).as_posix())
+    return files
 
 
 def test_required_publication_paths_exist() -> None:
@@ -42,6 +60,14 @@ def test_required_publication_paths_exist() -> None:
         "environments", "containers", "docs", "LICENSES", "run_pipeline.sh", "setup.sh",
         "README.md", "LICENSE", "CITATION.cff", "LICENSE_DEPENDENCIES.md",
         "THIRD_PARTY_NOTICES.md", "docs/third_party_inventory.tsv",
+        "docs/runtime_provenance.tsv",
+        "docs/insane_modifications.md",
+        "LICENSES/MIT.txt",
+        "LICENSES/GPL-3.0-only.txt",
+        "LICENSES/GPL-2.0-or-later.txt",
+        "resources/vendor/mstool/__init__.py",
+        "resources/vendor/mstool/LICENSE",
+        "resources/vendor/mstool/MODIFICATIONS.md",
     ]:
         assert (ROOT / rel).exists(), rel
 
@@ -91,6 +117,12 @@ def test_resource_manifest_covers_contained_resources() -> None:
     for path in (ROOT / "resources").rglob("*"):
         if any(part == "__pycache__" for part in path.parts):
             continue
+        if path.name == ".DS_Store":
+            continue
+        if path.relative_to(ROOT).as_posix().startswith("resources/vendor/mstool/"):
+            continue
+        if path.relative_to(ROOT).as_posix().startswith(LOCAL_EXTERNAL_PREFIXES) and path.name != "README.md":
+            continue
         if path.is_file() and path.name != "RESOURCE_MANIFEST.tsv":
             rel = path.relative_to(ROOT).as_posix()
             if rel not in listed:
@@ -118,8 +150,8 @@ def test_no_compiled_or_generated_artifacts_are_tracked() -> None:
 
 def test_restricted_resource_paths_not_tracked() -> None:
     forbidden = [
-        "resources/vendor/mstool/",
         "resources/forcefields/charmm36.ff/",
+        "resources/forcefields/charmm36/toppar/",
         "resources/forcefields/toppar/",
         "examples/legacy_kor/",
         "examples/test_membrane/",
@@ -132,7 +164,15 @@ def test_restricted_resource_paths_not_tracked() -> None:
 
 
 def test_no_large_public_files() -> None:
-    offenders = [str(p.relative_to(ROOT)) for p in ROOT.rglob("*") if p.is_file() and ".git" not in p.parts and p.stat().st_size > 50 * 1024 * 1024]
+    offenders = [
+        str(p.relative_to(ROOT))
+        for p in ROOT.rglob("*")
+        if p.is_file()
+        and ".git" not in p.parts
+        and ".local" not in p.parts
+        and not p.relative_to(ROOT).as_posix().startswith(LOCAL_EXTERNAL_PREFIXES)
+        and p.stat().st_size > 50 * 1024 * 1024
+    ]
     assert offenders == []
 
 
@@ -210,7 +250,7 @@ def test_public_pdb_dry_run_from_outside_repo_with_spaces_without_private_resour
     assert result.returncode == 0, result.stderr
     provenance = json.loads((output / "provenance.json").read_text(encoding="utf-8"))
     assert provenance["input_sha256"]
-    assert "mstool_resolution_warning" in provenance
+    assert "mstool_resolution_warning" in provenance or provenance.get("mstool_commit")
     assert (output / "effective_config.yaml").is_file()
     assert not (output / "stage1").exists()
 
@@ -221,6 +261,9 @@ def test_public_ci_never_installs_or_caches_rosetta_assets() -> None:
     assert "apt-get install -y dssp" in ci
     assert "command -v mkdssp" in ci
     assert "actions/cache" not in ci
+    assert "membraneforger_cache_dir" in ci
+    assert "repository/vendor" in ci
+    assert "insane bundled exact script" in ci
     for word in forbidden:
         assert f"pip install {word}" not in ci
         assert f"curl" not in ci or word not in ci
@@ -232,7 +275,7 @@ def test_containers_do_not_embed_restricted_resources() -> None:
         if not path.is_file():
             continue
         text = path.read_text(encoding="utf-8").lower()
-        for token in ("pyrosetta", "rosetta", "charmm36.ff", "resources/forcefields/toppar", "resources/vendor/mstool"):
+        for token in ("pyrosetta", "rosetta", "charmm36.ff", "resources/forcefields/toppar"):
             if token in text:
                 offenders.append(f"{path.relative_to(ROOT)}:{token}")
     assert offenders == []
@@ -241,5 +284,52 @@ def test_containers_do_not_embed_restricted_resources() -> None:
 def test_bootstrap_resource_verify_and_offline_dry_run() -> None:
     martini = subprocess.run([sys.executable, str(ROOT / "scripts" / "bootstrap_resources.py"), "--component", "martini", "--verify"], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     assert martini.returncode == 0, martini.stderr
-    mstool = subprocess.run([sys.executable, str(ROOT / "scripts" / "bootstrap_resources.py"), "--component", "mstool", "--dry-run", "--offline"], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    mstool = subprocess.run([sys.executable, str(ROOT / "scripts" / "bootstrap_resources.py"), "--component", "mstool", "--verify"], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     assert mstool.returncode == 0, mstool.stderr
+
+
+def test_runtime_provenance_checksums_verify() -> None:
+    result = subprocess.run([sys.executable, str(ROOT / "scripts" / "verify_runtime_provenance.py")], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    assert result.returncode == 0, result.stderr
+
+
+def test_license_structure_is_explicit_for_bundled_pipeline() -> None:
+    license_text = (ROOT / "LICENSE").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    notices = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+    for text in (license_text, readme, notices):
+        assert "MembraneForger-authored" in text
+        assert "GPL-3.0-only" in text
+        assert "GPL-2.0-or-later" in text
+        assert "combined" in text.lower()
+    assert "distributors should confirm" not in (ROOT / "LICENSE_DEPENDENCIES.md").read_text(encoding="utf-8").lower()
+
+
+def test_vendored_component_license_inventory_is_complete() -> None:
+    import csv
+
+    rows = list(csv.DictReader((ROOT / "docs" / "runtime_provenance.tsv").open(encoding="utf-8"), delimiter="\t"))
+    vendored = [row for row in rows if row["classification"].startswith("VENDORED")]
+    assert vendored
+    for row in vendored:
+        assert row["upstream"]
+        assert row["base_version_or_commit"]
+        assert row["license_spdx"]
+        assert row["local_modifications"] in {"yes", "no"}
+        license_file = row["license_file"]
+        assert license_file and license_file != "not_applicable"
+        assert (ROOT / license_file).is_file(), row
+    assert (ROOT / "resources" / "vendor" / "mstool" / "MODIFICATIONS.md").read_text(encoding="utf-8").count("modified by MembraneForger") == 1
+    assert "Modified by MembraneForger, 2026-09-02" in (ROOT / "scripts" / "insane_M3_lipids_new.py").read_text(encoding="utf-8")
+
+
+def test_vendored_mstool_source_is_public_but_generated_artifacts_are_ignored() -> None:
+    source = ROOT / "resources" / "vendor" / "mstool" / "__init__.py"
+    assert source.is_file()
+    if (ROOT / ".git").exists():
+        ignored = subprocess.run(["git", "check-ignore", "-q", str(source.relative_to(ROOT))], cwd=ROOT)
+        assert ignored.returncode == 1
+    generated = ROOT / "resources" / "vendor" / "mstool" / "__pycache__" / "__init__.cpython-313.pyc"
+    if generated.exists() and (ROOT / ".git").exists():
+        generated_ignored = subprocess.run(["git", "check-ignore", "-q", str(generated.relative_to(ROOT))], cwd=ROOT)
+        assert generated_ignored.returncode == 0
