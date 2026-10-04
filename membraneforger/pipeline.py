@@ -19,6 +19,7 @@ from .martini import bilayer_midplane, classify_cg, make_membrane_whole
 from .minimization import run_em, validate_em
 from .orientation import OrientationRequest, check_orientation_preserved, orient_complex
 from .reporting import write_run_manifest
+from .slicing import slice_membrane_cg
 from .runtools import LOG_NAME, gromacs_version, log, sha256
 from .solvation import add_ions, make_index, rebox_system, solvate_system
 from .structio import xyz_nm
@@ -33,6 +34,7 @@ STAGE_HINTS = {
     "inputs": "the input file named in the message",
     "orient": "{out}/orientation_report.json, the chains of the all-atom input, and {work}/orientation/ppm/ with the PPM "
               "transcript in {out}/" + LOG_NAME,
+    "slice": "the slice report in {out}/run_manifest.json and the log, the --box option and --xy-buffer",
     "mstool": "the --mstool-python interpreter and the transcript at the end of {out}/" + LOG_NAME,
     "classify": "the residue and bead names of the coarse-grained input listed in the message",
     "mapping": "{out}/aa_cg_mapping.tsv if written, and the chain sequences of both inputs",
@@ -162,8 +164,22 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
         log(out, f"orientation preserved through CG registration: normal tilt {preserved['normal_tilt_deg']:.1e} deg, anchor "
                  f"depth {preserved['anchor_ca_depth_A']:+.2f} A kept; CG pose differs by "
                  f"{fit['metrics']['registration']['tilt_between_cg_anchor_pose_and_orientation_deg']} deg (measured, not adopted)", "PASS")
-    return {"placed": placed, "membrane": cg["membrane"], "box": box, "mapping": mapping,
-            "composition": Counter(RENAME_MOLECULE.get(m["aa"], m["aa"]) for m in cg["membrane"]),
+    cut = run_stage(session, "slice", slice_membrane_cg, cg["membrane"], placed, box, midplane, session.settings, session.box)
+    record["slice"] = cut["report"]
+    report, seam = cut["report"], cut["report"]["seam"]
+    if report["cropped"]:
+        log(out, f"slice ({report['mode']}): cell {box[0]:.2f} x {box[1]:.2f} -> {cut['box'][0]:.2f} x {cut['box'][1]:.2f} nm "
+                 f"({report['area_fraction_kept']:.0%} of the area), {report['lipids_before']} -> {report['lipids_after']} lipids "
+                 f"kept whole; leaflets {sum(report['leaflets_after']['lower'].values())}/"
+                 f"{sum(report['leaflets_after']['upper'].values())}; seam: {seam['pairs_created_by_new_periodicity']} bead pairs "
+                 f"closer than {seam['threshold_nm']} nm created by the new periodicity, {seam['lipids_removed']} lipids removed",
+            "WARN" if seam["lipids_removed"] else "INFO")
+    else:
+        log(out, f"slice ({report['mode']}): the complex plus {session.settings.box_xy_buffer_nm} nm reaches the whole "
+                 f"{box[0]:.2f} x {box[1]:.2f} nm cell; the membrane is not cut")
+    placed, membrane, box = cut["placed"], cut["membrane"], cut["box"]
+    return {"placed": placed, "membrane": membrane, "box": box, "mapping": mapping,
+            "composition": Counter(RENAME_MOLECULE.get(m["aa"], m["aa"]) for m in membrane),
             "ligands": DEFAULT_LIGANDS | {a["resname"] for a in aa_atoms if a["resname"] not in AMINO}}
 
 

@@ -125,7 +125,8 @@ Common options:
 | `--nterm-side in\|out` | side of the membrane of the first anchor chain's N terminus (needed by PPM) |
 | `--orientation auto\|ppm\|opm\|none` | orientation source; `none` uses the coordinates as given |
 | `--pdb-id ID` | exact PDB ID, for the OPM reference (default: `HEADER` record, never the file name) |
-| `--box auto\|X,Y,Z` | `auto` (default), or an opt-in box in nm |
+| `--box auto\|X,Y,Z` | `auto` (default: slice the membrane around the complex), or an opt-in box in nm |
+| `--xy-buffer NM` | membrane kept around the complex in x and y with `--box auto` (default 1.0) |
 
 Run `python -m membraneforger --help` for the full list.
 
@@ -169,10 +170,37 @@ PPM is always run in its planar single-membrane mode.
 
 ## Box
 
-`BOX = auto` (the default) keeps the membrane's x and y cell, as a periodic membrane requires, and sizes z around the
-bilayer midplane so the complex and the membrane are covered by 1.5 nm of water above and below (never less than 2 nm
-over the full extent). A box of your own is opt-in: `--box x,y,z` in nm, where x and y must equal the membrane cell and
-z must be at least the automatic minimum; anything else is refused with the value that would work.
+`BOX = auto` (the default) cuts the coarse-grained membrane before it is backmapped, so a large frame costs no more
+than the complex needs. This is the slicing of the earlier workflow (`archive/scripts/aa_stage4.py`, `slice_membrane`,
+buffer 1.0 nm), applied to the coarse-grained lipids instead of the finished all-atom system:
+
+- x and y: the window is the extent of the placed complex plus `--xy-buffer` (default 1.0 nm) on each side. An axis
+  whose window is as wide as the cell is not cut and keeps its periodicity.
+- A lipid is kept only if **all** of its beads lie inside the window, taken in its periodic image nearest the complex;
+  glycolipids such as GM3 are kept or dropped as one molecule.
+- The window becomes the new periodic cell. Bead pairs of different lipids closer than 0.30 nm that only the new
+  periodicity brings together are removed (the lipid with most clashes first) and reported; contacts that were already
+  close in the source frame are data, are left alone and are counted separately.
+- z is sized around the bilayer midplane (halfway between the phosphate planes) with 1.5 nm of water above and below
+  the complex and membrane, never less than 2 nm over the full extent.
+- Lipid counts, per-leaflet composition, area kept and the seam report are logged and written to `run_manifest.json`
+  (`slice`, `box`). Slicing changes the composition: leaflet ratios are those of the kept lipids.
+
+The 6WHC example keeps 313 of 392 lipids (its cell is cut in x only, because the complex nearly spans y). For the
+18 nm GPCR frames the default keeps about 75 to 90 of about 1,300 lipids, which leaves the protein only 2 nm of lipid
+from its own periodic image; use `--xy-buffer 1.5` or `2.0` for production systems:
+
+| `--xy-buffer` | KOR run1 cell (nm) | KOR lipids | GPR139 run3 cell (nm) | GPR139 lipids |
+|---|---|---|---|---|
+| 1.0 | 6.2 x 5.9 | 75 | 6.1 x 7.0 | 88 |
+| 1.5 | 7.2 x 6.9 | 120 | 7.1 x 8.0 | 138 |
+| 2.0 | 8.2 x 7.9 | 171 | 8.1 x 9.0 | 194 |
+| 3.0 | 10.2 x 9.9 | 307 | 10.1 x 11.0 | 339 |
+
+(Measured by cutting the frames with the coarse-grained protein standing in for the complex; no frame has been
+backmapped.) A box of your own is opt-in: `--box x,y,z` in nm. x and y may not exceed the coarse-grained cell and must
+leave at least 0.5 nm of membrane on each side of the complex (the membrane is cut to that size around the complex;
+the full cell width means no cut), and z must be at least the automatic minimum.
 
 ## What MembraneForger does
 
@@ -184,13 +212,15 @@ z must be at least the automatic minimum; anything else is refused with the valu
 4. **Registers the all-atom complex** to the coarse-grained frame. Each all-atom chain is matched to its
    coarse-grained chain by sequence; the coarse-grained frame supplies only the lateral position (a rotation about the
    membrane normal and a translation), so the orientation is never tilted.
-5. **Backmaps the membrane** around the placed complex with mstool.
-6. **Reviews the backmapped lipids** for bonds threaded through rings and for wrong stereochemistry. If it finds
+5. **Slices the coarse-grained membrane** to the complex plus a buffer in x and y (`BOX = auto`), keeping whole lipids
+   and removing seam overlaps, so that only those lipids are backmapped.
+6. **Backmaps the membrane** around the placed complex with mstool.
+7. **Reviews the backmapped lipids** for bonds threaded through rings and for wrong stereochemistry. If it finds
    one, it backmaps again with a new seed (up to five attempts).
-7. **Builds the CHARMM36 topology**: `pdb2gmx` for the protein, molecule topologies for lipids and ligands.
-8. **Sizes the box** (`BOX = auto`), adds water and 0.15 M NaCl, and writes the index groups.
-9. **Energy-minimizes** with GROMACS.
-10. **Audits the result** from the output files alone (`grompp -maxwarn 0`, `gmx check`, energies, geometry, ring
+8. **Builds the CHARMM36 topology**: `pdb2gmx` for the protein, molecule topologies for lipids and ligands.
+9. **Sizes the box in z**, adds water and 0.15 M NaCl, and writes the index groups.
+10. **Energy-minimizes** with GROMACS.
+11. **Audits the result** from the output files alone (`grompp -maxwarn 0`, `gmx check`, energies, geometry, ring
    threading). Only after the audit passes is the final structure published as `em.gro`.
 
 MembraneForger stops at the energy-minimized system. Equilibration and production molecular dynamics are up to you.
@@ -233,7 +263,7 @@ Set `MEMBRANEFORGER_GMX` if GROMACS is not on the path as `gmx`.
 
 What has been tested:
 
-- 166 unit, negative, invariance and orientation tests (the command above; three need real PPM, the network or an mstool-free interpreter and are skipped otherwise).
+- 187 unit, negative, invariance, orientation and slicing tests (the command above; three need real PPM, the network or an mstool-free interpreter and are skipped otherwise).
 - Complete builds of nine receptor–peptide–Gs systems (glucagon, GLP-1 and GIP receptors), each passing the audit.
 - The bundled example, built from a fresh clone of this layout.
 - Two deliberate failures, a truncated minimization and a membrane with a threaded ring, both of which are refused.
@@ -260,7 +290,9 @@ python membraneforger/visualization.py example_out --out renders --mode publicat
 - **Rigid placement.** The all-atom complex is placed as one rigid body. A chain that moved relative to the others
   during the coarse-grained run keeps its all-atom pose, and the build is refused if it no longer fits.
 - **Box and membrane.** Orthorhombic cells with one planar bilayer. Triclinic cells and more than one bilayer are
-  refused.
+  refused. With `BOX = auto` the membrane is cut around the complex, so the lipid composition of the build is that of
+  the kept lipids, and the cut edges are a seam that was never equilibrated; minimization and the audit are the checks
+  on it.
 - **Protein.** Inter-chain disulfides and residue insertion codes are refused.
 - **GM3 stereochemistry.** Six GM3 stereocentres have malformed definitions in the mstool mapping and are not
   controlled. Every run with GM3 reports this as a warning.
