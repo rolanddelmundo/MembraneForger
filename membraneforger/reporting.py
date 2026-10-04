@@ -12,7 +12,7 @@ import sys
 import time
 from pathlib import Path
 
-__all__ = ['SOURCE_AT_IMPORT', 'source_state', 'software_versions', 'artifact_hashes', 'write_run_manifest']
+__all__ = ['SOURCE_AT_IMPORT', 'source_state', 'software_versions', 'artifact_hashes', 'orientation_summary', 'write_run_manifest']
 
 PACKAGE = Path(__file__).resolve().parent
 ENVIRONMENT = ("MEMBRANEFORGER_TOPPAR", "MEMBRANEFORGER_DATA", "OMP_NUM_THREADS", "GMXLIB", "CONDA_PREFIX", "TMPDIR",
@@ -50,6 +50,23 @@ def artifact_hashes(out: Path) -> dict:
             for p in files}
 
 
+def orientation_summary(report: dict | None) -> dict | None:
+    """The orientation record for the manifest: the full report plus flat keys for the fields a reader looks up first."""
+    if not report:
+        return report
+    reference, ppm = report.get("reference") or {}, report.get("ppm") or {}
+    fit = report.get("fit") or {}
+    return {**report,
+            "reference_source": reference.get("source") or (ppm.get("executable") and f"PPM run {ppm['executable']}") or None,
+            "reference_sha256": reference.get("sha256") or ppm.get("output_sha256"),
+            "ppm_version": ppm.get("version"),
+            "ppm_parameters": {k: ppm.get(k) for k in ("membrane_code", "curvature", "nterm_side", "heteroatoms_submitted",
+                                                     "input", "executable_sha256", "res_lib_sha256")} if ppm else None,
+            "fit_rmsd": fit.get("core_rmsd_A", fit.get("rmsd_A")),
+            "translation_vector": report.get("translation_A"),
+            "membrane_center": report.get("membrane_center_A")}
+
+
 def write_run_manifest(session, status: str, error: dict | None, started: str, hashes: dict, command: list) -> Path:
     """Write run_manifest.json for a finished (passed or failed) build and return its path."""
     record = session.record
@@ -66,6 +83,7 @@ def write_run_manifest(session, status: str, error: dict | None, started: str, h
         "settings": vars(session.settings) if hasattr(session.settings, "__dict__") else
                     {f: getattr(session.settings, f) for f in session.settings.__dataclass_fields__},
         "stage_seconds": session.timings,
+        "orientation": orientation_summary(record.get("orientation")), "slice": record.get("slice"), "box": record.get("box"),
         "coarse_grain": record.get("coarse_grain"), "aa_cg_mapping": record.get("aa_cg_mapping"),
         "embedding": record.get("embedding"), "lipid_edits": record.get("lipid_edits"), "box_trim": record.get("box_trim"),
         "backmap_isomer_review": record.get("backmap_isomer_review"),

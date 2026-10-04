@@ -27,34 +27,55 @@ from .structio import element, read_gro, wrap, write_gro, xyz_nm
 
 __all__ = ['rebox_system', 'solute_geometry', 'solvate_system', 'add_ions', 'make_index']
 
-def rebox_system(system: dict, topology: dict, requested_z_nm: float | None = None) -> list[float]:
-    """Keep the membrane XY cell and size z so water covers the protein/ligand above and below the membrane."""
-    # A requested z (from --box) is used when it leaves at least the default water padding, else refused.
+def rebox_system(system: dict, topology: dict, requested_z_nm: float | None = None, z_pad_nm: float = SLAB_Z_PAD_NM) -> list[float]:
+    """Keep the membrane XY cell and size z around the bilayer midplane so water covers everything above and below."""
+    # x and y are the membrane cell (the lipids are periodic in it; --box x and y were already applied by slicing). z is
+    # centred on the bilayer midplane, found halfway between the two lipid phosphate planes (robust against a single
+    # stray lipid or tall head groups, unlike the extent of all membrane atoms), and reaches z_pad_nm beyond the
+    # farthest solute or membrane heavy atom on either side, but never less than MIN_Z_PAD_TOTAL_NM over the full
+    # extent of all atoms. A requested z (from --box) is used when it is at least that tall, else refused.
     coords, cryst = topology["coords"], system["cryst1"].ljust(80)
     if not all(abs(float(cryst[i:i + 7]) - 90.0) < 0.02 for i in (33, 40, 47)):
         raise SystemExit("input CRYST1 is not orthorhombic")
     box_x, box_y = float(cryst[6:15]) / 10.0, float(cryst[15:24]) / 10.0
     heavy = [a for a in coords if element(a["atom"]) != "H"]
-    memb_z = [a["z"] for a in heavy if a["group"] == "MEMB"]
-    solute_z = [a["z"] for a in heavy if a["group"] == "Protein_LIG"]
-    if not (memb_z and solute_z):
+    memb_z = np.array([a["z"] for a in heavy if a["group"] == "MEMB"]) / 10.0
+    solute_z = np.array([a["z"] for a in heavy if a["group"] == "Protein_LIG"]) / 10.0
+    if not (len(memb_z) and len(solute_z)):
         raise SystemExit("rebox needs membrane lipids and a protein")
-    center = 0.5 * (min(memb_z) + max(memb_z)) / 10.0
-    top, bottom = max(solute_z) / 10.0, min(solute_z) / 10.0
+    phosphorus = np.array([a["z"] for a in heavy if a["group"] == "MEMB" and a["atom"] == "P"]) / 10.0
+    middle = 0.5 * (memb_z.min() + memb_z.max())
+    if len(phosphorus) >= 10 and (phosphorus < middle).any() and (phosphorus >= middle).any():
+        planes = [float(np.median(phosphorus[phosphorus < middle])), float(np.median(phosphorus[phosphorus >= middle]))]
+        center, centre_source = 0.5 * (planes[0] + planes[1]), "midpoint between the lipid phosphate planes"
+    else:
+        planes, center, centre_source = None, float(middle), "midpoint of the membrane heavy-atom extent (no phosphate planes)"
+    top, bottom = float(solute_z.max()), float(solute_z.min())
+    half = max(top - center, center - bottom, float(memb_z.max()) - center, center - float(memb_z.min())) + z_pad_nm
     all_z = np.array([a["z"] for a in coords]) / 10.0
-    box_z = max(2.0 * (max(top - center, center - bottom) + SLAB_Z_PAD_NM), float(all_z.max() - all_z.min()) + MIN_Z_PAD_TOTAL_NM)
+    minimum = max(2.0 * half, float(all_z.max() - all_z.min()) + MIN_Z_PAD_TOTAL_NM)
+    box_z, mode = math.ceil(minimum * 1000.0) / 1000.0, "auto"
     if requested_z_nm is not None:
         if requested_z_nm < box_z - 1e-6:
             raise SystemExit(f"requested box z {requested_z_nm * 10:.0f} A is below the {box_z * 10:.0f} A this system needs "
-                             f"({SLAB_Z_PAD_NM} nm of water above and below the complex)")
-        box_z = float(requested_z_nm)
+                             f"({z_pad_nm} nm of water above and below the complex and membrane)")
+        box_z, mode = float(requested_z_nm), "user"
     shift = box_z / 2.0 - center
     if (all_z + shift).min() <= 0.0 or (all_z + shift).max() >= box_z:
         raise SystemExit("solute extends beyond the rebuilt z box")
     atoms = [dict(a, x=a["x"] / 10.0, y=a["y"] / 10.0, z=a["z"] / 10.0 + shift) for a in coords]
     write_gro(atoms, [box_x, box_y, box_z], system["out"] / "boxed.gro", f"{system['name']} boxed")
-    log(system["out"], f"rebox: {box_x:.3f} x {box_y:.3f} x {box_z:.3f} nm; membrane centre z {center:.2f} nm, "
-                       f"solute top {top - center:+.2f} nm, solute bottom {bottom - center:+.2f} nm, pad {SLAB_Z_PAD_NM} nm")
+    system["box_report"] = {"mode": mode, "box_nm": [box_x, box_y, box_z], "xy_source": "membrane cell (CRYST1)",
+                            "bilayer_midplane_nm": round(center, 4), "midplane_source": centre_source,
+                            "phosphate_planes_nm": [round(p, 4) for p in planes] if planes else None,
+                            "solute_above_midplane_nm": round(top - center, 4), "solute_below_midplane_nm": round(center - bottom, 4),
+                            "membrane_above_midplane_nm": round(float(memb_z.max()) - center, 4),
+                            "membrane_below_midplane_nm": round(center - float(memb_z.min()), 4),
+                            "z_pad_nm": z_pad_nm, "minimum_z_nm": round(minimum, 4), "shift_nm": round(shift, 4),
+                            "requested_z_nm": requested_z_nm}
+    log(system["out"], f"rebox ({mode}): {box_x:.3f} x {box_y:.3f} x {box_z:.3f} nm; bilayer midplane z {center:.2f} nm "
+                       f"({centre_source}), solute top {top - center:+.2f} nm, solute bottom {bottom - center:+.2f} nm, "
+                       f"pad {z_pad_nm} nm, minimum z {minimum:.3f} nm")
     return [box_x, box_y, box_z]
 
 

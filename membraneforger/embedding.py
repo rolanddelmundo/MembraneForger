@@ -87,12 +87,14 @@ def periodic_mean(values: np.ndarray, length: float) -> float:
 
 
 def embed_complex(aa_atoms: list[dict], cg_protein: list[list[dict]], membrane: list[dict], box: list[float],
-                  slab: tuple[float, float], bilayer_z_a: float | None = None, overlap_nm: float = OVERLAP_NM) -> dict:
+                  slab: tuple[float, float], bilayer_z_a: float | None = None, midplane_nm: float | None = None,
+                  overlap_nm: float = OVERLAP_NM) -> dict:
     """Put the complex where the frame's own protein was, with its hydrophobic belt on the midplane, and clear overlaps."""
     # Returns the identity rotation and the translation (A) applied to the complex, the placed atoms, the membrane
     # molecules that remain, and notes/metrics for the log and manifest. The complex is not rotated.
     cell = np.array(box)
-    midplane = 0.5 * (slab[0] + slab[1])
+    # midplane_nm: the bilayer midplane to put the bilayer centre on (default: the middle of the membrane's z extent).
+    midplane = 0.5 * (slab[0] + slab[1]) if midplane_nm is None else float(midplane_nm)
     belt = hydrophobic_belt(aa_atoms) if bilayer_z_a is None else {"z_a": float(bilayer_z_a), "given": True}
     centre_z = belt["z_a"] / 10.0
     bb = np.array([[b["x"], b["y"], b["z"]] for res in cg_protein for b in res if b["atom"] == "BB"])
