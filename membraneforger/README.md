@@ -4,7 +4,7 @@ All-atom protein/ligand complex + Martini 3 coarse-grained membrane system -> va
 all-atom CHARMM36/GROMACS system.
 
 ```bash
-python -m membraneforger --all-atom prot-lig.pdb --coarse-grain system.gro --out output_directory
+python -m membraneforger --all-atom prot-lig.pdb --coarse-grain system.gro --orient-chain R --out output_directory
 ```
 
 | File | Role |
@@ -14,10 +14,11 @@ python -m membraneforger --all-atom prot-lig.pdb --coarse-grain system.gro --out
 | `config.py` | CHARMM/GROMACS constants and the tunable `Settings` |
 | `martini.py` | the Martini 3 classification layer and residue-name aliases |
 | `validation.py` | input validation, input/stale-output protection |
-| `alignment.py` | sequence correspondence and rigid placement of the all-atom complex |
+| `orientation.py` | membrane orientation from the anchor chain(s): OPM exact reference or local PPM 3.0, one rigid transform for the whole complex, validation, `orientation_report.json` |
+| `alignment.py` | sequence correspondence and rigid placement of the all-atom complex (a free fit, or, after orientation, a rotation about z plus translation that keeps the orientation) |
 | `backmapping.py`, `mstool_worker.py` | membrane backmapping; the worker is the only file that imports mstool |
 | `topology.py` | structure repair and CHARMM36 topology construction |
-| `solvation.py` | box, water, ions, index groups |
+| `solvation.py` | box (`BOX = auto` around the bilayer midplane, or an opt-in user box), water, ions, index groups |
 | `minimization.py` | EM and its validation |
 | `audit.py` | independent audit (own parsers, `grompp -maxwarn 0`, `gmx check`, `gmx energy`, geometry) |
 | `reporting.py` | `run_manifest.json` |

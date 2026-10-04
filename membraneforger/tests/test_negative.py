@@ -186,7 +186,9 @@ class CommandLineRefusals(unittest.TestCase):
     """End-to-end refusals through the real entry point; none may leave em.gro behind."""
 
     def run_cli(self, *args):
-        result = subprocess.run([sys.executable, "-m", "membraneforger", *map(str, args)], cwd=REPO, text=True, capture_output=True)
+        # These tests exercise the stages after orientation on a multi-chain input, so orientation is switched off.
+        result = subprocess.run([sys.executable, "-m", "membraneforger", "--orientation", "none", *map(str, args)],
+                                cwd=REPO, text=True, capture_output=True)
         return result.returncode, result.stdout + result.stderr
 
     def setUp(self):
@@ -209,6 +211,8 @@ class CommandLineRefusals(unittest.TestCase):
         self.assertIn("has no map.dat", output)
 
     def test_interpreter_without_mstool(self):
+        if subprocess.run(["/usr/bin/python3", "-c", "import mstool"], capture_output=True).returncode == 0:
+            self.skipTest("/usr/bin/python3 can import mstool on this machine")
         out = self.tmp / "nomstool"
         code, output = self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--out", out, "--gmx", self.gmx,
                                     "--mstool-python", "/usr/bin/python3")

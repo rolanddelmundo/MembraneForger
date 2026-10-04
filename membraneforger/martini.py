@@ -14,7 +14,7 @@ from .structio import xyz_nm
 __all__ = ['MARTINI3_PROTEIN', 'MARTINI2_PROTEIN', 'MARTINI3_PROTEIN_ALIASES', 'MARTINI3_SOLVENT',
            'MARTINI3_ION_BEADS', 'MARTINI2_ONLY', 'MARTINI3_MEMBRANE', 'MARTINI3_GLYCOLIPIDS', 'gro_safe_aliases',
            'structure_resname', 'cg_residues', 'membrane_entry', 'classify_cg_residue', 'classify_glycolipid',
-           'classify_cg', 'make_membrane_whole']
+           'classify_cg', 'make_membrane_whole', 'bilayer_midplane']
 
 # Side-chain beads per residue in Martini 3. Martini 2 differs (ALA 0, TYR 3, TRP 4) and is rejected.
 MARTINI3_PROTEIN = {"GLY": 0, "ALA": 1, "CYS": 1, "VAL": 1, "LEU": 1, "ILE": 1, "MET": 1, "PRO": 1, "SER": 1,
@@ -204,3 +204,20 @@ def make_membrane_whole(membrane: list[dict], box: list[float]) -> tuple[float, 
         raise SystemExit(f"membrane beads span {high - low:.1f} nm of a {cell[2]:.1f} nm box in z; "
                          "expected one planar bilayer normal to z")
     return low, high
+
+
+def bilayer_midplane(membrane: list[dict], slab: tuple[float, float]) -> tuple[float, str, dict]:
+    """Locate the CG bilayer midplane (nm) halfway between the two PO4 leaflet planes of the whole membrane."""
+    # Returns the midplane, how it was found, and the leaflet planes plus the bilayer normal from the PO4 beads.
+    xyz = np.array([[b["x"], b["y"], b["z"]] for mol in membrane for b in mol["beads"] if b["atom"] == "PO4"])
+    middle = 0.5 * (slab[0] + slab[1])
+    if len(xyz) < 10 or not (xyz[:, 2] < middle).any() or not (xyz[:, 2] >= middle).any():
+        return middle, "midpoint of the membrane bead extent (fewer than 10 PO4 beads in two leaflets)", {}
+    centred = xyz - xyz.mean(axis=0)
+    _, vectors = np.linalg.eigh(centred.T @ centred)
+    normal = vectors[:, 0] * np.sign(vectors[2, 0] or 1.0)
+    lower, upper = float(np.median(xyz[xyz[:, 2] < middle, 2])), float(np.median(xyz[xyz[:, 2] >= middle, 2]))
+    detail = {"po4_planes_nm": [round(lower, 4), round(upper, 4)], "po4_beads": int(len(xyz)),
+              "po4_normal": [round(float(v), 5) for v in normal],
+              "po4_normal_tilt_from_z_deg": round(float(np.degrees(np.arccos(min(1.0, abs(normal[2]))))), 3)}
+    return 0.5 * (lower + upper), "midpoint between the two PO4 leaflet planes", detail

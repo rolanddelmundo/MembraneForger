@@ -15,8 +15,9 @@ from .alignment import map_all_atom_to_cg
 from .audit import audit_run, check_ring_piercing, closest_contact_between
 from .backmapping import assemble_membrane_pdb, backmap_membrane, read_mapping
 from .config import AMINO, DEFAULT_LIGANDS, RENAME_MOLECULE, Settings
-from .martini import classify_cg, make_membrane_whole
+from .martini import bilayer_midplane, classify_cg, make_membrane_whole
 from .minimization import run_em, validate_em
+from .orientation import OrientationRequest, check_orientation_preserved, orient_complex
 from .reporting import write_run_manifest
 from .runtools import LOG_NAME, gromacs_version, log, sha256
 from .solvation import add_ions, make_index, rebox_system, solvate_system
@@ -30,6 +31,8 @@ __all__ = ['Session', 'StageFailure', 'run_stage', 'prepare_inputs', 'backmap_an
 # What to look at when a stage fails; {out} and {work} are filled in at run time.
 STAGE_HINTS = {
     "inputs": "the input file named in the message",
+    "orient": "{out}/orientation_report.json, the chains of the all-atom input, and {work}/orientation/ppm/ with the PPM "
+              "transcript in {out}/" + LOG_NAME,
     "mstool": "the --mstool-python interpreter and the transcript at the end of {out}/" + LOG_NAME,
     "classify": "the residue and bead names of the coarse-grained input listed in the message",
     "mapping": "{out}/aa_cg_mapping.tsv if written, and the chain sequences of both inputs",
@@ -61,6 +64,8 @@ class Session:
     ntomp: int
     nsteps: int
     settings: Settings = field(default_factory=Settings)
+    orientation: OrientationRequest = field(default_factory=lambda: OrientationRequest(mode="none"))
+    box: tuple | None = None  # None: BOX=auto; else the opt-in (x, y, z) in nm
     work: Path | None = None
     timings: dict = field(default_factory=dict)
     record: dict = field(default_factory=dict)
@@ -99,6 +104,13 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
     aa_atoms, notes = run_stage(session, "inputs", read_all_atom, all_atom, session.forcefield)
     for note in notes:
         log(out, note)
+    # Orientation first: it needs only the all-atom input, and it must fail before anything expensive runs.
+    (work / "orientation").mkdir(exist_ok=True)
+    oriented = run_stage(session, "orient", orient_complex, aa_atoms, all_atom, session.orientation, session.settings,
+                         out, work / "orientation")
+    record["orientation"] = oriented["report"]
+    write_orientation_report(out, oriented["report"])
+    aa_atoms = oriented["oriented"]  # from here on the PPM/OPM frame is authoritative: nothing may tilt the complex
     cg_atoms, box = run_stage(session, "inputs", read_cg, coarse_grain)
     described = run_stage(session, "mstool", read_mapping, out, work, session.python, session.data)
     mapping = described["residues"]
@@ -121,7 +133,15 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
                                            "are rebuilt after the box is resized"}
     run_stage(session, "classify", require_membrane_topologies, cg["membrane"], session.forcefield)
     slab = run_stage(session, "classify", make_membrane_whole, cg["membrane"], box)
-    fit = run_stage(session, "mapping", map_all_atom_to_cg, aa_atoms, cg["protein"], box, slab, session.settings)
+    midplane, midplane_how, leaflets = run_stage(session, "classify", bilayer_midplane, cg["membrane"], slab)
+    record["coarse_grain"].update({"membrane_z_range_nm": [round(slab[0], 4), round(slab[1], 4)],
+                                   "bilayer_midplane_nm": round(midplane, 4), "bilayer_midplane_source": midplane_how, **leaflets})
+    log(out, f"CG bilayer midplane z {midplane:.3f} nm ({midplane_how})"
+             + (f"; PO4 normal {leaflets['po4_normal_tilt_from_z_deg']} deg from z" if leaflets else ""))
+    enabled = oriented["report"]["enabled"]
+    fit = run_stage(session, "mapping", map_all_atom_to_cg, aa_atoms, cg["protein"], box, slab, session.settings,
+                    midplane if enabled else None, tuple(oriented["report"]["anchor_chains"]),
+                    oriented["report"].get("half_thickness_A"))
     for note in fit["notes"]:
         log(out, f"AA-CG: {note}", "WARN" if "keeps its all-atom pose" in note else "INFO")
     (out / "aa_cg_mapping.tsv").write_text("aa_chain\taa_residue\tcg_segment\tcg_residue\tdeviation_A\tfit\n"
@@ -131,6 +151,17 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
              f"core fraction {fit['metrics']['core_fraction']:.2f} >= {session.settings.fit_min_core_fraction}", "PASS")
     moved = xyz_nm(aa_atoms) @ fit["R"].T + fit["t"]
     placed = [dict(a, x=float(x), y=float(y), z=float(z)) for a, (x, y, z) in zip(aa_atoms, moved)]
+    if enabled:  # prove the registration kept the orientation: normal still z, depth unchanged
+        preserved = run_stage(session, "mapping", check_orientation_preserved, aa_atoms, placed,
+                              oriented["report"]["anchor_chains"], midplane * 10.0)
+        oriented["report"]["registration"] = {**fit["metrics"]["registration"], "cg_midplane_source": midplane_how,
+                                              **{f"cg_{k}": v for k, v in leaflets.items()}, "check": preserved,
+                                              "final_membrane_normal": preserved["membrane_normal_after_registration"],
+                                              "final_membrane_center_nm": [None, None, round(midplane, 4)]}
+        write_orientation_report(out, oriented["report"])
+        log(out, f"orientation preserved through CG registration: normal tilt {preserved['normal_tilt_deg']:.1e} deg, anchor "
+                 f"depth {preserved['anchor_ca_depth_A']:+.2f} A kept; CG pose differs by "
+                 f"{fit['metrics']['registration']['tilt_between_cg_anchor_pose_and_orientation_deg']} deg (measured, not adopted)", "PASS")
     return {"placed": placed, "membrane": cg["membrane"], "box": box, "mapping": mapping,
             "composition": Counter(RENAME_MOLECULE.get(m["aa"], m["aa"]) for m in cg["membrane"]),
             "ligands": DEFAULT_LIGANDS | {a["resname"] for a in aa_atoms if a["resname"] not in AMINO}}
@@ -151,6 +182,11 @@ def backmap_and_assemble(session: Session, prepared: dict, seed: int) -> Path:
     log(out, f"membrane.pdb (seed {seed}): {len(prepared['placed'])} protein/ligand atoms placed, {len(lipids)} membrane "
              f"molecules backmapped ({natoms} atoms); inventory matches the coarse-grained input", "PASS")
     return out / "membrane.pdb"
+
+
+def write_orientation_report(out: Path, report: dict) -> None:
+    """Write orientation_report.json (rewritten once the CG registration has been checked)."""
+    (out / "orientation_report.json").write_text(json.dumps(report, indent=2, default=str) + "\n")
 
 
 def require_membrane_topologies(membrane: list[dict], forcefield: Path) -> None:
@@ -208,7 +244,8 @@ def build_topology_and_box(session: Session, membrane: Path, ligands: set, expec
     topology = run_stage(session, "topology", build_topology, system, work, gmx)
     for note in topology["notes"]:
         log(out, note)
-    box = run_stage(session, "box", rebox_system, system, topology)
+    box = run_stage(session, "box", rebox_system, system, topology, session.box, session.settings.box_z_pad_nm)
+    session.record["box"] = system["box_report"]
     rings = run_stage(session, "rings", review_ring_piercing, out, "boxed.gro")
     solute_atoms = sum(n * len(atoms) for _, n, atoms, group in topology["molecules"] if group == "Protein_LIG")
     contact = run_stage(session, "rings", closest_contact_between, out, "boxed.gro", solute_atoms)

@@ -9,6 +9,7 @@ from .structio import *
 from .martini import *
 from .validation import *
 from .alignment import *
+from .orientation import *
 from .backmapping import *
 from .topology import *
 from .solvation import *
