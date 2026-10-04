@@ -1,7 +1,7 @@
-## MembraneForger: all-atom membrane systems from a single all-atom PDB
+## MembraneForger: all-atom preequilibrated membrane
 
 MembraneForger: software package that embeds an all-atom protein (or protein–ligand) structure into a
-pre-equilibrated Martini 3 cell-membrane model, backmaps the membrane with
+pre-equilibrated Martini 3 coarse-grained cell-membrane, backmaps the membrane with
 [mstool](https://github.com/ksy141/mstool), and returns a validated, energy-minimized all-atom
 CHARMM36 / GROMACS system (`em.gro`). You only need one input file: your all-atom structure, oriented with the
 membrane normal along z (as from OPM or CHARMM-GUI).
