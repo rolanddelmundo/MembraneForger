@@ -33,7 +33,7 @@ def sha256(path: Path) -> str:
 
 
 def run_command(out: Path, cmd: list, stdin: str | None = None, env: dict | None = None, produces: tuple = (),
-                cwd: Path | None = None) -> str:
+                cwd: Path | None = None, timeout: float | None = None) -> str:
     """Run an external command without a shell, log its transcript, and fail unless it exits 0 and writes its outputs."""
     # Files listed in `produces` are deleted first and must exist and be non-empty afterwards, so a stale or
     # partial file from an earlier run can never stand in for the output of a command that did not finish.
@@ -43,9 +43,11 @@ def run_command(out: Path, cmd: list, stdin: str | None = None, env: dict | None
         target.unlink(missing_ok=True)
     env = dict(env if env is not None else os.environ, GMX_MAXBACKUP="-1")  # never leave #file.N# backups behind
     try:
-        result = subprocess.run(cmd, cwd=cwd or out, text=True, capture_output=True, input=stdin, env=env)
+        result = subprocess.run(cmd, cwd=cwd or out, text=True, capture_output=True, input=stdin, env=env, timeout=timeout)
     except OSError as exc:
         raise SystemExit(f"cannot run {cmd[0]}: {exc}") from None
+    except subprocess.TimeoutExpired:
+        raise SystemExit(f"{Path(cmd[0]).name} did not finish within {timeout} s") from None
     output = result.stdout + result.stderr
     log(out, f"$ {' '.join(cmd)}\n{output}", "DEBUG")
     step = next((c for c in cmd[1:] if not c.startswith("-") and "/" not in c), Path(cmd[0]).name)
