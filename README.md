@@ -1,7 +1,7 @@
 ## MembraneForger: all-atom membrane systems from a single all-atom PDB
 
 MembraneForger: software package that embeds an all-atom protein (or protein–ligand) structure into a
-pre-equilibrated 40 × 40 nm Martini 3 plasma-membrane mimic, backmaps the membrane with
+pre-equilibrated 18 × 18 nm Martini 3 plasma-membrane mimic, backmaps the membrane with
 [mstool](https://github.com/ksy141/mstool), and returns a validated, energy-minimized all-atom
 CHARMM36 / GROMACS system (`em.gro`). You only need one input file: your all-atom structure.
 
@@ -34,13 +34,13 @@ To use your own Martini 3 membrane instead of the bundled one, add `--coarse-gra
 
 **Bundled membrane**
 
-Leaflet composition in mole percent (`examples/leaflet_composition.py`, averaged over the equilibrated frames in
+Leaflet composition in mole percent (`examples/leaflet_composition.py`, averaged over the 18 frames in
 `examples/preeq_cg_cellmem/`, rounded to whole numbers):
 
 | Lipid | CHOL | POPC | DOPC | POPE | DOPE | PSM | GM3 | POPS | DOPS | PIP2 (SAP6) |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Outer leaflet | 27 | 19 | 19 | 5 | 5 | 15 | 10 | 0 | 0 | 0 |
-| Inner leaflet | 23 | 5 | 5 | 21 | 21 | 0 | 0 | 8 | 7 | 10 |
+| Outer leaflet | 28 | 19 | 19 | 5 | 5 | 14 | 10 | 0 | 0 | 0 |
+| Inner leaflet | 22 | 5 | 5 | 21 | 21 | 0 | 0 | 8 | 7 | 10 |
 
 **Output**
 
