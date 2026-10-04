@@ -13,9 +13,9 @@ from .config import AMINO, ONE_LETTER, Settings
 from .martini import MARTINI3_PROTEIN_ALIASES
 from .structio import residues_in_order, xyz_nm
 
-__all__ = ['align_sequences', 'kabsch', 'rmsd', 'all_atom_chains', 'cg_protein_segments', 'candidate_matches',
-           'assign_matches', 'fit_assignment', 'resolve_interchangeable_chains', 'choose_periodic_image',
-           'map_all_atom_to_cg']
+__all__ = ['align_sequences', 'kabsch', 'kabsch_about_z', 'rmsd', 'all_atom_chains', 'cg_protein_segments',
+           'candidate_matches', 'assign_matches', 'fit_assignment', 'resolve_interchangeable_chains',
+           'choose_periodic_image', 'map_all_atom_to_cg']
 
 def align_sequences(a: str, b: str) -> list[tuple[int, int]]:
     """Semi-global alignment (end gaps are free): returns the aligned index pairs of two one-letter sequences."""
@@ -44,6 +44,16 @@ def kabsch(P: np.ndarray, Q: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     pc, qc = P.mean(axis=0), Q.mean(axis=0)
     U, _, Vt = np.linalg.svd((P - pc).T @ (Q - qc))
     R = Vt.T @ np.diag([1.0, 1.0, np.sign(np.linalg.det(Vt.T @ U.T))]) @ U.T
+    return R, qc - R @ pc
+
+
+def kabsch_about_z(P: np.ndarray, Q: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Least-squares rotation about z plus translation taking P onto Q; the z axis (membrane normal) is kept."""
+    pc, qc = P.mean(axis=0), Q.mean(axis=0)
+    H = (P - pc)[:, :2].T @ (Q - qc)[:, :2]
+    theta = math.atan2(H[0, 1] - H[1, 0], H[0, 0] + H[1, 1])
+    c, s = math.cos(theta), math.sin(theta)
+    R = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
     return R, qc - R @ pc
 
 
@@ -122,25 +132,28 @@ def assign_matches(candidates: dict) -> tuple[list, dict]:
 
 
 def fit_assignment(assignment: list, aa: OrderedDict, segments: list[dict], candidates: dict, cell: np.ndarray,
-                   settings: Settings) -> dict:
+                   settings: Settings, about_z: bool = False) -> dict:
     """Image every assigned CG segment next to the largest one, then find one trimmed rigid transform for all pairs."""
+    # about_z restricts the transform to a rotation about z plus a translation: used when the all-atom complex is
+    # already membrane-oriented, so that the CG registration can never tilt it away from the membrane normal.
+    fit = kabsch_about_z if about_z else kabsch
     blocks = [(k, label, np.array([aa[label]["xyz"][i] for i, _ in candidates[(label, k)]["pairs"]]),
                np.array([segments[k]["xyz"][j] for _, j in candidates[(label, k)]["pairs"]]))
               for label, k in assignment]
     anchor = max(blocks, key=lambda b: len(b[2]))
-    R, t = kabsch(anchor[2], anchor[3])
+    R, t = fit(anchor[2], anchor[3])
     shifts = [cell * np.round(((P @ R.T + t).mean(axis=0) - Q.mean(axis=0)) / cell) for _, _, P, Q in blocks]
     P = np.vstack([b[2] for b in blocks])
     Q = np.vstack([b[3] + shift for b, shift in zip(blocks, shifts)])
     keep = np.ones(len(P), dtype=bool)
     for _ in range(8):
-        R, t = kabsch(P[keep], Q[keep])
+        R, t = fit(P[keep], Q[keep])
         error = np.linalg.norm(P @ R.T + t - Q, axis=1)
         trimmed = error <= max(settings.fit_trim_factor * float(np.median(error)), settings.fit_trim_floor_a)
         if trimmed.sum() < 3 or (trimmed == keep).all():
             break
         keep = trimmed
-    R, t = kabsch(P[keep], Q[keep])  # the returned transform always belongs to the returned core
+    R, t = fit(P[keep], Q[keep])  # the returned transform always belongs to the returned core
     error = np.linalg.norm(P @ R.T + t - Q, axis=1)
     return {"R": R, "t": t, "error": error, "keep": keep, "Q": Q, "blocks": blocks, "shifts": shifts,
             "rmsd": rmsd(error), "core": rmsd(error[keep])}
@@ -200,11 +213,16 @@ def choose_periodic_image(points: np.ndarray, cell: np.ndarray, slab: tuple[floa
 
 
 def map_all_atom_to_cg(aa_atoms: list[dict], cg_protein: list[list[dict]], box: list[float], slab: tuple[float, float],
-                       settings: Settings = Settings()) -> dict:
+                       settings: Settings = Settings(), midplane_nm: float | None = None, anchors: tuple = (),
+                       embedded_half_a: float | None = None) -> dict:
     """Match all-atom chains to CG protein segments by sequence and find the rigid transform that places the complex."""
     # Chain IDs and residue numbers are never compared. Backbone centres (N, CA, C, O) are fitted onto BB beads,
     # which is where Martini 3 places BB. One transform moves the whole complex so its interfaces stay intact.
+    # With midplane_nm (the CG bilayer midplane) and anchors, the all-atom complex is taken to be membrane-oriented
+    # already (normal +z, midplane z = 0): the registration is then a rotation about z plus a translation fitted on
+    # the anchor chain(s), with z = 0 put on the CG midplane. The orientation is kept; the CG frame is used laterally.
     cell = np.array(box) * 10.0
+    about_z = midplane_nm is not None
     aa = all_atom_chains(aa_atoms)
     segments = cg_protein_segments(cg_protein, cell, settings.cg_chain_break_nm)
     candidates = candidate_matches(aa, segments, settings)
@@ -213,9 +231,11 @@ def map_all_atom_to_cg(aa_atoms: list[dict], cg_protein: list[list[dict]], box: 
     if orphans:
         raise SystemExit("coarse-grained protein segment(s) with no all-atom counterpart: " + ", ".join(
             f"{segments[k]['ids'][0]}-{segments[k]['ids'][-1]} ({len(segments[k]['ids'])} residues)" for k in orphans))
-    fit = lambda assignment: fit_assignment(assignment, aa, segments, candidates, cell, settings)
+    fit = lambda assignment, z=False: fit_assignment(assignment, aa, segments, candidates, cell, settings, z)
     assigned, notes = resolve_interchangeable_chains(assigned, candidates, fit, settings)
     ambiguity = "; ".join(notes) or "none: every chain has a unique sequence match"
+    # The free (unconstrained) fit of the whole complex establishes that the all-atom complex IS the complex of the
+    # CG frame: same assembly, every chain where the CG frame has it. In the plain workflow it is also the placement.
     best = fit(assigned)
     core_fraction = float(best["keep"].mean())
     if core_fraction < settings.fit_min_core_fraction or best["core"] > settings.fit_max_core_rmsd_a:
@@ -233,6 +253,66 @@ def map_all_atom_to_cg(aa_atoms: list[dict], cg_protein: list[list[dict]], box: 
         if median > settings.fit_max_core_rmsd_a:
             displaced.append(f"chain {label} deviates from its CG counterpart by a median {median:.1f} A in the complex fit; "
                              "it keeps its all-atom pose relative to the rest of the complex")
+    registration = None
+    if about_z:
+        # Orientation mode: the complex is already in the membrane frame (normal +z, midplane z = 0) and that frame
+        # is authoritative. The CG frame only supplies the lateral registration, read from the anchor chain(s) with
+        # a rotation about z plus an xy translation; the z translation puts z = 0 on the CG bilayer midplane. The
+        # tilt and depth by which the equilibrated CG pose differs are measured and reported, never adopted.
+        anchor_assignment = [(label, k) for label, k in assigned if label in anchors]
+        if not anchor_assignment:
+            raise SystemExit(f"anchor chain(s) {list(anchors)} have no coarse-grained counterpart, so the oriented complex cannot "
+                             "be registered laterally to the CG membrane")
+        anchor_free = fit(anchor_assignment)
+        # The lateral registration must put the membrane-embedded part of the anchor into the lipid cavity; soluble
+        # domains above or below the membrane are a lever arm that only amplifies the (reported) tilt discrepancy.
+        # So the constrained fit uses the anchor residues inside the hydrophobic slab of the orientation when there
+        # are enough of them, and every anchor residue otherwise (a peripheral anchor).
+        embedded = {key: dict(candidates[key], pairs=[(i, j) for i, j in candidates[key]["pairs"]
+                                                      if embedded_half_a is None or abs(aa[key[0]]["xyz"][i][2]) <= embedded_half_a])
+                    for key in anchor_assignment}
+        n_embedded = sum(len(c["pairs"]) for c in embedded.values())
+        use_embedded = embedded_half_a is not None and n_embedded >= settings.register_min_embedded_pairs
+        reg = fit_assignment(anchor_assignment, aa, segments, embedded if use_embedded else candidates, cell, settings, True)
+        tilt = float(np.degrees(np.arccos(np.clip(anchor_free["R"][2, 2], -1.0, 1.0))))
+        complex_tilt = float(np.degrees(np.arccos(np.clip(best["R"][2, 2], -1.0, 1.0))))
+        midplane_a = midplane_nm * 10.0
+        depth_offset_a = float(reg["t"][2] - midplane_a)  # the CG pose puts the anchor this much higher than the midplane does
+        registration = {"constrained_to": "rotation about z + translation, fitted on the anchor chain(s) only; z translation "
+                                          "from the CG bilayer midplane",
+                        "anchor_chains": list(anchors), "anchor_backbone_pairs": int(len(reg["error"])),
+                        "fitted_on": (f"anchor residues with backbone centre inside +-{embedded_half_a} A of the midplane"
+                                      if use_embedded else "every matched anchor residue"),
+                        "embedded_pairs_available": int(n_embedded),
+                        "rotation_about_z_deg": round(float(np.degrees(np.arctan2(reg["R"][1, 0], reg["R"][0, 0]))), 3),
+                        "cg_midplane_nm": round(midplane_nm, 4),
+                        "depth_offset_cg_pose_minus_midplane_A": round(depth_offset_a, 3),
+                        "tilt_between_cg_anchor_pose_and_orientation_deg": round(tilt, 3),
+                        "tilt_between_cg_complex_pose_and_orientation_deg": round(complex_tilt, 3),
+                        "anchor_free_fit_core_rmsd_A": round(anchor_free["core"], 3),
+                        "anchor_constrained_core_rmsd_A": round(reg["core"], 3), "anchor_constrained_rmsd_A": round(reg["rmsd"], 3),
+                        "anchor_constrained_core_fraction": round(float(reg["keep"].mean()), 4),
+                        "complex_free_fit_core_rmsd_A": round(best["core"], 3),
+                        "limits": {"register_max_tilt_deg": settings.register_max_tilt_deg,
+                                   "register_max_depth_offset_nm": settings.register_max_depth_offset_nm,
+                                   "fit_max_core_rmsd_a": settings.fit_max_core_rmsd_a}}
+        if tilt > settings.register_max_tilt_deg:
+            raise SystemExit(f"the coarse-grained anchor pose is tilted {tilt:.1f} deg from the membrane orientation of the "
+                             f"all-atom complex (limit {settings.register_max_tilt_deg} deg); the CG membrane cavity does not "
+                             "fit the oriented complex, so no scientifically defensible registration exists")
+        if abs(depth_offset_a) > settings.register_max_depth_offset_nm * 10.0:
+            raise SystemExit(f"the coarse-grained anchor sits {depth_offset_a / 10:.2f} nm from where the membrane orientation "
+                             f"puts it (limit {settings.register_max_depth_offset_nm} nm)")
+        if reg["core"] > settings.fit_max_core_rmsd_a or float(reg["keep"].mean()) < settings.fit_min_core_fraction:
+            raise SystemExit(f"the oriented anchor cannot be registered laterally to its coarse-grained counterpart: core RMSD "
+                             f"{reg['core']:.2f} A over {int(reg['keep'].sum())}/{len(reg['keep'])} {'membrane-embedded ' if use_embedded else ''}"
+                             f"backbone pairs with a rotation about z only (limits {settings.fit_max_core_rmsd_a} A, "
+                             f"{settings.fit_min_core_fraction:.0%}); the CG pose is tilted {tilt:.1f} deg from the orientation")
+        best["R"], best["t"] = reg["R"], np.array([reg["t"][0], reg["t"][1], midplane_a])
+        # Deviations reported from here on are those of the actual placement; the core flags keep describing the
+        # correspondence (the free complex fit), which is what the rows' "fit" column has always meant.
+        best["error"] = np.linalg.norm(np.vstack([b[2] for b in best["blocks"]]) @ best["R"].T + best["t"] - best["Q"], axis=1)
+        registration["complex_rmsd_after_registration_A"] = round(rmsd(best["error"]), 3)
     shift, inside = choose_periodic_image(best["Q"], cell, slab)
     R, t = best["R"], best["t"] + shift
 
@@ -255,8 +335,8 @@ def map_all_atom_to_cg(aa_atoms: list[dict], cg_protein: list[list[dict]], box: 
                        "median_deviation_A": round(float(np.median(error)), 3)})
         notes.append(f"chain {label} ({len(aa[label]['seq'])} residues) -> CG segment {k + 1} "
                      f"{segments[k]['ids'][0]}-{segments[k]['ids'][-1]} ({len(segments[k]['seq'])} residues): "
-                     f"{len(P)} pairs, identity {match['same'] / len(P):.0%}, RMSD {rmsd(error):.2f} A in the complex fit, "
-                     f"{own:.2f} A fitted alone")
+                     f"{len(P)} pairs, identity {match['same'] / len(P):.0%}, RMSD {rmsd(error):.2f} A "
+                     f"{'after registration' if registration else 'in the complex fit'}, {own:.2f} A fitted alone")
     for k, seg in enumerate(segments):
         if len(seg["seq"]) > len(covered[k]):
             notes.append(f"CG segment {k + 1}: {len(seg['seq']) - len(covered[k])} of {len(seg['seq'])} residues have no "
@@ -266,8 +346,16 @@ def map_all_atom_to_cg(aa_atoms: list[dict], cg_protein: list[list[dict]], box: 
         notes.append(f"chain {label} ({len(aa[label]['seq'])} residues) has no coarse-grained counterpart; "
                      "it is carried rigidly with the complex")
     notes += displaced
-    notes.append(f"rigid fit: {len(best['error'])} backbone pairs, RMSD {best['rmsd']:.2f} A, core RMSD {best['core']:.2f} A "
-                 f"over {int(best['keep'].sum())} pairs; {inside} BB beads inside the bilayer")
+    notes.append(f"{'correspondence (free complex fit)' if registration else 'rigid fit'}: {len(best['error'])} backbone pairs, "
+                 f"RMSD {best['rmsd']:.2f} A, core RMSD {best['core']:.2f} A over {int(best['keep'].sum())} pairs; "
+                 f"{inside} BB beads inside the bilayer")
+    if registration:
+        notes.append(f"registration: rotation about z ({registration['rotation_about_z_deg']} deg) and translation fitted on "
+                     f"anchor {','.join(anchors)} ({registration['anchor_backbone_pairs']} pairs, {registration['fitted_on']}, core RMSD "
+                     f"{registration['anchor_constrained_core_rmsd_A']} A); the CG anchor pose is tilted "
+                     f"{registration['tilt_between_cg_anchor_pose_and_orientation_deg']} deg from the membrane orientation and sits "
+                     f"{registration['depth_offset_cg_pose_minus_midplane_A']:+.1f} A from the midplane placement (measured, not "
+                     f"adopted); whole-complex RMSD after registration {registration['complex_rmsd_after_registration_A']} A")
     metrics = {"chains": chains, "unmatched_aa_chains": unmatched, "backbone_pairs": len(best["error"]),
                "raw_rmsd_A": round(best["rmsd"], 3), "core_rmsd_A": round(best["core"], 3),
                "core_fraction": round(core_fraction, 4), "rotation": [[round(float(v), 6) for v in row] for row in R],
@@ -276,5 +364,6 @@ def map_all_atom_to_cg(aa_atoms: list[dict], cg_protein: list[list[dict]], box: 
                           "fit_min_core_fraction": settings.fit_min_core_fraction,
                           "fit_min_identity": settings.fit_min_identity,
                           "fit_max_chain_median_a": settings.fit_max_chain_median_a, "fit_min_coverage": settings.fit_min_coverage,
-                          "fit_trim_factor": settings.fit_trim_factor, "fit_trim_floor_a": settings.fit_trim_floor_a}}
+                          "fit_trim_factor": settings.fit_trim_factor, "fit_trim_floor_a": settings.fit_trim_floor_a},
+               "registration": registration}
     return {"R": R, "t": t, "rows": rows, "notes": notes, "assigned": sorted(assigned), "metrics": metrics}

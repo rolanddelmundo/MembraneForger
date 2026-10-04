@@ -67,6 +67,13 @@ class Embedding(unittest.TestCase):
         self.assertAlmostEqual(given["t"][2] - auto["t"][2], -10.0, places=3)
         self.assertTrue(given["metrics"]["hydrophobic_belt"].get("given"))
 
+    def test_given_midplane_puts_the_bilayer_centre_on_it(self):
+        aa, cg, box, slab = load(KOR1)
+        default = mf.embed_complex(aa, cg["protein"], cg["membrane"], box, slab, bilayer_z_a=0.0)
+        moved = mf.embed_complex(aa, cg["protein"], cg["membrane"], box, slab, bilayer_z_a=0.0, midplane_nm=default["metrics"]["midplane_nm"] + 0.5)
+        self.assertAlmostEqual(moved["t"][2] - default["t"][2], 5.0, places=3)
+        self.assertAlmostEqual(moved["metrics"]["midplane_nm"], default["metrics"]["midplane_nm"] + 0.5, places=3)
+
     def test_periodic_mean_crosses_the_boundary(self):
         self.assertAlmostEqual(mf.periodic_mean(np.array([0.1, 9.9]), 10.0), 0.0, places=6)
         self.assertAlmostEqual(mf.periodic_mean(np.array([4.0, 6.0]), 10.0), 5.0, places=6)
