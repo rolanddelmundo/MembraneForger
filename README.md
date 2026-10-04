@@ -1,9 +1,10 @@
 ## MembraneForger: all-atom membrane systems from a single all-atom PDB
 
 MembraneForger: software package that embeds an all-atom protein (or protein–ligand) structure into a
-pre-equilibrated 18 × 18 nm Martini 3 plasma-membrane mimic, backmaps the membrane with
+pre-equilibrated Martini 3 cell-membrane model, backmaps the membrane with
 [mstool](https://github.com/ksy141/mstool), and returns a validated, energy-minimized all-atom
-CHARMM36 / GROMACS system (`em.gro`). You only need one input file: your all-atom structure.
+CHARMM36 / GROMACS system (`em.gro`). You only need one input file: your all-atom structure, oriented with the
+membrane normal along z (as from OPM or CHARMM-GUI).
 
 **Installing Requirements**
 
@@ -26,27 +27,37 @@ GROMACS is also required (tested with 2023.3 and 2025.3). If it is not on your p
 No particular installation procedure is necessary. Clone the repository and run the package from its folder:
 
 ```bash
-python -m membraneforger --all-atom protein.pdb --out output_directory
+python -m membraneforger --aa protein.pdb --out output_directory
 ```
 
-The box is sized automatically. To set it yourself, give the three edge lengths in Å: `--box 80 80 100`.
-To use your own Martini 3 membrane instead of the bundled one, add `--coarse-grain your_frame.gro`.
+| Option | Meaning |
+|---|---|
+| `--aa PDB` | your all-atom structure (required) |
+| `--cg 1` / `--cg 2` / `--cg FILE` | the membrane: `1` = bundled kappa opioid receptor frame (default), `2` = bundled GPR139 frame, or a Martini 3 frame of your own complex (add `--embed` to use only its membrane) |
+| `--box X Y Z` | box edges in Å; default: the membrane's x and y, z from the protein height. Smaller x and y trim the membrane around the protein |
+| `--dellipid LIPID` | remove a lipid species (repeatable): CHOL, POPC, DOPC, POPE, DOPE, POPS, DOPS, PSM, DPG3, SAP6 |
+| `--addlipid LIPID` | turn the removed lipids into this one instead (POPC, DOPC, POPE, DOPE, POPS, DOPS, PSM) |
+| `--bilayer-z Z` | z of the bilayer centre in your structure, in Å (default: found from the hydrophobic belt) |
+| `--ntomp N`, `--gmx CMD`, `--mstool-python PATH` | threads, GROMACS command, Python with mstool |
 
-**Bundled membrane**
+Run `python -m membraneforger --help` for the rest. The protein is moved as one rigid body onto the spot the
+frame's own receptor occupied, lipids overlapping it are removed, and the membrane is backmapped around it; the
+build then adds water and 0.15 M NaCl, minimizes, and audits the result (`grompp -maxwarn 0`, `gmx check`,
+energies, geometry). `em.gro` is written only when every check passes, with `topol.top`, `toppar/`,
+`index_ini.ndx` and `run_manifest.json`; the last line of `membranebuilder.log` says `PASS` or `FAIL`.
+Backmapping dominates the run time (about 45 minutes on 8 cores). Equilibrate the system before production.
 
-Leaflet composition in mole percent (`examples/leaflet_composition.py`, averaged over the 18 frames in
-`examples/preeq_cg_cellmem/`, rounded to whole numbers):
+**Bundled membranes**
 
-| Lipid | CHOL | POPC | DOPC | POPE | DOPE | PSM | GM3 | POPS | DOPS | PIP2 (SAP6) |
+Eighteen frames (30 µs, Martini 3) of a GPCR in an asymmetric ten-species cell-membrane model, in
+`examples/preeq_cg_cellmem/`: `KOR1`–`KOR9` (kappa opioid receptor) and `GPR1`–`GPR9` (GPR139), about
+18.3 × 18.3 × 19.2 nm each. Leaflet composition in mole percent, averaged over the 18 frames
+(`examples/leaflet_composition.py`):
+
+| Leaflet | CHOL | POPC | DOPC | POPE | DOPE | PSM | DPG3 | POPS | DOPS | SAP6 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Outer leaflet | 28 | 19 | 19 | 5 | 5 | 14 | 10 | 0 | 0 | 0 |
-| Inner leaflet | 22 | 5 | 5 | 21 | 21 | 0 | 0 | 8 | 7 | 10 |
-
-**Output**
-
-`em.gro` is written only after every check passes (`grompp -maxwarn 0`, `gmx check`, energies, geometry);
-`topol.top`, `toppar/` and `index_ini.ndx` go with it, and `membranebuilder.log` ends with `PASS` or `FAIL`.
-Backmapping dominates the run time (about 45 minutes on 8 cores).
+| Outer | 28 | 19 | 19 | 5 | 5 | 14 | 10 | 0 | 0 | 0 |
+| Inner | 22 | 5 | 5 | 21 | 21 | 0 | 0 | 8 | 7 | 10 |
 
 Tests: `python -m unittest discover -s membraneforger/tests -t .`
 
