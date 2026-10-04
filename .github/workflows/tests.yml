@@ -1,0 +1,23 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install GROMACS
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq gromacs
+      - name: Install Python requirements
+        run: pip install numpy scipy networkx "pandas<3" openmm mstool==0.3.9 ruff
+      - name: Lint
+        run: ruff check membraneforger examples
+      - name: Unit, negative and invariance tests
+        run: python -m unittest discover -s membraneforger/tests -t .
