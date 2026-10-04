@@ -32,7 +32,9 @@ SOURCE_AT_IMPORT = source_state()  # the code that is actually running, even if 
 
 def software_versions(session) -> dict:
     """Collect the versions of the interpreters and libraries the build used."""
-    import networkx, numpy, scipy
+    import networkx
+    import numpy
+    import scipy
     return {"python": sys.version.split()[0], "python_executable": sys.executable, "platform": platform.platform(),
             "numpy": numpy.__version__, "scipy": scipy.__version__, "networkx": networkx.__version__,
             "gromacs": session.record.get("gromacs_version"), "gromacs_command": session.gmx,
@@ -83,11 +85,13 @@ def write_run_manifest(session, status: str, error: dict | None, started: str, h
         "stage_seconds": session.timings,
         "orientation": orientation_summary(record.get("orientation")), "slice": record.get("slice"), "box": record.get("box"),
         "coarse_grain": record.get("coarse_grain"), "aa_cg_mapping": record.get("aa_cg_mapping"),
+        "embedding": record.get("embedding"), "lipid_edits": record.get("lipid_edits"), "box_trim": record.get("box_trim"),
         "backmap_isomer_review": record.get("backmap_isomer_review"),
         "backmap_attempts": record.get("backmap_attempts"), "mstool": record.get("mstool"),
         "ring_piercing_before_em": record.get("ring_piercing_before_em"),
         "closest_membrane_solute_contact_before_em": record.get("closest_membrane_solute_contact_before_em"),
-        "disulfides": record.get("disulfides"), "removed_lipids": record.get("removed_lipids"), "box_nm": record.get("box_nm"), "topology": record.get("topology"),
+        "disulfides": record.get("disulfides"), "removed_lipids": record.get("removed_lipids"), "box_nm": record.get("box_nm"),
+        "topology": record.get("topology"),
         "em": record.get("em"), "audit": record.get("audit"),
         "artifacts": artifact_hashes(session.out), "screenshots": [],
     }
