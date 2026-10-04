@@ -1,0 +1,20 @@
+;;
+;; JNJ-specific bonded parameter supplement converted from JNJ/JNJ.prm
+;; CHARMM kcal/mol values were converted to GROMACS kJ/mol by * 4.184.
+;;
+
+[ angletypes ]
+; i        j       k       func  th0        cth         S0          Kub
+  CG2R61   CG311   NG2S1     5   115.200000 221.752000  0.000000    0.000000
+
+[ dihedraltypes ]
+; i        j       k       l       func  phi0        cp         mult
+  CG2R61   CG2R61  CG311   NG2S1     9   0.000000   0.502080    2
+  CG2R61   CG2R61  CG311   NG2S1     9 180.000000   0.543920    4
+  CG2R61   CG2R61  CG311   NG2S1     9 180.000000   0.041840    6
+  CG2R61   CG311   NG2S1   CG2O1     9   0.000000   0.062760    1
+  CG2R61   CG311   NG2S1   CG2O1     9   0.000000   1.247232    2
+  CG2R61   CG311   NG2S1   CG2O1     9 180.000000   0.317984    3
+  CG2R61   CG311   NG2S1   CG2O1     9   0.000000   2.590696    4
+  CG2R61   CG311   NG2S1   CG2O1     9   0.000000   0.619232    6
+  CG2R61   CG311   NG2S1   HGP1      9   0.000000   0.000000    1
