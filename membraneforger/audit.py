@@ -18,7 +18,8 @@ from scipy.spatial import cKDTree
 from .config import Settings
 
 __all__ = ['gro_table', 'topology_includes', 'topology_molecules', 'itp_atoms', 'gromacs', 'check_topology',
-           'check_grompp', 'check_energy', 'same_image', 'superposed_rmsd', 'check_structure', 'closest_contact_between', 'itp_bonds', 'molecule_rings',
+           'check_grompp', 'check_energy', 'same_image', 'superposed_rmsd', 'check_structure', 'closest_contact_between', 'itp_bonds',
+           'molecule_rings',
            'ring_piercings', 'check_ring_piercing', 'audit_run']
 
 PROTEIN = {"ALA", "ARG", "ASN", "ASP", "CYS", "CYS2", "CYSG", "CYSP", "GLN", "GLU", "GLY", "HIS", "HSD", "HSE", "HSP",

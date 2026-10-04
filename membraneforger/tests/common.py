@@ -10,8 +10,8 @@ import membraneforger as mf  # noqa: E402
 first = lambda *paths: next((REPO / p for p in paths if (REPO / p).exists()), REPO / paths[0])
 FORCEFIELD = first("forcefield", "modified_pipeline")
 DATA = first("backmap_data", "Incretin_backmap")
-AA_PDB = first("examples/6WHC_MTZP_run1/prot-lig.pdb", "tests/glpa_sapi_6WHC_MTZP_run1/prot-lig.pdb")
-CG_GRO = first("examples/6WHC_MTZP_run1/system.gro", "final_gro_10us/6WHC_MTZP_run1.gro")
+AA_PDB = first("examples/preeq_cg_cellmem/6WHC_MTZP_prot-lig.pdb", "tests/glpa_sapi_6WHC_MTZP_run1/prot-lig.pdb")
+CG_GRO = first("examples/preeq_cg_cellmem/6WHC_MTZP_cg_cellmem.gro", "final_gro_10us/6WHC_MTZP_run1.gro")
 MAPPING = json.loads((Path(__file__).parent / "data/mapping_residues.json").read_text())
 POPC = MAPPING["POPC"]["beads"]
 CHOL3 = list(mf.MARTINI3_MEMBRANE["CHOL"]["beads"])
