@@ -188,12 +188,19 @@ class CommandLineRefusals(unittest.TestCase):
     """End-to-end refusals through the real entry point; none may leave em.gro behind."""
 
     def run_cli(self, *args):
-        result = subprocess.run([sys.executable, "-m", "membraneforger", *map(str, args)], cwd=REPO, text=True, capture_output=True)
+        # These tests exercise the stages after orientation on a multi-chain input, so orientation is switched off.
+        result = subprocess.run([sys.executable, "-m", "membraneforger", "--orientation", "none", *map(str, args)],
+                                cwd=REPO, text=True, capture_output=True)
         return result.returncode, result.stdout + result.stderr
 
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
         self.gmx = os.environ.get("MEMBRANEFORGER_GMX") or shutil.which("gmx") or "gmx"
+        # An interpreter that cannot import mstool, whatever this machine has installed: the build must stop at the mstool stage.
+        self.no_mstool = self.tmp / "python-without-mstool"
+        self.no_mstool.write_text("#!/bin/sh\necho 'Traceback (most recent call last):' >&2\n"
+                                  "echo \"ModuleNotFoundError: No module named 'mstool'\" >&2\nexit 1\n")
+        self.no_mstool.chmod(0o755)
 
     def test_missing_input_and_missing_arguments(self):
         self.assertIn("missing input file", self.run_cli("--all-atom", "nope.pdb", "--coarse-grain", CG_GRO)[1])
@@ -203,14 +210,14 @@ class CommandLineRefusals(unittest.TestCase):
 
     def test_bundled_membrane_is_the_default_and_needs_no_cg(self):
         out = self.tmp / "bundled"
-        code, output = self.run_cli("--aa", AA_PDB, "--out", out, "--gmx", self.gmx, "--mstool-python", "/usr/bin/python3")
+        code, output = self.run_cli("--aa", AA_PDB, "--out", out, "--gmx", self.gmx, "--mstool-python", self.no_mstool)
         self.assertEqual(code, 1)
         self.assertRegex(output, r"GPR[1-9]_cg_cellmem\.gro")  # a bundled GPR139 frame was picked up as input
         self.assertIn("ERROR: mstool:", output)  # and the build stopped at the mstool stage, not at the parser
-        code, output = self.run_cli("--aa", AA_PDB, "--cg", "2", "--out", out, "--gmx", self.gmx, "--mstool-python", "/usr/bin/python3")
+        code, output = self.run_cli("--aa", AA_PDB, "--cg", "2", "--out", out, "--gmx", self.gmx, "--mstool-python", self.no_mstool)
         self.assertRegex(output, r"KOR[1-9]_cg_cellmem\.gro")
         code, output = self.run_cli("--aa", AA_PDB, "--cg", f"custom={CG_GRO}", "--out", out, "--gmx", self.gmx,
-                                    "--mstool-python", "/usr/bin/python3")
+                                    "--mstool-python", self.no_mstool)
         self.assertIn("6WHC_MTZP_cg_cellmem.gro", output)
 
     def test_lipid_and_box_options_are_checked(self):
@@ -233,7 +240,7 @@ class CommandLineRefusals(unittest.TestCase):
     def test_interpreter_without_mstool(self):
         out = self.tmp / "nomstool"
         code, output = self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--out", out, "--gmx", self.gmx,
-                                    "--mstool-python", "/usr/bin/python3")
+                                    "--mstool-python", self.no_mstool)
         self.assertEqual(code, 1)
         self.assertIn("ERROR: mstool:", output)
         self.assertIn("Inspect:", output)

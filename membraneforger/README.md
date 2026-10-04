@@ -4,8 +4,8 @@ All-atom protein/ligand complex (+ a bundled or own Martini 3 coarse-grained mem
 energy-minimized all-atom CHARMM36/GROMACS system.
 
 ```bash
-python -m membraneforger --aa protein.pdb --out output_directory                      # bundled membrane
-python -m membraneforger --aa prot-lig.pdb --cg system.gro --out output_directory   # own frame of the complex
+python -m membraneforger --aa complex.pdb --orient-chain R --out output_directory     # bundled membrane
+python -m membraneforger --aa prot-lig.pdb --cg system.gro --orient-chain R --out output_directory   # own frame
 ```
 
 | File | Role |
@@ -15,11 +15,13 @@ python -m membraneforger --aa prot-lig.pdb --cg system.gro --out output_director
 | `config.py` | CHARMM/GROMACS constants and the tunable `Settings` |
 | `martini.py` | the Martini 3 classification layer and residue-name aliases |
 | `validation.py` | input validation, input/stale-output protection |
-| `alignment.py` | sequence correspondence and rigid placement of the all-atom complex on its own CG frame |
-| `embedding.py` | placing the complex into a bundled membrane, box trimming, `--dellipid`/`--addlipid` |
+| `orientation.py` | membrane orientation from the anchor chain(s): OPM exact reference or local PPM 3.0, one rigid transform for the whole complex, validation, `orientation_report.json` |
+| `alignment.py` | sequence correspondence and rigid placement of the all-atom complex on its own CG frame (a free fit, or, after orientation, a rotation about z plus a translation that keeps the orientation) |
+| `embedding.py` | placing the complex into a bundled membrane, `--dellipid`/`--addlipid` |
+| `slicing.py` | `BOX = auto`: cut the coarse-grained membrane to the complex plus a buffer in x and y (whole lipids, seam check) before backmapping; also applies a `--box` x and y |
 | `backmapping.py`, `mstool_worker.py` | membrane backmapping; the worker is the only file that imports mstool |
 | `topology.py` | structure repair and CHARMM36 topology construction |
-| `solvation.py` | box, water, ions, index groups |
+| `solvation.py` | box (`BOX = auto` around the bilayer midplane, or an opt-in user box), water, ions, index groups |
 | `minimization.py` | EM and its validation |
 | `audit.py` | independent audit (own parsers, `grompp -maxwarn 0`, `gmx check`, `gmx energy`, geometry) |
 | `reporting.py` | `run_manifest.json` |

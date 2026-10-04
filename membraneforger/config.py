@@ -5,11 +5,34 @@
 """Constants shared by every stage, and the Settings that carry the tunable acceptance criteria."""
 from dataclasses import dataclass
 
-__all__ = ['AMINO', 'SOLVENT', 'N_CAP', 'C_CAP', 'RENAME_RESIDUE', 'RENAME_ATOM', 'RENAME_MOLECULE', 'TERMINUS_MENU',
+__all__ = ['ORIENTATION', 'ORIENT_CHAINS', 'NTERM_SIDE', 'PDB_ID', 'PPM_MEMBRANE', 'BOX',
+           'AMINO', 'SOLVENT', 'N_CAP', 'C_CAP', 'RENAME_RESIDUE', 'RENAME_ATOM', 'RENAME_MOLECULE', 'TERMINUS_MENU',
            'DEFAULT_LIGANDS', 'NSTEPS', 'DISULFIDE_MAX_A', 'DISULFIDE_OK_A', 'SLAB_Z_PAD_NM', 'MIN_Z_PAD_TOTAL_NM',
            'SALT_M', 'ION_RMIN_NM', 'GENION_ATTEMPTS', 'WATER_CLASH_NM', 'WATER_PROTECT_NM', 'LIPID_SCAN_A',
            'LIPID_DELETE_A', 'GENERATED', 'INDEX_GROUPS', 'FMAX_TARGET', 'H_BOND_RANGE', 'GLPA_MAX_BOND_A',
            'LYS_BACKBONE', 'ONE_LETTER', 'GM3_XML_TO_GLPA', 'LIPIDATED', 'CYSG_HDB', 'EM_MDP', 'Settings']
+
+# ============================================================
+# MEMBRANE ORIENTATION
+# ============================================================
+# Select the chain that actually spans or associates with the membrane. MembraneForger determines its membrane
+# orientation (from the exact OPM entry of the structure when a PDB ID is known and matches, otherwise with a local
+# PPM 3.0 run on the anchor's own coordinates) and moves the complete complex as ONE rigid object. Command-line
+# options (--orientation, --orient-chain(s), --nterm-side, --pdb-id, --ppm-membrane) override these defaults.
+ORIENTATION = "auto"       # auto | ppm | opm | none      (none: use the input coordinates as given)
+ORIENT_CHAINS = ""         # e.g. "R", "A", or "A,B"      (empty: the only protein chain, else fail and ask)
+NTERM_SIDE = "auto"        # auto | in | out              (side of the N terminus of the first anchor chain)
+PDB_ID = ""                # optional exact PDB ID         (else the HEADER record of the input, else none)
+PPM_MEMBRANE = ""          # advanced: PPM 3.0 membrane code, "" = undefined flat bilayer (e.g. "PMm", "GnI")
+
+# ============================================================
+# BOX
+# ============================================================
+# auto: the coarse-grained membrane is sliced in x and y to the placed complex plus 1.0 nm of membrane on each side
+# (whole lipids only; an axis that would be as wide as the cell is kept whole), and z is sized around the bilayer
+# midplane with SLAB_Z_PAD_NM of water above and below. A user box is opt-in: "x,y,z" in nm, with x and y no larger
+# than the coarse-grained cell (the membrane is cut to that size around the complex) and z at least the automatic minimum.
+BOX = "auto"               # auto | "x,y,z" (nm)
 
 AMINO = {"ALA", "ARG", "ASN", "ASP", "CYS", "CYSG", "CYSP", "GLN", "GLU", "GLY", "HIS", "HSD", "HSE", "HSP", "ILE",
          "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL", "AIB", "LEM", "KTZ", "KRT", "KSM"}
@@ -44,7 +67,8 @@ SALT_M, ION_RMIN_NM, GENION_ATTEMPTS = 0.15, 0.60, 3
 WATER_CLASH_NM, WATER_PROTECT_NM = 0.18, 0.45
 LIPID_SCAN_A, LIPID_DELETE_A = 1.0, 0.10  # EM survived 0.15 A (6WHC_MORF) but not 0.05 A (7RA3_MRTR)
 # Every file a build writes into the output directory; removed at the start so nothing stale survives a rerun.
-GENERATED = ("membrane.pdb", "aa_cg_mapping.tsv", "prot-memb.pdb", "topol.top", "topol.pre_genion.top", "boxed.gro",
+GENERATED = ("oriented.pdb", "orientation_report.json", "membrane.pdb", "aa_cg_mapping.tsv", "prot-memb.pdb",
+             "topol.top", "topol.pre_genion.top", "boxed.gro",
              "solv_raw.gro", "solv.gro", "solv_ions.gro", "index_ini.ndx", "genion.ndx", "ions.mdp", "ions.tpr",
              "ions_mdout.mdp", "em.mdp", "mdout.mdp", "em.tpr", "em.log", "em.edr", "em.trr", "em.gro",
              "em.unverified.gro", "toppar", "audit.json", "run_manifest.json", "ring_piercing.json", "work")
@@ -231,3 +255,41 @@ class Settings:
     # Independent-audit limits: protein CA RMSD across EM (nm) and the closest lipid-solute heavy-atom pair (nm).
     audit_max_ca_rmsd_nm: float = 0.15
     audit_min_contact_nm: float = 0.10
+    # Membrane orientation. An OPM/OPRLM entry is accepted as the orientation reference only when the anchor chain
+    # matches it by sequence (identity over the aligned residues) AND its membrane-embedded backbone (reference
+    # residues with CA inside the hydrophobic slab) superposes within orient_opm_max_core_rmsd_a after trimming at
+    # orient_opm_trim_floor_a; a 1 A core deviation over a 30 A bundle changes the normal by about 2 degrees, which
+    # is below PPM's own tilt uncertainty. Beyond that the structure has moved and PPM is run on its real coordinates.
+    orient_min_identity: float = 0.95
+    orient_opm_max_core_rmsd_a: float = 1.0
+    orient_opm_min_core_fraction: float = 0.7
+    orient_opm_trim_floor_a: float = 1.0
+    orient_opm_min_slab_residues: int = 20
+    # PPM only repositions the submitted atoms (it writes 3 decimals), so its output must be a rigid copy of the
+    # anchor to within rounding; anything larger means the wrong atoms were matched or the output is not the input's.
+    orient_ppm_max_fit_rmsd_a: float = 0.05
+    orient_ppm_min_matched_fraction: float = 0.9
+    orient_ppm_timeout_s: int = 3600
+    # CG registration after orientation. The CG membrane has a cavity shaped around the CG protein's own pose; a
+    # rigid complex rotated by theta about the midplane moves the ends of a 17 A half-height bundle by 17 sin(theta)
+    # A at the membrane surfaces, which at 20 degrees is 6 A, about one lipid diameter: beyond that the backmapped
+    # membrane cannot be expected to accommodate the oriented complex. The depth offset between the CG pose and the
+    # midplane placement is limited likewise (0.5 nm, about one phosphate-plane width).
+    register_max_tilt_deg: float = 20.0
+    register_max_depth_offset_nm: float = 0.5
+    # The lateral registration is fitted on the anchor residues inside the hydrophobic slab (what must sit in the
+    # lipid cavity) when at least this many are matched; otherwise on every matched anchor residue.
+    register_min_embedded_pairs: int = 20
+    # Water above and below the complex/membrane in the automatic box (nm).
+    box_z_pad_nm: float = SLAB_Z_PAD_NM
+    # BOX = auto slices the coarse-grained membrane to the placed complex plus this buffer on each side in x and y
+    # (1.0 nm, the slice_buffer_nm of the earlier workflow); an axis whose window reaches the cell width is not cut.
+    box_xy_buffer_nm: float = 1.0
+    # A user box must leave at least this much membrane on each side of the complex.
+    box_xy_min_buffer_nm: float = 0.5
+    # Seam clash threshold between beads of different lipids that only the new periodicity brings together. The
+    # closest inter-molecule bead pair in the equilibrated 6WHC frame is 0.342 nm (Martini sigma is 0.47 nm), so
+    # 0.30 nm separates real near-contacts from overlap; such lipids are removed rather than left to minimization.
+    seam_min_bead_nm: float = 0.30
+    # A sliced membrane must keep at least this many lipids, and at least this many phospholipids, in two leaflets.
+    slice_min_lipids: int = 30
