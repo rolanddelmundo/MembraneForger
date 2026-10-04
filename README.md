@@ -1,6 +1,6 @@
 ## MembraneForger: all-atom membrane systems from a single PDB
 
-MembraneForger takes an all-atom protein (or protein/ligand) PDB, embeds it in a pre-equilibrated 40 × 40 Å
+MembraneForger takes an all-atom protein (or protein/ligand) PDB, embeds it in a pre-equilibrated 40 × 40 nm
 Martini 3 coarse-grained membrane, backmaps the membrane around it, and returns a validated, energy-minimized
 all-atom CHARMM36 / GROMACS system (`em.gro`).
 
