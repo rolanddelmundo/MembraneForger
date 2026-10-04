@@ -1,10 +1,11 @@
 # MembraneForger
 
-All-atom protein/ligand complex + Martini 3 coarse-grained membrane system -> validated, energy-minimized
-all-atom CHARMM36/GROMACS system.
+All-atom protein/ligand complex (+ a bundled or own Martini 3 coarse-grained membrane) -> validated,
+energy-minimized all-atom CHARMM36/GROMACS system.
 
 ```bash
-python -m membraneforger --all-atom prot-lig.pdb --coarse-grain system.gro --out output_directory
+python -m membraneforger --aa protein.pdb --out output_directory                      # bundled membrane
+python -m membraneforger --aa prot-lig.pdb --cg system.gro --out output_directory   # own frame of the complex
 ```
 
 | File | Role |
@@ -14,7 +15,8 @@ python -m membraneforger --all-atom prot-lig.pdb --coarse-grain system.gro --out
 | `config.py` | CHARMM/GROMACS constants and the tunable `Settings` |
 | `martini.py` | the Martini 3 classification layer and residue-name aliases |
 | `validation.py` | input validation, input/stale-output protection |
-| `alignment.py` | sequence correspondence and rigid placement of the all-atom complex |
+| `alignment.py` | sequence correspondence and rigid placement of the all-atom complex on its own CG frame |
+| `embedding.py` | placing the complex into a bundled membrane, box trimming, `--dellipid`/`--addlipid` |
 | `backmapping.py`, `mstool_worker.py` | membrane backmapping; the worker is the only file that imports mstool |
 | `topology.py` | structure repair and CHARMM36 topology construction |
 | `solvation.py` | box, water, ions, index groups |

@@ -10,15 +10,26 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial import cKDTree
 
-from .config import (EM_MDP, FMAX_TARGET, GENION_ATTEMPTS, INDEX_GROUPS, ION_RMIN_NM, MIN_Z_PAD_TOTAL_NM, SALT_M, SLAB_Z_PAD_NM,
-                     WATER_CLASH_NM, WATER_PROTECT_NM)
+from .config import (
+    EM_MDP,
+    FMAX_TARGET,
+    GENION_ATTEMPTS,
+    INDEX_GROUPS,
+    ION_RMIN_NM,
+    MIN_Z_PAD_TOTAL_NM,
+    SALT_M,
+    SLAB_Z_PAD_NM,
+    WATER_CLASH_NM,
+    WATER_PROTECT_NM,
+)
 from .runtools import log, run_command
 from .structio import element, read_gro, wrap, write_gro, xyz_nm
 
 __all__ = ['rebox_system', 'solute_geometry', 'solvate_system', 'add_ions', 'make_index']
 
-def rebox_system(system: dict, topology: dict) -> list[float]:
+def rebox_system(system: dict, topology: dict, requested_z_nm: float | None = None) -> list[float]:
     """Keep the membrane XY cell and size z so water covers the protein/ligand above and below the membrane."""
+    # A requested z (from --box) is used when it leaves at least the default water padding, else refused.
     coords, cryst = topology["coords"], system["cryst1"].ljust(80)
     if not all(abs(float(cryst[i:i + 7]) - 90.0) < 0.02 for i in (33, 40, 47)):
         raise SystemExit("input CRYST1 is not orthorhombic")
@@ -32,6 +43,11 @@ def rebox_system(system: dict, topology: dict) -> list[float]:
     top, bottom = max(solute_z) / 10.0, min(solute_z) / 10.0
     all_z = np.array([a["z"] for a in coords]) / 10.0
     box_z = max(2.0 * (max(top - center, center - bottom) + SLAB_Z_PAD_NM), float(all_z.max() - all_z.min()) + MIN_Z_PAD_TOTAL_NM)
+    if requested_z_nm is not None:
+        if requested_z_nm < box_z - 1e-6:
+            raise SystemExit(f"requested box z {requested_z_nm * 10:.0f} A is below the {box_z * 10:.0f} A this system needs "
+                             f"({SLAB_Z_PAD_NM} nm of water above and below the complex)")
+        box_z = float(requested_z_nm)
     shift = box_z / 2.0 - center
     if (all_z + shift).min() <= 0.0 or (all_z + shift).max() >= box_z:
         raise SystemExit("solute extends beyond the rebuilt z box")
