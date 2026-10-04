@@ -1,8 +1,8 @@
 # Pre-equilibrated coarse-grained cell membranes (Martini 3)
 
 Eighteen frames of a single GPCR in an asymmetric, ten-species cell-membrane model, each taken at 30 µs of a
-Martini 3 simulation. They are the bundled membranes of MembraneForger: `--cg 1` is `KOR1_cg_cellmem.gro`, `--cg 2` is
-`GPR1_cg_cellmem.gro`, and any other frame can be given as `--cg FILE --embed`.
+Martini 3 simulation. They are the bundled membranes of MembraneForger: `--cg 1` picks one of the GPR139 frames at random, `--cg 2`
+one of the kappa opioid receptor frames, and a particular frame can be given as `--cg custom=FILE --embed`.
 
 | Files | Receptor | Replicates |
 |---|---|---|
