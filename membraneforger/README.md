@@ -1,10 +1,11 @@
 # MembraneForger
 
-All-atom protein/ligand complex + Martini 3 coarse-grained membrane system -> validated, energy-minimized
-all-atom CHARMM36/GROMACS system.
+All-atom protein/ligand complex (+ a bundled or own Martini 3 coarse-grained membrane) -> validated,
+energy-minimized all-atom CHARMM36/GROMACS system.
 
 ```bash
-python -m membraneforger --all-atom prot-lig.pdb --coarse-grain system.gro --orient-chain R --out output_directory
+python -m membraneforger --aa complex.pdb --orient-chain R --out output_directory     # bundled membrane
+python -m membraneforger --aa prot-lig.pdb --cg system.gro --orient-chain R --out output_directory   # own frame
 ```
 
 | File | Role |
@@ -15,8 +16,9 @@ python -m membraneforger --all-atom prot-lig.pdb --coarse-grain system.gro --ori
 | `martini.py` | the Martini 3 classification layer and residue-name aliases |
 | `validation.py` | input validation, input/stale-output protection |
 | `orientation.py` | membrane orientation from the anchor chain(s): OPM exact reference or local PPM 3.0, one rigid transform for the whole complex, validation, `orientation_report.json` |
-| `slicing.py` | `BOX = auto`: crop the coarse-grained membrane to the complex plus a buffer in x and y (whole lipids, seam check) before backmapping |
-| `alignment.py` | sequence correspondence and rigid placement of the all-atom complex (a free fit, or, after orientation, a rotation about z plus translation that keeps the orientation) |
+| `alignment.py` | sequence correspondence and rigid placement of the all-atom complex on its own CG frame (a free fit, or, after orientation, a rotation about z plus a translation that keeps the orientation) |
+| `embedding.py` | placing the complex into a bundled membrane, `--dellipid`/`--addlipid` |
+| `slicing.py` | `BOX = auto`: cut the coarse-grained membrane to the complex plus a buffer in x and y (whole lipids, seam check) before backmapping; also applies a `--box` x and y |
 | `backmapping.py`, `mstool_worker.py` | membrane backmapping; the worker is the only file that imports mstool |
 | `topology.py` | structure repair and CHARMM36 topology construction |
 | `solvation.py` | box (`BOX = auto` around the bilayer midplane, or an opt-in user box), water, ions, index groups |

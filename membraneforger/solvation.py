@@ -10,20 +10,30 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial import cKDTree
 
-from .config import (EM_MDP, FMAX_TARGET, GENION_ATTEMPTS, INDEX_GROUPS, ION_RMIN_NM, MIN_Z_PAD_TOTAL_NM, SALT_M, SLAB_Z_PAD_NM,
-                     WATER_CLASH_NM, WATER_PROTECT_NM)
+from .config import (
+    EM_MDP,
+    FMAX_TARGET,
+    GENION_ATTEMPTS,
+    INDEX_GROUPS,
+    ION_RMIN_NM,
+    MIN_Z_PAD_TOTAL_NM,
+    SALT_M,
+    SLAB_Z_PAD_NM,
+    WATER_CLASH_NM,
+    WATER_PROTECT_NM,
+)
 from .runtools import log, run_command
 from .structio import element, read_gro, wrap, write_gro, xyz_nm
 
 __all__ = ['rebox_system', 'solute_geometry', 'solvate_system', 'add_ions', 'make_index']
 
-def rebox_system(system: dict, topology: dict, requested: tuple | None = None, z_pad_nm: float = SLAB_Z_PAD_NM) -> list[float]:
+def rebox_system(system: dict, topology: dict, requested_z_nm: float | None = None, z_pad_nm: float = SLAB_Z_PAD_NM) -> list[float]:
     """Keep the membrane XY cell and size z around the bilayer midplane so water covers everything above and below."""
-    # BOX=auto: x and y are the membrane cell (the lipids are periodic in it and nothing else may change it). z is
+    # x and y are the membrane cell (the lipids are periodic in it; --box x and y were already applied by slicing). z is
     # centred on the bilayer midplane, found halfway between the two lipid phosphate planes (robust against a single
     # stray lipid or tall head groups, unlike the extent of all membrane atoms), and reaches z_pad_nm beyond the
     # farthest solute or membrane heavy atom on either side, but never less than MIN_Z_PAD_TOTAL_NM over the full
-    # extent of all atoms. A requested box (opt-in) must keep x and y and be at least as tall as that minimum.
+    # extent of all atoms. A requested z (from --box) is used when it is at least that tall, else refused.
     coords, cryst = topology["coords"], system["cryst1"].ljust(80)
     if not all(abs(float(cryst[i:i + 7]) - 90.0) < 0.02 for i in (33, 40, 47)):
         raise SystemExit("input CRYST1 is not orthorhombic")
@@ -45,15 +55,11 @@ def rebox_system(system: dict, topology: dict, requested: tuple | None = None, z
     all_z = np.array([a["z"] for a in coords]) / 10.0
     minimum = max(2.0 * half, float(all_z.max() - all_z.min()) + MIN_Z_PAD_TOTAL_NM)
     box_z, mode = math.ceil(minimum * 1000.0) / 1000.0, "auto"
-    if requested is not None:
-        rx, ry, rz = (float(v) for v in requested)
-        if abs(rx - box_x) > 0.01 or abs(ry - box_y) > 0.01:
-            raise SystemExit(f"BOX x,y = {rx:.3f},{ry:.3f} nm must equal the membrane cell {box_x:.3f},{box_y:.3f} nm "
-                             "(the membrane is periodic in it); only z may be chosen here")
-        if rz < box_z:
-            raise SystemExit(f"BOX z = {rz:.3f} nm is smaller than the {box_z:.3f} nm this system needs "
-                             f"({z_pad_nm} nm of water beyond the solute and membrane on both sides of the midplane)")
-        box_z, mode = rz, "user"
+    if requested_z_nm is not None:
+        if requested_z_nm < box_z - 1e-6:
+            raise SystemExit(f"requested box z {requested_z_nm * 10:.0f} A is below the {box_z * 10:.0f} A this system needs "
+                             f"({z_pad_nm} nm of water above and below the complex and membrane)")
+        box_z, mode = float(requested_z_nm), "user"
     shift = box_z / 2.0 - center
     if (all_z + shift).min() <= 0.0 or (all_z + shift).max() >= box_z:
         raise SystemExit("solute extends beyond the rebuilt z box")
@@ -66,7 +72,7 @@ def rebox_system(system: dict, topology: dict, requested: tuple | None = None, z
                             "membrane_above_midplane_nm": round(float(memb_z.max()) - center, 4),
                             "membrane_below_midplane_nm": round(center - float(memb_z.min()), 4),
                             "z_pad_nm": z_pad_nm, "minimum_z_nm": round(minimum, 4), "shift_nm": round(shift, 4),
-                            "requested_nm": [rx, ry, rz] if requested is not None else None}
+                            "requested_z_nm": requested_z_nm}
     log(system["out"], f"rebox ({mode}): {box_x:.3f} x {box_y:.3f} x {box_z:.3f} nm; bilayer midplane z {center:.2f} nm "
                        f"({centre_source}), solute top {top - center:+.2f} nm, solute bottom {bottom - center:+.2f} nm, "
                        f"pad {z_pad_nm} nm, minimum z {minimum:.3f} nm")

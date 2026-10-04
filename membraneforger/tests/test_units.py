@@ -87,6 +87,7 @@ class MstoolCompatibility(unittest.TestCase):
 
     def test_flipped_centres_are_counted_only_for_well_formed_definitions(self):
         import pandas
+
         from membraneforger.mstool_worker import flipped_chirals
         rows = []
         for hand in (1.0, -1.0):  # two residues, the second is the mirror image
@@ -158,7 +159,8 @@ class RingPiercing(unittest.TestCase):
         self.assertEqual(self.piercings([2.0, 2.0, 1.93], [2.0, 2.0, 2.08], shift=np.array([3.0, 0.0, 3.0])), [(0, 0)])
 
     def verdict(self, pierced, contact=0.2, review=None, last=False):
-        staged = {"rings": {"pierced": pierced}, "solute_atoms": 8, "contact": {"distance_nm": contact, "atoms": ["POPS:H13Y(atom 20)", "ILE:CD(atom 3)"]}}
+        staged = {"rings": {"pierced": pierced}, "solute_atoms": 8,
+                  "contact": {"distance_nm": contact, "atoms": ["POPS:H13Y(atom 20)", "ILE:CD(atom 3)"]}}
         return mf.backmap_verdict(staged, review or {}, mf.Settings(), last)
 
     def test_backmap_verdict(self):
