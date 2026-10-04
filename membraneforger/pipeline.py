@@ -15,7 +15,7 @@ from .alignment import map_all_atom_to_cg
 from .audit import audit_run, check_ring_piercing, closest_contact_between
 from .backmapping import assemble_membrane_pdb, backmap_membrane, read_mapping
 from .config import AMINO, DEFAULT_LIGANDS, RENAME_MOLECULE, Settings
-from .embedding import edit_lipids, embed_complex
+from .embedding import check_box_z, edit_lipids, embed_complex
 from .martini import bilayer_midplane, classify_cg, make_membrane_whole
 from .minimization import run_em, validate_em
 from .orientation import OrientationRequest, check_orientation_preserved, orient_complex
@@ -204,6 +204,8 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
         log(out, f"slice ({report['mode']}): the complex plus {session.settings.box_xy_buffer_nm} nm reaches the whole "
                  f"{box[0]:.2f} x {box[1]:.2f} nm cell; the membrane is not cut")
     placed, membrane, box = cut["placed"], cut["membrane"], cut["box"]
+    if session.box_a:  # refuse a z that cannot hold the complex now, not after the slow backmapping
+        run_stage(session, "mapping", check_box_z, placed, slab, session.box_a[2] / 10.0)
     return {"placed": placed, "membrane": membrane, "box": box, "mapping": mapping,
             "composition": Counter(RENAME_MOLECULE.get(m["aa"], m["aa"]) for m in membrane),
             "ligands": DEFAULT_LIGANDS | {a["resname"] for a in aa_atoms if a["resname"] not in AMINO}}
