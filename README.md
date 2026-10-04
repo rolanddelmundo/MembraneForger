@@ -1,46 +1,68 @@
-## MembraneForger: all-atom membrane systems from Martini 3 coarse-grained frames
+# MembraneForger
 
-MembraneForger takes two files, an all-atom protein/ligand complex and one frame of a Martini 3 coarse-grained
-simulation of the same complex in a membrane, and builds a validated, energy-minimized all-atom CHARMM36 / GROMACS
-system from them.
+A tested workflow for converting a Martini 3 coarse-grained protein–membrane simulation into an all-atom
+CHARMM36 / GROMACS system.
+
+MembraneForger takes one frame of your coarse-grained simulation and the all-atom structure of the same protein
+complex, and returns a solvated, neutralized, energy-minimized all-atom system that has passed an independent audit.
 
 ```bash
 python -m membraneforger --all-atom prot-lig.pdb --coarse-grain system.gro --orient-chain R --out output_directory
 ```
 
-`--orient-chain` names the chain that actually spans or associates with the membrane (the receptor, the
-transporter, the channel subunit). MembraneForger determines the membrane orientation of that chain and moves the
-complete complex, with its partners, peptides, ligands, ions and modified residues, as one rigid object. If the input
-has a single protein chain the option can be left out; with several chains it is required, and the program says so.
+`--orient-chain` names the chain that actually spans or associates with the membrane (the receptor, transporter or
+channel subunit). MembraneForger determines the membrane orientation of that chain and moves the complete complex,
+with its partners, peptides, ligands, ions and modified residues, as one rigid object. With a single protein chain the
+option can be left out; with several chains it is required, and the program says so.
 
-What it does, in order:
+If any check fails, the build stops with an error and no final structure is written.
 
-1. checks both inputs and records their checksums (the inputs are never modified);
-2. orients the all-atom complex in the membrane frame from the anchor chain (membrane normal along z, bilayer
-   midplane at z = 0, extracellular side at positive z) and proves that every atom received the same rigid transform;
-3. classifies every coarse-grained residue (protein, lipid species, water, ions) and refuses Martini 2 files;
-4. matches each all-atom chain to its coarse-grained chain by sequence; the coarse-grained frame then supplies only
-   the lateral position (a rotation about the membrane normal and a translation): the orientation is never tilted;
-5. backmaps the membrane around the placed complex with [mstool](https://github.com/ksy141/mstool);
-6. checks the backmapped lipids for bonds threaded through rings and for wrong stereochemistry, and backmaps again
-   with a new seed when it finds one;
-7. builds the CHARMM36 topology (`pdb2gmx` for the protein, molecule topologies for lipids and ligands);
-8. sizes the box (`BOX = auto`: the membrane cell in x and y, z centred on the bilayer midplane with 1.5 nm of water
-   beyond the complex on both sides), adds water and 0.15 M NaCl, and writes the index groups;
-9. energy-minimizes with GROMACS;
-10. audits the result from the output files alone (`grompp -maxwarn 0`, `gmx check`, energies, geometry) and only
-    then publishes `em.gro`.
+## Contents
 
-A build that fails any check stops with an error and does not write `em.gro`.
+1. [What you need](#what-you-need)
+2. [Before MembraneForger: the coarse-grained simulation](#before-membraneforger-the-coarse-grained-simulation)
+3. [Requirements](#requirements)
+4. [Installation](#installation)
+5. [Quick start](#quick-start)
+6. [What MembraneForger does](#what-membraneforger-does)
+7. [Outputs](#outputs)
+8. [Running on a cluster](#running-on-a-cluster)
+9. [Tests](#tests)
+10. [Stage renders](#stage-renders)
+11. [Supported systems and known limits](#supported-systems-and-known-limits)
+12. [Repository layout](#repository-layout)
+13. [Version history](#version-history)
+14. [Citation and licensing](#citation-and-licensing)
 
-The coarse-grained input frames come from Martini 3 molecular dynamics; the coarse-grained systems for those
-simulations were prepared with Martinize2 and Vermouth. MembraneForger starts from a frame of such a simulation and
-does not run the coarse-grained simulation itself.
+## What you need
 
-This is version 1.0.0. The earlier four-stage workflow (versions 0.1.0 and 0.2.0) is kept unchanged under `archive/`
-and is no longer maintained.
+| Input | Option | Description |
+|---|---|---|
+| Coarse-grained frame | `--coarse-grain` | One frame (`.gro` or `.pdb`) of a Martini 3 simulation of the protein complex in its membrane. It supplies the periodic cell, the membrane composition and geometry, and where the protein sits. |
+| All-atom complex | `--all-atom` | A PDB file of the same protein complex with its ligands. It is the only source of protein and ligand chemistry and is moved as one rigid body; none of its atoms are rebuilt. |
+| Anchor chain | `--orient-chain` | The chain that spans or associates with the membrane. Its membrane orientation positions the whole complex. Optional only when the input has one protein chain. |
 
-**Requirements**
+The two files do not need matching chain IDs or residue numbers: chains are matched by sequence. Neither input file
+is ever modified.
+
+## Before MembraneForger: the coarse-grained simulation
+
+MembraneForger starts from a finished coarse-grained simulation. It does not build or run one. The steps below are
+how I prepared mine; they are my own usage, not part of MembraneForger, and must be done before running it.
+
+1. **Coarse-grain the protein** with Martinize2 (Vermouth), using the Martini 3 force field.
+2. **Build the membrane** around the coarse-grained protein with INSANE, choosing the lipid composition.
+3. **Minimize, equilibrate and run** the coarse-grained system in GROMACS.
+4. **Take one frame** of the trajectory as a `.gro` file. That file is the `--coarse-grain` input.
+
+The scripts I used for steps 1 to 3 are the first two stages of the earlier MembraneForger release, kept under
+`archive/` with their own documentation (`archive/README.md`, `archive/docs/stage1.md`, `archive/docs/stage2.md`).
+They are provided as a record and are no longer maintained.
+
+Any Martini 3 simulation prepared another way works too, as long as it uses the lipids listed under
+[Supported systems and known limits](#supported-systems-and-known-limits).
+
+## Requirements
 
 - Python 3.10 or newer with numpy, scipy and networkx:
 
@@ -48,113 +70,160 @@ and is no longer maintained.
 pip install numpy scipy networkx
 ```
 
-- GROMACS (tested with 2025.3). Pass the command with `--gmx` if it is not `gmx`.
-- mstool 0.3.9 or 0.3.10 (other versions are refused). If mstool lives in a different Python environment, pass that
-  interpreter with `--mstool-python`.
+- GROMACS (tested with 2025.3). Pass the command with `--gmx` if it is not called `gmx`.
+- [mstool](https://github.com/ksy141/mstool) 0.3.9 or 0.3.10. Other versions are refused. If mstool lives in a
+  different Python environment, pass that interpreter with `--mstool-python`.
 - For membrane orientation: PPM 3.0, the standalone program behind the OPM/PPM web server. Its Fortran source
   (`ppm3_code/`, with `res.lib`) is distributed by the OPM team; compile it with `make` (needs `gfortran`), which
   produces the executable `immers`. Point MembraneForger at it with `--ppm-exe /path/to/immers` or
   `MEMBRANEFORGER_PPM`, or put it on `PATH`; `res.lib` must sit next to the executable. PPM is not bundled here.
-  When the structure is a PDB entry that OPM holds, its orientation can be taken from OPM instead (one download,
-  cached), and PPM is not needed for that build.
-- Optional, for the stage renders only: a Python that can import `vmd` (vmd-python), Pillow, and the `tachyon` ray
+  When the structure is a PDB entry that OPM holds, its orientation is taken from OPM instead (one download, cached)
+  and PPM is not needed for that build.
+- Optional, only for the stage renders: a Python that can import `vmd` (vmd-python), Pillow, and the `tachyon` ray
   tracer.
 
-**Installation**
+## Installation
 
-No installation step is needed. Clone the repository and run the package from the repository folder:
+There is no installation step. Clone the repository and run the package from the repository folder:
 
 ```bash
-git clone <repository URL>
-cd membraneforger
+git clone https://github.com/rolanddelmundo/MembraneForger.git
+cd MembraneForger
 python -m membraneforger --help
 ```
 
-**Repository layout**
+## Quick start
 
-| Path | Contents |
-|---|---|
-| `membraneforger/` | the Python package (one module per pipeline stage, listed in `membraneforger/README.md`) |
-| `membraneforger/tests/` | unit, negative and invariance tests |
-| `membraneforger/example.py` | how to run a build from Python with your own acceptance settings |
-| `membraneforger/cpu.submit` | Slurm array template, one build per task |
-| `forcefield/` | CHARMM36 force field for GROMACS, lipid and ligand topologies, and the parameter packages of the modified residues used in the example |
-| `backmap_data/` | mstool mapping additions (`map.dat`) and extra force-field XML files |
-| `examples/6WHC_MTZP_run1/` | one complete input pair: `prot-lig.pdb` (all-atom complex) and `system.gro` (Martini 3 frame) |
-| `archive/` | the previous MembraneForger (v0.2.0) exactly as released, with its own licence files; not used by v1.0.0 |
-
-Use `--toppar` and `--data` (or `MEMBRANEFORGER_TOPPAR` and `MEMBRANEFORGER_DATA`) to point at your own force-field
-and backmapping data folders.
-
-**Example**
+The repository includes one complete input pair, a glucagon receptor–tirzepatide–Gs complex in a ten-lipid membrane:
 
 ```bash
-python -m membraneforger --all-atom examples/6WHC_MTZP_run1/prot-lig.pdb \
-    --coarse-grain examples/6WHC_MTZP_run1/system.gro --orient-chain R --nterm-side out \
-    --ppm-exe /path/to/immers --out example_out --ntomp 8
+python -m membraneforger \
+    --all-atom examples/6WHC_MTZP_run1/prot-lig.pdb \
+    --coarse-grain examples/6WHC_MTZP_run1/system.gro \
+    --orient-chain R --nterm-side out --ppm-exe /path/to/immers \
+    --out example_out --ntomp 8
 ```
 
-The receptor is chain R; its N terminus is extracellular (`--nterm-side out`), which PPM needs because the file
-carries no PDB ID. With `--pdb-id 6WHC` the orientation is taken from the OPM entry instead and neither PPM nor
-`--nterm-side` is needed. The backmapping step dominates the run time (about 45 minutes on 8 cores for this
-example). The last line of `example_out/membranebuilder.log` starts with `PASS` or `FAIL`.
+The receptor is chain R and its N terminus is extracellular, which PPM needs because the file carries no PDB ID. With
+`--pdb-id 6WHC` the orientation is taken from the OPM entry instead, and neither PPM nor `--nterm-side` is needed.
 
-**Membrane orientation**
+This takes about an hour on 8 cores; membrane backmapping is most of it. When the build finishes, the last line of
+`example_out/membranebuilder.log` starts with `PASS` and `example_out/em.gro` exists.
+
+Common options:
+
+| Option | Meaning |
+|---|---|
+| `--out DIR` | output directory |
+| `--gmx CMD` | GROMACS command |
+| `--mstool-python PATH` | Python interpreter that has mstool |
+| `--ntomp N` | threads for backmapping and minimization |
+| `--toppar DIR` | your own force-field folder (default `forcefield/`; or set `MEMBRANEFORGER_TOPPAR`) |
+| `--data DIR` | your own backmapping data folder (default `backmap_data/`; or set `MEMBRANEFORGER_DATA`) |
+| `--membrane FILE` | finish a system that is already all-atom instead of giving the two inputs |
+| `--orient-chain C`, `--orient-chains A,B` | anchor chain(s) that define the membrane orientation |
+| `--nterm-side in\|out` | side of the membrane of the first anchor chain's N terminus (needed by PPM) |
+| `--orientation auto\|ppm\|opm\|none` | orientation source; `none` uses the coordinates as given |
+| `--pdb-id ID` | exact PDB ID, for the OPM reference (default: `HEADER` record, never the file name) |
+| `--box auto\|X,Y,Z` | `auto` (default), or an opt-in box in nm |
+
+Run `python -m membraneforger --help` for the full list.
+
+## Membrane orientation
 
 ```bash
-python -m membraneforger --all-atom complex.pdb --coarse-grain system.gro --orient-chain R      # auto
-python -m membraneforger ... --orientation ppm --orient-chain R --nterm-side out                # force PPM 3.0
-python -m membraneforger ... --orientation opm --pdb-id 7F6G --orient-chain R                   # force the OPM entry
-python -m membraneforger ... --orientation none                                                  # coordinates as given
+python -m membraneforger ... --orient-chain R                                          # auto
+python -m membraneforger ... --orientation ppm --orient-chain R --nterm-side out       # force PPM 3.0
+python -m membraneforger ... --orientation opm --pdb-id 7F6G --orient-chain R          # force the OPM entry
+python -m membraneforger ... --orientation none                                         # coordinates as given
 ```
 
 - `auto` (the default) uses the exact OPM/OPRLM entry of the structure when a PDB ID is known (`--pdb-id`, else the
-  `HEADER` record of the input; never the file name) and the anchor chain matches it by sequence and by its
-  membrane-embedded backbone; otherwise it runs PPM 3.0 on the anchor chain's own coordinates. Custom models,
-  predicted and mutated structures therefore work without a PDB ID.
+  `HEADER` record of the input) and the anchor chain matches it by sequence and by its membrane-embedded backbone;
+  otherwise it runs PPM 3.0 on the anchor chain's own coordinates. Custom models, predicted and mutated structures
+  therefore work without a PDB ID.
 - `--nterm-side in|out` is the side of the membrane the N terminus of the first anchor chain lies on (`in` =
   cytoplasmic). PPM needs it. It is read from the OPM entry when there is one; otherwise it must be given, and the
   build stops before anything expensive runs and says so. It is never guessed from a protein family or name.
-- `--orient-chains A,B` orients from several chains at once (a dimer, a multi-subunit channel). Only the anchor
-  chain(s) are submitted to PPM; every other chain, ligand and ion is moved with the derived transform.
+- `--orient-chains A,B` orients from several chains at once. Only the anchor chain(s) are submitted to PPM; every
+  other chain, ligand and ion is moved with the derived transform.
 - `--orientation none` keeps the previous behaviour for inputs that are already oriented and placed: the all-atom
-  complex is then fitted onto the coarse-grained protein with a free rigid fit.
+  complex is fitted onto the coarse-grained protein with a free rigid fit.
 
-Orientation moves the complex into the OPM/PPM frame (normal +z, midplane z = 0, IN negative z, OUT positive z).
-The coarse-grained frame is then registered to it laterally: the anchor's membrane-embedded residues set a rotation
-about z and an xy translation, and z = 0 is put on the coarse-grained bilayer midplane (halfway between the two
-phosphate planes). The tilt and depth by which the equilibrated coarse-grained pose differs are measured and
-reported (`orientation_report.json`, `run_manifest.json`) and never adopted; a difference above 20 degrees or 0.5
-nm is refused, because the lipid cavity of the coarse-grained membrane would no longer fit the oriented complex.
-PPM makes the orientation step general; whether a given coarse-grained membrane fits the oriented complex is a
-separate question that the registration check answers.
+Orientation moves the complex into the OPM/PPM frame (normal +z, midplane z = 0, IN negative z, OUT positive z). The
+coarse-grained frame is then registered to it laterally: the anchor's membrane-embedded residues set a rotation about
+z and an xy translation, and z = 0 is put on the coarse-grained bilayer midplane (halfway between the phosphate
+planes). The tilt and depth by which the equilibrated coarse-grained pose differs are measured and reported
+(`orientation_report.json`, `run_manifest.json`) and never adopted; a difference above 20 degrees or 0.5 nm is
+refused, because the lipid cavity of the coarse-grained membrane would no longer fit the oriented complex.
 
-Advanced options: `--ppm-membrane CODE` selects a PPM 3.0 membrane model (default: PPM's undefined flat bilayer,
-which assumes nothing about the biological membrane); `--ppm-heteroatoms` submits the anchor chains' heteroatoms to
-PPM; `--opm-file` uses an already downloaded OPM/OPRLM coordinate file (offline), `--opm-cache` sets the download
-cache. PPM is always run in its planar single-membrane mode; curved membranes are never requested.
+**Orientation does not make a coarse-grained membrane generic.** PPM makes the all-atom side work for any protein.
+The `--coarse-grain` frame, including the pre-equilibrated KOR and GPR139 frames, is an equilibrated system that
+contains its own receptor and a lipid cavity shaped around it; it is usable only with an all-atom structure of that
+same protein. A different protein needs a coarse-grained system of its own.
 
-**Box**
+Advanced options: `--ppm-membrane CODE` selects a PPM 3.0 membrane model (default: PPM's undefined flat bilayer, which
+assumes nothing about the biological membrane); `--ppm-heteroatoms` submits the anchor chains' heteroatoms to PPM;
+`--opm-file` uses an already downloaded OPM/OPRLM coordinate file (offline); `--opm-cache` sets the download cache.
+PPM is always run in its planar single-membrane mode.
 
-`BOX = auto` (the default) keeps the membrane's x and y cell, as it must for a periodic membrane, and sizes z around
-the bilayer midplane so that the complex and the membrane are covered by 1.5 nm of water above and below (never less
-than 2 nm over the full extent). A box of your own is opt-in: `--box x,y,z` in nm, where x and y must equal the
-membrane cell and z must be at least the automatic minimum; anything else is refused with the value that would work.
+## Box
 
-**Outputs**
+`BOX = auto` (the default) keeps the membrane's x and y cell, as a periodic membrane requires, and sizes z around the
+bilayer midplane so the complex and the membrane are covered by 1.5 nm of water above and below (never less than 2 nm
+over the full extent). A box of your own is opt-in: `--box x,y,z` in nm, where x and y must equal the membrane cell and
+z must be at least the automatic minimum; anything else is refused with the value that would work.
+
+## What MembraneForger does
+
+1. **Reads and checks both inputs**, and records their checksums.
+2. **Orients the all-atom complex** in the membrane frame from the anchor chain and verifies that every atom received
+   the same rigid transform.
+3. **Classifies every coarse-grained residue** as protein, lipid species, water or ion. Martini 2 files and unknown
+   residues are refused, never silently dropped.
+4. **Registers the all-atom complex** to the coarse-grained frame. Each all-atom chain is matched to its
+   coarse-grained chain by sequence; the coarse-grained frame supplies only the lateral position (a rotation about the
+   membrane normal and a translation), so the orientation is never tilted.
+5. **Backmaps the membrane** around the placed complex with mstool.
+6. **Reviews the backmapped lipids** for bonds threaded through rings and for wrong stereochemistry. If it finds
+   one, it backmaps again with a new seed (up to five attempts).
+7. **Builds the CHARMM36 topology**: `pdb2gmx` for the protein, molecule topologies for lipids and ligands.
+8. **Sizes the box** (`BOX = auto`), adds water and 0.15 M NaCl, and writes the index groups.
+9. **Energy-minimizes** with GROMACS.
+10. **Audits the result** from the output files alone (`grompp -maxwarn 0`, `gmx check`, energies, geometry, ring
+   threading). Only after the audit passes is the final structure published as `em.gro`.
+
+MembraneForger stops at the energy-minimized system. Equilibration and production molecular dynamics are up to you.
+
+## Outputs
 
 | File | Meaning |
 |---|---|
-| `em.gro` | the validated, energy-minimized system (present only after a passing audit) |
-| `oriented.pdb`, `orientation_report.json` | the complete complex in the membrane frame, and the orientation record (provider, anchor, N-terminal side, PPM/OPM parameters and hashes, fit RMSD, rotation, translation, validation, CG registration) |
-| `topol.top`, `toppar/`, `index_ini.ndx` | topology, included molecule files, index groups (`System`, `Protein_LIG`, `MEMB`, `SOL_ION`) |
+| `em.gro` | the validated, energy-minimized system; present only after a passing audit |
+| `oriented.pdb`, `orientation_report.json` | the complete complex in the membrane frame, and the orientation record: provider, anchor, N-terminal side, PPM/OPM parameters and hashes, fit RMSD, rotation, translation, validation and CG registration |
+| `topol.top`, `toppar/` | topology and the molecule files it includes |
+| `index_ini.ndx` | index groups `System`, `Protein_LIG`, `MEMB`, `SOL_ION` |
 | `membrane.pdb` | the placed complex with the backmapped membrane, before topology building |
+| `aa_cg_mapping.tsv` | which all-atom chain was matched to which coarse-grained chain, and how well |
 | `run_manifest.json` | inputs and their checksums, settings, per-stage results and timings, output checksums |
 | `audit.json` | the independent audit, check by check |
-| `aa_cg_mapping.tsv` | which all-atom chain was matched to which coarse-grained chain, and how well |
-| `membranebuilder.log` | the full transcript |
+| `membranebuilder.log` | the full transcript; its last line starts with `PASS` or `FAIL` |
 
-**Tests**
+## Running on a cluster
+
+`membraneforger/cpu.submit` is a Slurm array template that runs one build per task from a tab-separated case table
+(name, all-atom PDB, coarse-grained file):
+
+```bash
+sbatch --array=0-7 \
+    --export=ALL,REPO=/path/to/MembraneForger,CASES=cases.tsv,OUTROOT=/path/to/outputs \
+    membraneforger/cpu.submit
+```
+
+Edit the partition, memory and time limit at the top of the file for your cluster. To drive a build from Python with
+your own acceptance settings, see `membraneforger/example.py`.
+
+## Tests
 
 ```bash
 python -m unittest discover -s membraneforger/tests -t .
@@ -162,35 +231,69 @@ python -m unittest discover -s membraneforger/tests -t .
 
 Set `MEMBRANEFORGER_GMX` if GROMACS is not on the path as `gmx`.
 
-**Stage renders**
+What has been tested:
 
-`membraneforger/visualization.py` renders every stage of a finished build with VMD and Tachyon (fixed camera,
-ambient occlusion, one colour per lipid species and per protein chain):
+- 166 unit, negative, invariance and orientation tests (the command above; three need real PPM, the network or an mstool-free interpreter and are skipped otherwise).
+- Complete builds of nine receptor–peptide–Gs systems (glucagon, GLP-1 and GIP receptors), each passing the audit.
+- The bundled example, built from a fresh clone of this layout.
+- Two deliberate failures, a truncated minimization and a membrane with a threaded ring, both of which are refused.
+
+Other receptors, lipids and force-field residues have not been exercised.
+
+## Stage renders
+
+`membraneforger/visualization.py` renders every stage of a finished build with VMD and Tachyon: fixed camera, ambient
+occlusion, and one colour per lipid species and per protein chain.
 
 ```bash
 python membraneforger/visualization.py example_out --out renders --mode publication \
-    --all-atom examples/6WHC_MTZP_run1/prot-lig.pdb --coarse-grain examples/6WHC_MTZP_run1/system.gro
+    --all-atom examples/6WHC_MTZP_run1/prot-lig.pdb \
+    --coarse-grain examples/6WHC_MTZP_run1/system.gro
 ```
 
-**Supported systems and known limits**
+## Supported systems and known limits
 
-- Martini 3 only. Lipids: POPC, DOPC, POPE, DOPE, POPS, DOPS, PSM, cholesterol, PIP2 (`SAP6`) and GM3.
-- The all-atom complex is placed as one rigid body.
-- The coarse-grained input must contain the same complex (every coarse-grained protein segment needs an all-atom
-  counterpart). Its membrane is an equilibrated, protein-specific patch, not a generic template: orientation makes
-  the all-atom side general, but a different protein needs a coarse-grained system of its own.
-- Orientation needs either an OPM entry of the structure or a PPM 3.0 installation; PPM's N-terminal side must be
-  supplied when no OPM entry provides it.
-- Orthorhombic boxes with one bilayer. Triclinic cells, more than one bilayer, inter-chain disulfides and residue
-  insertion codes are refused.
-- Six GM3 stereocentres have malformed definitions in the mstool mapping and are not controlled; every run reports
-  them as a warning.
-- mstool's cholesterol and PIP2 mappings do not use the Martini 3 beads `R6` and `C4`; these beads are dropped
-  before backmapping and reported.
-- Only the systems listed in the tutorial were exercised.
+- **Martini 3 only.** Supported lipids: POPC, DOPC, POPE, DOPE, POPS, DOPS, PSM, cholesterol, PIP2 (`SAP6`) and GM3.
+- **Orientation.** Needs an OPM entry of the structure or a PPM 3.0 installation; PPM's N-terminal side must be
+  supplied when no OPM entry gives it. The coarse-grained frame must contain the same protein complex, because its
+  membrane is an equilibrated, protein-specific patch rather than a generic template.
+- **Rigid placement.** The all-atom complex is placed as one rigid body. A chain that moved relative to the others
+  during the coarse-grained run keeps its all-atom pose, and the build is refused if it no longer fits.
+- **Box and membrane.** Orthorhombic cells with one planar bilayer. Triclinic cells and more than one bilayer are
+  refused.
+- **Protein.** Inter-chain disulfides and residue insertion codes are refused.
+- **GM3 stereochemistry.** Six GM3 stereocentres have malformed definitions in the mstool mapping and are not
+  controlled. Every run with GM3 reports this as a warning.
+- **Cholesterol and PIP2.** mstool's mappings for these lipids do not use the Martini 3 beads `R6` and `C4`. Those
+  beads are dropped before backmapping and reported.
+- **Reproducibility.** Backmapping is not bit-reproducible: two runs with the same seed give slightly different
+  lipid coordinates, and therefore different water and ion counts. Both pass the same checks.
 
-**Third-party components**
+## Repository layout
 
-The CHARMM36 force-field files under `forcefield/` and the mapping data under `backmap_data/` come from their
-respective projects (CHARMM36 / CHARMM-GUI, CGenFF, mstool). Cite those projects, Martini 3 and GROMACS when you
-publish results obtained with this package.
+| Path | Contents |
+|---|---|
+| `membraneforger/` | the Python package, one module per pipeline stage (listed in `membraneforger/README.md`) |
+| `membraneforger/tests/` | unit, negative and invariance tests |
+| `membraneforger/example.py` | running a build from Python |
+| `membraneforger/cpu.submit` | Slurm array template |
+| `forcefield/` | CHARMM36 force field for GROMACS, lipid and ligand topologies, and the parameter packages of the modified residues used in the example |
+| `backmap_data/` | mstool mapping additions (`map.dat`) and extra force-field XML files |
+| `examples/6WHC_MTZP_run1/` | the example input pair: `prot-lig.pdb` and `system.gro` |
+| `examples/preequilibrated_gpcr_cellmembrane/` | eighteen Martini 3 frames (30 µs) of the kappa opioid receptor and GPR139 in a cell-membrane model; coarse-grained inputs only |
+| `archive/` | the earlier MembraneForger (v0.2.0) exactly as released, including the coarse-grained setup stages |
+
+## Version history
+
+- **1.0.0** — the two-input pipeline described here.
+- **0.2.0, 0.1.0** — a four-stage workflow that started from a PDB alone and also built the coarse-grained system.
+  It is kept unchanged under `archive/` and is no longer maintained.
+
+## Citation and licensing
+
+If you use MembraneForger, cite this repository and the tools and force fields it relies on: Martini 3, Martinize2
+and Vermouth, mstool, CHARMM36 and CGenFF, and GROMACS.
+
+MembraneForger's own source files are released under the MIT license (`LICENSE.txt`). The force-field files under
+`forcefield/` and the mapping data under `backmap_data/` are third-party data and remain under the terms of their
+own projects. `archive/` carries its own license files.
