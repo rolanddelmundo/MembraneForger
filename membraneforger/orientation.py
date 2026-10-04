@@ -14,8 +14,6 @@ The anchor chain(s) are oriented by a provider (an exact OPM reference entry, or
 anchor coordinates themselves); the rigid transform taking the original anchor onto its oriented copy is derived
 once and applied to EVERY atom of the original complex. Nothing is ever rebuilt from a provider's coordinate file.
 """
-import hashlib
-import json
 import math
 import os
 import re
@@ -190,10 +188,10 @@ def fetch_opm_reference(pdb_id: str, cache: Path | None, out: Path | None = None
                 if out:
                     log(out, f"OPM has no entry for {pdb_id} ({url} -> 404)")
                 return None
-            raise OrientationFailure(f"OPM lookup of {pdb_id} failed: HTTP {exc.code} from {url}")
+            raise OrientationFailure(f"OPM lookup of {pdb_id} failed: HTTP {exc.code} from {url}") from None
         except (urllib.error.URLError, OSError, ValueError) as exc:
             raise OrientationFailure(f"OPM lookup of {pdb_id} failed: {exc} ({url}); pass --opm-file with a downloaded "
-                                     "OPM/OPRLM coordinate file to work offline")
+                                     "OPM/OPRLM coordinate file to work offline") from None
         if b"1/2 of bilayer thickness" not in data:
             raise OrientationFailure(f"{url} did not return an OPM coordinate file")
         part = target.with_suffix(".part")
@@ -422,7 +420,7 @@ class LocalPPM:
         try:
             thickness, thickness_sd, tilt, tilt_sd, energy = (float(f) for f in fields[:5])
         except ValueError:
-            raise OrientationFailure(f"malformed datapar1 row: {row!r}")
+            raise OrientationFailure(f"malformed datapar1 row: {row!r}") from None
         curved = (workdir / "datapar2").read_text(errors="replace").strip() if (workdir / "datapar2").is_file() else ""
         if PPM_INPUT_NAME in curved:
             raise OrientationFailure("PPM reported a curved membrane although a planar one was requested")

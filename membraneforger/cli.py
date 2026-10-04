@@ -5,18 +5,32 @@
 """Parse the command line, locate installation resources, and run one build."""
 import argparse
 import os
+import random
 import shutil
 import sys
 from pathlib import Path
 
-from .config import BOX, NSTEPS, NTERM_SIDE, ORIENTATION, ORIENT_CHAINS, PDB_ID, PPM_MEMBRANE, Settings
+from .config import BOX, NSTEPS, NTERM_SIDE, ORIENT_CHAINS, ORIENTATION, PDB_ID, PPM_MEMBRANE, Settings
+from .embedding import CONVERTIBLE, LIPID_NAMES, lipid_name
 from .orientation import NTERM_SIDES, ORIENTATION_MODES, OrientationRequest
 from .pipeline import Session, build
 from .runtools import find_gromacs
 
-__all__ = ['make_parser', 'locate_forcefield', 'locate_data', 'parse_chains', 'parse_box', 'orientation_request', 'main']
+__all__ = ['BUNDLED_MEMBRANES', 'bundled_membrane', 'make_parser', 'locate_forcefield', 'locate_data', 'parse_chains', 'parse_box',
+           'orientation_request', 'main']
 
 REPOSITORY = Path(__file__).resolve().parents[1]
+# --cg 1 / --cg 2: one frame drawn at random from the bundled pre-equilibrated membranes of that receptor
+# (examples/preeq_cg_cellmem/README.md lists all 18); the chosen file is logged and recorded in run_manifest.json.
+BUNDLED_MEMBRANES = {"1": "GPR*_cg_cellmem.gro", "2": "KOR*_cg_cellmem.gro"}
+
+
+def bundled_membrane(code: str) -> Path:
+    """Pick one of the bundled frames for --cg 1 (GPR139 membranes) or --cg 2 (kappa opioid receptor membranes)."""
+    frames = sorted((REPOSITORY / "examples" / "preeq_cg_cellmem").glob(BUNDLED_MEMBRANES[code]))
+    if not frames:
+        raise SystemExit(f"no bundled membrane matches examples/preeq_cg_cellmem/{BUNDLED_MEMBRANES[code]}")
+    return random.choice(frames)
 
 
 def parse_chains(*values: str | None) -> tuple:
@@ -30,7 +44,7 @@ def parse_chains(*values: str | None) -> tuple:
 
 
 def parse_box(value: str | None) -> tuple | None:
-    """Parse BOX / --box: 'auto' (None) or three positive lengths in nm 'x,y,z'."""
+    """Parse the BOX header value: 'auto' (None) or three positive edge lengths in A as 'x,y,z'."""
     text = (value or "auto").strip().lower()
     if text in ("", "auto"):
         return None
@@ -39,7 +53,7 @@ def parse_box(value: str | None) -> tuple | None:
     except ValueError:
         parts = ()
     if len(parts) != 3 or not all(v > 0 for v in parts):
-        raise SystemExit(f"--box must be 'auto' or three positive lengths in nm as x,y,z, not {value!r}")
+        raise SystemExit(f"BOX must be 'auto' or three positive edge lengths in A as x,y,z, not {value!r}")
     return parts
 
 
@@ -66,10 +80,26 @@ def make_parser() -> argparse.ArgumentParser:
         prog="membraneforger.py",
         description="Build a validated, energy-minimized all-atom CHARMM36 membrane system (em.gro) from an all-atom "
                     "protein/ligand PDB and a Martini 3 coarse-grained simulation frame.")
-    parser.add_argument("--all-atom", type=Path, metavar="PDB",
-                        help="all-atom protein/ligand complex; the only source of protein and ligand chemistry")
-    parser.add_argument("--coarse-grain", type=Path, metavar="PDB|GRO",
-                        help="Martini 3 system with its box; supplies the membrane and where the protein sits")
+    parser.add_argument("--aa", "--all-atom", dest="all_atom", type=Path, metavar="PDB",
+                        help="all-atom protein (or protein/ligand) structure with its membrane normal along z; "
+                             "the only source of protein and ligand chemistry")
+    parser.add_argument("--cg", "--coarse-grain", dest="coarse_grain", default="1", metavar="1|2|FILE",
+                        help="membrane: 1 = a random bundled GPR139 frame, 2 = a random bundled kappa opioid receptor frame "
+                             "(the protein is embedded into either), or a Martini 3 frame of your own complex, given as "
+                             "FILE or custom=FILE (default: 1)")
+    parser.add_argument("--embed", action="store_true",
+                        help="embed the protein into the membrane of a --cg FILE instead of fitting it onto the frame's "
+                             "protein (always the case for the bundled membranes)")
+    parser.add_argument("--box", nargs=3, type=float, metavar=("X", "Y", "Z"),
+                        help=f"opt-in box edges in A (default: BOX = {BOX}: the membrane is sliced to the complex plus --xy-buffer "
+                             "in x and y, and z is sized around the bilayer midplane); x and y may only be smaller than the "
+                             "membrane patch, which is then cut around the complex, z must leave the default water padding")
+    parser.add_argument("--bilayer-z", type=float, metavar="Z",
+                        help="z of the bilayer centre in the all-atom input, in A (default: found from the hydrophobic belt)")
+    parser.add_argument("--dellipid", action="append", default=[], metavar="LIPID",
+                        help=f"remove every molecule of this lipid (repeatable): {', '.join(LIPID_NAMES)}")
+    parser.add_argument("--addlipid", metavar="LIPID",
+                        help=f"turn the lipids removed by --dellipid into this lipid instead ({', '.join(CONVERTIBLE)})")
     parser.add_argument("-o", "--out", type=Path, help="output directory (default: ./<coarse-grain stem>_membraneforger)")
     parser.add_argument("--name", help="system name for logs and [ system ] (default: output directory name)")
     parser.add_argument("--toppar", type=Path, default=os.environ.get("MEMBRANEFORGER_TOPPAR"),
@@ -106,12 +136,8 @@ def make_parser() -> argparse.ArgumentParser:
     orient.add_argument("--ppm-heteroatoms", action="store_true", help="advanced: submit the anchor chains' heteroatoms to PPM too")
     orient.add_argument("--opm-file", type=Path, metavar="PDB", help="an already downloaded OPM/OPRLM coordinate file (offline use)")
     orient.add_argument("--opm-cache", type=Path, metavar="DIR", help="cache for downloaded OPM files (default: ~/.cache/membraneforger/opm)")
-    parser.add_argument("--box", metavar="auto|X,Y,Z", default=None,
-                        help=f"auto: slice the coarse-grained membrane to the complex plus --xy-buffer in x and y and size z "
-                             f"around the bilayer midplane; or an opt-in box in nm, with x,y no larger than the coarse-grained "
-                             f"cell (default: {BOX})")
     parser.add_argument("--xy-buffer", type=float, default=defaults.box_xy_buffer_nm, metavar="NM",
-                        help="membrane kept around the complex on each side in x and y when --box is auto (default: %(default)s nm)")
+                        help="membrane kept around the complex on each side in x and y when the box is auto (default: %(default)s nm)")
     return parser
 
 
@@ -138,13 +164,33 @@ def main(argv: list | None = None) -> int:
     """Run one build from command-line arguments and return its exit code."""
     parser = make_parser()
     args = parser.parse_args(argv)
-    if args.membrane and (args.all_atom or args.coarse_grain):
-        parser.error("--membrane replaces --all-atom and --coarse-grain; give one or the other")
-    if not args.membrane and not (args.all_atom and args.coarse_grain):
-        parser.error("--all-atom and --coarse-grain are both required")
+    given_cg = "--cg" in sys.argv or "--coarse-grain" in sys.argv
+    if args.membrane and (args.all_atom or given_cg):
+        parser.error("--membrane replaces --aa and --cg; give one or the other")
+    if not args.membrane and not args.all_atom:
+        parser.error("--aa is required")
+    embed, cg = args.embed, str(args.coarse_grain)
+    if cg in BUNDLED_MEMBRANES:
+        try:
+            args.coarse_grain, embed = bundled_membrane(cg), True
+        except SystemExit as exc:
+            parser.error(str(exc))
+    else:
+        args.coarse_grain = Path(cg[len("custom="):] if cg.lower().startswith("custom=") else cg)
+    if args.membrane:
+        args.coarse_grain = None
     for path in (args.all_atom, args.coarse_grain, args.membrane):
         if path and not path.is_file():
             parser.error(f"missing input file {path}")
+    if args.box and (len(args.box) != 3 or min(args.box) <= 0):
+        parser.error("--box needs three positive edge lengths in A")
+    if args.membrane and (args.box or args.dellipid or args.addlipid or args.embed):
+        parser.error("--box, --dellipid, --addlipid and --embed need --aa and --cg, not --membrane")
+    try:
+        for name in args.dellipid + ([args.addlipid] if args.addlipid else []):
+            lipid_name(name)
+    except SystemExit as exc:
+        parser.error(str(exc))
     try:
         forcefield = locate_forcefield(args.toppar)
         gmx = find_gromacs(args.gmx)
@@ -159,9 +205,11 @@ def main(argv: list | None = None) -> int:
             parser.error(f"--mstool-python {python} not found")
     try:
         orientation = orientation_request(args)
-        box = parse_box(args.box if args.box is not None else BOX)
+        box = tuple(args.box) if args.box else (None if args.membrane else parse_box(BOX))
     except SystemExit as exc:
         parser.error(str(exc))
+    if orientation.mode != "none" and args.bilayer_z is not None and not args.membrane:
+        parser.error("--bilayer-z applies with --orientation none; an oriented complex has its bilayer centre at z = 0")
     if args.membrane and (orientation.mode != "none" and (orientation.chains or args.orientation or args.pdb_id)):
         parser.error("--membrane starts from an assembled system; membrane orientation options do not apply to it")
     if args.membrane:
@@ -175,7 +223,9 @@ def main(argv: list | None = None) -> int:
     settings = Settings(fit_max_core_rmsd_a=args.fit_max_core_rmsd, fit_min_core_fraction=args.fit_min_core_fraction,
                         box_xy_buffer_nm=args.xy_buffer)
     session = Session(out=out, name=args.name or out.name, gmx=gmx, forcefield=forcefield, data=data, python=python,
-                      ntomp=args.ntomp, nsteps=args.nsteps, settings=settings, orientation=orientation, box=box)
+                      ntomp=args.ntomp, nsteps=args.nsteps, settings=settings, embed=embed,
+                      box_a=box, bilayer_z_a=args.bilayer_z, delete_lipids=list(args.dellipid), add_lipid=args.addlipid,
+                      orientation=orientation)
     resolved = [p.resolve() if p else None for p in (args.all_atom, args.coarse_grain, args.membrane)]
     return build(session, resolved[0], resolved[1], resolved[2], [sys.executable] + sys.argv)
 

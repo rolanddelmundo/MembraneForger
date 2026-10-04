@@ -20,9 +20,26 @@ import numpy as np
 from networkx.algorithms import isomorphism as iso
 from scipy.spatial import cKDTree
 
-from .config import (AMINO, C_CAP, CYSG_HDB, DISULFIDE_MAX_A, DISULFIDE_OK_A, GLPA_MAX_BOND_A, GM3_XML_TO_GLPA, H_BOND_RANGE,
-                     LIPID_DELETE_A, LIPID_SCAN_A, LIPIDATED, LYS_BACKBONE, N_CAP, RENAME_ATOM, RENAME_MOLECULE, RENAME_RESIDUE,
-                     SOLVENT, TERMINUS_MENU)
+from .config import (
+    AMINO,
+    C_CAP,
+    CYSG_HDB,
+    DISULFIDE_MAX_A,
+    DISULFIDE_OK_A,
+    GLPA_MAX_BOND_A,
+    GM3_XML_TO_GLPA,
+    H_BOND_RANGE,
+    LIPID_DELETE_A,
+    LIPID_SCAN_A,
+    LIPIDATED,
+    LYS_BACKBONE,
+    N_CAP,
+    RENAME_ATOM,
+    RENAME_MOLECULE,
+    RENAME_RESIDUE,
+    SOLVENT,
+    TERMINUS_MENU,
+)
 from .runtools import log, sha256
 from .structio import dist, element, read_itp, read_pdb, residues_in_order, source_element, write_pdb, xyz_nm
 

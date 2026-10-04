@@ -149,7 +149,8 @@ class AnchorSelection(unittest.TestCase):
     def test_header_record_gives_the_pdb_id(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "x.pdb"
-            path.write_text("HEADER    MEMBRANE PROTEIN                        07-APR-20   6WHC              \nATOM      1  CA  GLY A   1       0.000   0.000   0.000  1.00  0.00           C\n")
+            path.write_text("HEADER    MEMBRANE PROTEIN                        07-APR-20   6WHC              \n"
+                            "ATOM      1  CA  GLY A   1       0.000   0.000   0.000  1.00  0.00           C\n")
             self.assertEqual(mf.pdb_id_from_header(path), "6WHC")
             path.write_text("HEADER    MEMBRANE PROTEIN                        07-APR-20   XXXX              \n")
             self.assertIsNone(mf.pdb_id_from_header(path))
@@ -232,7 +233,8 @@ class OPMReferenceMode(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out, work = Fixtures.session_dirs(Path(tmp))
             request = mf.OrientationRequest(mode="opm", chains=("R",), pdb_id="6WHC", opm_file=OPM_6WHC, nterm_side="in")
-            self.assertIn("contradicts the exact reference", failure(mf.orient_complex, Fixtures.complex(), AA_PDB, request, mf.Settings(), out, work))
+            message = failure(mf.orient_complex, Fixtures.complex(), AA_PDB, request, mf.Settings(), out, work)
+            self.assertIn("contradicts the exact reference", message)
 
 
 class LocalPPMProvider(unittest.TestCase):
@@ -254,7 +256,8 @@ class LocalPPMProvider(unittest.TestCase):
 
     def test_executable_discovery(self):
         self.assertEqual(mf.find_ppm_executable(str(self.exe)), self.exe.resolve())
-        self.assertIn("not found", failure(mf.find_ppm_executable, None) or "") if not shutil.which("immers") and not os.environ.get("MEMBRANEFORGER_PPM") else None
+        if not shutil.which("immers") and not os.environ.get("MEMBRANEFORGER_PPM"):
+            self.assertIn("not found", failure(mf.find_ppm_executable, None))
         (self.exe.parent / "res.lib").unlink()
         self.assertIn("res.lib is missing", failure(mf.find_ppm_executable, str(self.exe)))
         self.assertIn("not an executable", failure(mf.find_ppm_executable, str(self.tmp / "absent")))
@@ -514,7 +517,6 @@ class RegistrationKeepsTheOrientation(unittest.TestCase):
         self.assertEqual(fit["assigned"], [("A", 1), ("P", 2), ("R", 0)])
 
     def test_a_tilted_cg_pose_beyond_the_limit_is_refused(self):
-        tilted = [list(r) for r in self.cg["protein"]]
         centre = np.array([[b["x"], b["y"], b["z"]] for r in self.cg["protein"] for b in r]).mean(axis=0)
         Rt = rotation([1.0, 0.0, 0.0], 30.0)
         rotated = []
@@ -553,12 +555,12 @@ class BoxSizing(unittest.TestCase):
                 coords.append({"atom": atom, "group": "Protein_LIG", "resid": n + 1, "resname": "GLY", "x": 50.0, "y": 50.0, "z": float(z) + dz})
         return coords
 
-    def rebox(self, requested=None, pad=1.5):
+    def rebox(self, requested_z=None, pad=1.5):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)
             (out / mf.LOG_NAME).write_text("")
             system = {"cryst1": "CRYST1  100.000  100.000  150.000  90.00  90.00  90.00 P 1           1", "out": out, "name": "t"}
-            box = mf.rebox_system(system, {"coords": self.make_system()}, requested, pad)
+            box = mf.rebox_system(system, {"coords": self.make_system()}, requested_z, pad)
             atoms, gro_box = mf.read_gro(out / "boxed.gro")
             return box, system["box_report"], atoms, gro_box
 
@@ -574,17 +576,17 @@ class BoxSizing(unittest.TestCase):
         self.assertAlmostEqual(z[[a["atom"] == "P" for a in atoms]].mean(), box[2] / 2.0, places=6)
 
     def test_user_box_is_opt_in_and_validated(self):
-        box, report, _, _ = self.rebox(requested=(10.0, 10.0, 20.0))
+        box, report, _, _ = self.rebox(requested_z=20.0)
         self.assertEqual((report["mode"], box[2]), ("user", 20.0))
-        self.assertIn("must equal the membrane cell", failure(self.rebox, requested=(12.0, 10.0, 20.0)))
-        self.assertIn("smaller than the 17.000 nm", failure(self.rebox, requested=(10.0, 10.0, 15.0)))
+        self.assertEqual(box[:2], [10.0, 10.0])                    # x and y are the cell this stage receives
+        self.assertIn("is below the 170 A", failure(self.rebox, requested_z=15.0))
 
     def test_cli_box_parsing(self):
         self.assertIsNone(mf.parse_box("auto"))
         self.assertIsNone(mf.parse_box(None))
         self.assertEqual(mf.parse_box("11.18,11.18,20.3"), (11.18, 11.18, 20.3))
-        self.assertIn("three positive lengths", failure(mf.parse_box, "11,20"))
-        self.assertIn("three positive lengths", failure(mf.parse_box, "a,b,c"))
+        self.assertIn("three positive edge lengths in A", failure(mf.parse_box, "11,20"))
+        self.assertIn("three positive edge lengths in A", failure(mf.parse_box, "a,b,c"))
 
 
 class CommandLine(unittest.TestCase):
@@ -598,7 +600,10 @@ class CommandLine(unittest.TestCase):
 
     def test_option_validation(self):
         self.assertIn("invalid choice", self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--orientation", "maybe")[1])
-        self.assertIn("three positive lengths", self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--box", "big")[1])
+        self.assertIn("expected 3 arguments", self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--box", "100", "100")[1])
+        self.assertIn("three positive edge lengths", self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--box", "100", "-5", "100")[1])
+        self.assertIn("--bilayer-z applies with --orientation none",
+                      self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--orient-chain", "R", "--bilayer-z", "5")[1])
         self.assertIn("do not apply", self.run_cli("--membrane", AA_PDB, "--orient-chain", "R")[1])
 
     def test_multiple_chains_fail_early_with_instructions(self):

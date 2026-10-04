@@ -15,8 +15,8 @@ import numpy as np
 from .common import AA_PDB, CG_GRO, FORCEFIELD, MAPPING, REPO, failure, mf
 
 OPM_6WHC = Path(__file__).parent / "data" / "6whc_opm_chainR.pdb"
-KOR_FRAME = REPO / "examples" / "preequilibrated_gpcr_cellmembrane" / "8F7W_KOR_run1_30us.gro"
-GPR139_FRAME = REPO / "examples" / "preequilibrated_gpcr_cellmembrane" / "GPR139_7F6G_run3_30us.gro"
+KOR_FRAME = REPO / "examples" / "preeq_cg_cellmem" / "KOR1_cg_cellmem.gro"
+GPR139_FRAME = REPO / "examples" / "preeq_cg_cellmem" / "GPR3_cg_cellmem.gro"
 CELL = [20.0, 20.0, 12.0]
 MIDPLANE = 6.0
 
@@ -223,7 +223,8 @@ class RealFrames(unittest.TestCase):
         self.assertGreaterEqual(moved[:, 0].min(), self.settings.box_xy_buffer_nm - 1e-6)
         self.assertLessEqual(moved[:, 0].max(), cut["box"][0] - self.settings.box_xy_buffer_nm + 1e-6)
         before = mf.xyz_nm(self.placed)
-        self.assertAlmostEqual(float(np.linalg.norm(before[0] - before[-1])), float(np.linalg.norm(mf.xyz_nm(cut["placed"])[0] - mf.xyz_nm(cut["placed"])[-1])), places=6)
+        after = mf.xyz_nm(cut["placed"])
+        self.assertAlmostEqual(float(np.linalg.norm(before[0] - before[-1])), float(np.linalg.norm(after[0] - after[-1])), places=6)
 
     def test_a_larger_buffer_keeps_more_membrane(self):
         small = mf.slice_membrane_cg(self.membrane, self.placed, self.box, self.midplane, mf.Settings(box_xy_buffer_nm=0.5))
@@ -259,8 +260,9 @@ class RealFrames(unittest.TestCase):
                 pts = np.vstack([m["xyz"] for m in cut["membrane"]])
                 own = np.concatenate([np.full(len(m["xyz"]), i) for i, m in enumerate(cut["membrane"])])
                 new_box = np.array(cut["box"])
-                pairs = cKDTree(np.mod(pts - pts.min(axis=0), new_box), boxsize=new_box).query_pairs(self.settings.seam_min_bead_nm, output_type="ndarray")
-                flat = cKDTree(pts).query_pairs(self.settings.seam_min_bead_nm, output_type="ndarray")
+                limit = self.settings.seam_min_bead_nm
+                pairs = cKDTree(np.mod(pts - pts.min(axis=0), new_box), boxsize=new_box).query_pairs(limit, output_type="ndarray")
+                flat = cKDTree(pts).query_pairs(limit, output_type="ndarray")
                 created = {tuple(p) for p in pairs.tolist() if own[p[0]] != own[p[1]]} - {tuple(p) for p in flat.tolist()}
                 self.assertEqual(len(created), 0)
 
@@ -277,7 +279,7 @@ class Integration(unittest.TestCase):
         if subprocess.run([sys.executable, "-c", "import mstool"], capture_output=True).returncode:
             raise unittest.SkipTest("mstool is not importable in this interpreter")
 
-    def prepare(self, **kwargs):
+    def prepare(self, cg=CG_GRO, **kwargs):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp, True)
         out = tmp / "out"
@@ -286,7 +288,7 @@ class Integration(unittest.TestCase):
         request = kwargs.pop("orientation", mf.OrientationRequest(mode="none"))
         session = mf.Session(out=out, name="t", gmx="gmx", forcefield=FORCEFIELD, data=mf.locate_data(None), python=sys.executable,
                              ntomp=1, nsteps=1, orientation=request, work=out / "work", **kwargs)
-        return session, mf.prepare_inputs(session, AA_PDB, CG_GRO)
+        return session, mf.prepare_inputs(session, AA_PDB, cg)
 
     def test_auto_box_slices_before_backmapping_and_records_it(self):
         session, prepared = self.prepare()
@@ -313,12 +315,31 @@ class Integration(unittest.TestCase):
         self.assertLess(float(np.ptp(z_after - z_before)), 1e-2)                       # PDB rounding only: a pure z translation
         self.assertTrue((Path(session.out) / "orientation_report.json").is_file())
 
+    def test_oriented_complex_embeds_into_a_bundled_membrane_and_is_sliced(self):
+        request = mf.OrientationRequest(mode="opm", chains=("R",), pdb_id="6WHC", opm_file=OPM_6WHC)
+        session, prepared = self.prepare(cg=KOR_FRAME, orientation=request, embed=True)
+        report = session.record["slice"]
+        self.assertTrue(report["cropped"])
+        self.assertLess(prepared["box"][0] * prepared["box"][1], 0.5 * 18.28 * 18.28)       # a fraction of the 18 nm patch
+        self.assertLess(report["lipids_after"], 0.5 * report["lipids_before"])
+        registration = session.record["orientation"]["registration"]
+        self.assertEqual(registration["mode"], "embed")
+        self.assertEqual(registration["check"]["status"], "PASS")
+        self.assertLess(registration["check"]["normal_tilt_deg"], 1e-4)
+        self.assertEqual(session.record["embedding"]["bilayer_centre_input_A"], 0.0)          # the oriented frame: bilayer centre at z = 0
+        self.assertAlmostEqual(session.record["embedding"]["midplane_nm"], session.record["coarse_grain"]["bilayer_midplane_nm"], places=3)
+        oriented, _ = mf.read_pdb(Path(session.out) / "oriented.pdb")
+        z_shift = mf.xyz_nm(prepared["placed"])[:, 2] - mf.xyz_nm(oriented)[:, 2]
+        self.assertLess(float(np.ptp(z_shift)), 1e-2)                                         # embedding only translated the complex
+        self.assertAlmostEqual(float(z_shift.mean()) / 10.0, session.record["coarse_grain"]["bilayer_midplane_nm"], places=2)
+        self.assertEqual(sum(prepared["composition"].values()), report["lipids_after"])
+
     def test_user_box_is_validated_against_the_cell_and_cuts_the_membrane(self):
-        session, prepared = self.prepare(box=(9.6, 11.18, 25.0))
+        session, prepared = self.prepare(box_a=(96.0, 111.8, 250.0))
         self.assertEqual(session.record["slice"]["mode"], "user")
         self.assertAlmostEqual(prepared["box"][0], 9.6)
         with self.assertRaises(mf.StageFailure) as caught:
-            self.prepare(box=(30.0, 11.18, 25.0))
+            self.prepare(box_a=(300.0, 111.8, 250.0))
         self.assertEqual(caught.exception.stage, "slice")
         self.assertIn("larger than the 11.180 nm", caught.exception.what)
 

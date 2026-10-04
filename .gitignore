@@ -8,3 +8,4 @@ __pycache__/
 example_out/
 renders/
 mforger_*.log
+.ruff_cache/

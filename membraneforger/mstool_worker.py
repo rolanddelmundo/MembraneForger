@@ -64,6 +64,7 @@ def forcefield_files(data: Path, package: Path) -> tuple[list, list]:
 def backmap(job: dict, mstool, mapping_add: list) -> None:
     """Backmap the membrane beads with the complex held as a rock and write the all-atom lipids as a table."""
     import random
+
     import numpy
     from openmm.app import ForceField
     random.seed(job["seed"])  # mstool places atoms around each bead at random; the seed makes an attempt repeatable

@@ -243,7 +243,7 @@ def map_all_atom_to_cg(aa_atoms: list[dict], cg_protein: list[list[dict]], box: 
                          f"{int(best['keep'].sum())}/{len(best['keep'])} backbone pairs (limits "
                          f"{settings.fit_max_core_rmsd_a} A, {settings.fit_min_core_fraction:.0%})")
     offset, displaced = 0, []
-    for k, label, P, _ in best["blocks"]:  # no matched chain may sit somewhere else than its CG counterpart
+    for _k, label, P, _ in best["blocks"]:  # no matched chain may sit somewhere else than its CG counterpart
         median = float(np.median(best["error"][offset:offset + len(P)]))
         offset += len(P)
         if median > settings.fit_max_chain_median_a:

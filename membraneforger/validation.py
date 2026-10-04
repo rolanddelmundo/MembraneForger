@@ -48,7 +48,7 @@ def read_cg(path: Path) -> tuple[list[dict], list[float]]:
         if not np.isfinite(xyz_nm(atoms)).all() or not all(math.isfinite(v) and v > 0 for v in box):
             raise ValueError("non-finite coordinates or a non-positive box")
     except (ValueError, IndexError) as exc:
-        raise SystemExit(f"coarse-grained input {path.name}: {exc}")
+        raise SystemExit(f"coarse-grained input {path.name}: {exc}") from None
     return atoms, box
 
 
@@ -59,7 +59,7 @@ def read_all_atom(path: Path, forcefield: Path) -> tuple[list[dict], list[str]]:
     try:
         atoms, _ = read_pdb(path)
     except (ValueError, IndexError) as exc:
-        raise SystemExit(f"all-atom input {path.name}: malformed ATOM/HETATM record ({exc})")
+        raise SystemExit(f"all-atom input {path.name}: malformed ATOM/HETATM record ({exc})") from None
     if not atoms:
         raise SystemExit(f"all-atom input {path.name}: no ATOM/HETATM records")
     if sum(l.startswith("MODEL ") for l in text) > 1:
