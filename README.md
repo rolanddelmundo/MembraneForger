@@ -30,6 +30,25 @@ membrane is used instead of the bundled one. In both cases the pipeline:
 6. audits the result from the output files alone (`grompp -maxwarn 0`, `gmx check`, energies, geometry) and
    only then publishes `em.gro`.
 
+**Bundled membrane**
+
+The pre-equilibrated membrane is a plasma-membrane mimic built with INSANE and run with Martini 3. Final leaflet
+compositions, in mole percent of each leaflet (`examples/leaflet_composition.py`, average over the equilibrated
+frames, rounded to whole numbers; cholesterol flip-flops, so its two numbers differ from the 25:25 it was built with):
+
+| Lipid | Outer leaflet | Inner leaflet |
+|---|---|---|
+| Cholesterol (CHOL) | 27 | 23 |
+| POPC | 19 | 5 |
+| DOPC | 19 | 5 |
+| POPE | 5 | 21 |
+| DOPE | 5 | 21 |
+| Sphingomyelin (PSM) | 15 | 0 |
+| GM3 | 10 | 0 |
+| POPS | 0 | 8 |
+| DOPS | 0 | 7 |
+| PIP2 (SAP6) | 0 | 10 |
+
 A build that fails any check stops with an error and does not write `em.gro`. The last line of
 `membranebuilder.log` starts with `PASS` or `FAIL`. Backmapping dominates the run time (about 45 minutes on
 8 cores for the bundled example).
@@ -56,8 +75,8 @@ No installation step is needed: clone the repository and run `python -m membrane
 
 `membraneforger/` holds the package (one module per stage, see `membraneforger/README.md`), its tests, a Python
 usage example and a Slurm array template. `forcefield/` is the CHARMM36 force field with lipid and ligand
-topologies, `backmap_data/` the mstool mapping additions, and `examples/6WHC_MTZP_run1/` a complete input
-example. Use `--toppar` and `--data` (or `MEMBRANEFORGER_TOPPAR` and `MEMBRANEFORGER_DATA`) to point at your own
+topologies, `backmap_data/` the mstool mapping additions, and `examples/preeq_cg_cellmem/` the pre-equilibrated
+coarse-grained membranes (`<system>_cg_cellmem.gro`) with a matching all-atom example (`6WHC_MTZP_prot-lig.pdb`). Use `--toppar` and `--data` (or `MEMBRANEFORGER_TOPPAR` and `MEMBRANEFORGER_DATA`) to point at your own
 folders. The earlier workflow (v0.1.0 and v0.2.0) is kept unchanged under `archive/` and is no longer maintained.
 
 Tests: `python -m unittest discover -s membraneforger/tests -t .` (set `MEMBRANEFORGER_GMX` if GROMACS is not
