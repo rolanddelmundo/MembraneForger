@@ -28,9 +28,10 @@ PPM_MEMBRANE = ""          # advanced: PPM 3.0 membrane code, "" = undefined fla
 # ============================================================
 # BOX
 # ============================================================
-# auto: x and y come from the membrane cell; z is sized around the bilayer midplane so that the complex and the
-# membrane are covered by SLAB_Z_PAD_NM of water above and below. A user box is opt-in: "x,y,z" in nm, where x and
-# y must equal the membrane cell (the membrane is periodic in it) and z must be at least the automatic minimum.
+# auto: the coarse-grained membrane is sliced in x and y to the placed complex plus 1.0 nm of membrane on each side
+# (whole lipids only; an axis that would be as wide as the cell is kept whole), and z is sized around the bilayer
+# midplane with SLAB_Z_PAD_NM of water above and below. A user box is opt-in: "x,y,z" in nm, with x and y no larger
+# than the coarse-grained cell (the membrane is cut to that size around the complex) and z at least the automatic minimum.
 BOX = "auto"               # auto | "x,y,z" (nm)
 
 AMINO = {"ALA", "ARG", "ASN", "ASP", "CYS", "CYSG", "CYSP", "GLN", "GLU", "GLY", "HIS", "HSD", "HSE", "HSP", "ILE",
@@ -281,3 +282,14 @@ class Settings:
     register_min_embedded_pairs: int = 20
     # Water above and below the complex/membrane in the automatic box (nm).
     box_z_pad_nm: float = SLAB_Z_PAD_NM
+    # BOX = auto slices the coarse-grained membrane to the placed complex plus this buffer on each side in x and y
+    # (1.0 nm, the slice_buffer_nm of the earlier workflow); an axis whose window reaches the cell width is not cut.
+    box_xy_buffer_nm: float = 1.0
+    # A user box must leave at least this much membrane on each side of the complex.
+    box_xy_min_buffer_nm: float = 0.5
+    # Seam clash threshold between beads of different lipids that only the new periodicity brings together. The
+    # closest inter-molecule bead pair in the equilibrated 6WHC frame is 0.342 nm (Martini sigma is 0.47 nm), so
+    # 0.30 nm separates real near-contacts from overlap; such lipids are removed rather than left to minimization.
+    seam_min_bead_nm: float = 0.30
+    # A sliced membrane must keep at least this many lipids, and at least this many phospholipids, in two leaflets.
+    slice_min_lipids: int = 30
