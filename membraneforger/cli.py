@@ -5,6 +5,7 @@
 """Parse the command line, locate installation resources, and run one build."""
 import argparse
 import os
+import random
 import shutil
 import sys
 from pathlib import Path
@@ -14,11 +15,20 @@ from .embedding import CONVERTIBLE, LIPID_NAMES, lipid_name
 from .pipeline import Session, build
 from .runtools import find_gromacs
 
-__all__ = ['BUNDLED_MEMBRANES', 'make_parser', 'locate_forcefield', 'locate_data', 'main']
+__all__ = ['BUNDLED_MEMBRANES', 'bundled_membrane', 'make_parser', 'locate_forcefield', 'locate_data', 'main']
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-# --cg 1 / --cg 2: the bundled pre-equilibrated membranes (examples/preeq_cg_cellmem/README.md lists all 18 frames).
-BUNDLED_MEMBRANES = {"1": "KOR1_cg_cellmem.gro", "2": "GPR1_cg_cellmem.gro"}
+# --cg 1 / --cg 2: one frame drawn at random from the bundled pre-equilibrated membranes of that receptor
+# (examples/preeq_cg_cellmem/README.md lists all 18); the chosen file is logged and recorded in run_manifest.json.
+BUNDLED_MEMBRANES = {"1": "GPR*_cg_cellmem.gro", "2": "KOR*_cg_cellmem.gro"}
+
+
+def bundled_membrane(code: str) -> Path:
+    """Pick one of the bundled frames for --cg 1 (GPR139 membranes) or --cg 2 (kappa opioid receptor membranes)."""
+    frames = sorted((REPOSITORY / "examples" / "preeq_cg_cellmem").glob(BUNDLED_MEMBRANES[code]))
+    if not frames:
+        raise SystemExit(f"no bundled membrane matches examples/preeq_cg_cellmem/{BUNDLED_MEMBRANES[code]}")
+    return random.choice(frames)
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -32,8 +42,9 @@ def make_parser() -> argparse.ArgumentParser:
                         help="all-atom protein (or protein/ligand) structure with its membrane normal along z; "
                              "the only source of protein and ligand chemistry")
     parser.add_argument("--cg", "--coarse-grain", dest="coarse_grain", default="1", metavar="1|2|FILE",
-                        help="membrane: 1 = bundled kappa opioid receptor frame, 2 = bundled GPR139 frame (the protein "
-                             "is embedded into either), or a Martini 3 frame of your own complex (default: 1)")
+                        help="membrane: 1 = a random bundled GPR139 frame, 2 = a random bundled kappa opioid receptor frame "
+                             "(the protein is embedded into either), or a Martini 3 frame of your own complex, given as "
+                             "FILE or custom=FILE (default: 1)")
     parser.add_argument("--embed", action="store_true",
                         help="embed the protein into the membrane of a --cg FILE instead of fitting it onto the frame's "
                              "protein (always the case for the bundled membranes)")
@@ -96,11 +107,14 @@ def main(argv: list | None = None) -> int:
         parser.error("--membrane replaces --aa and --cg; give one or the other")
     if not args.membrane and not args.all_atom:
         parser.error("--aa is required")
-    embed = args.embed
-    if str(args.coarse_grain) in BUNDLED_MEMBRANES:
-        args.coarse_grain, embed = REPOSITORY / "examples" / "preeq_cg_cellmem" / BUNDLED_MEMBRANES[str(args.coarse_grain)], True
+    embed, cg = args.embed, str(args.coarse_grain)
+    if cg in BUNDLED_MEMBRANES:
+        try:
+            args.coarse_grain, embed = bundled_membrane(cg), True
+        except SystemExit as exc:
+            parser.error(str(exc))
     else:
-        args.coarse_grain = Path(args.coarse_grain)
+        args.coarse_grain = Path(cg[len("custom="):] if cg.lower().startswith("custom=") else cg)
     if args.membrane:
         args.coarse_grain = None
     for path in (args.all_atom, args.coarse_grain, args.membrane):

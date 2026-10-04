@@ -8,14 +8,15 @@ membrane normal along z (as from OPM or CHARMM-GUI).
 
 **Installing Requirements**
 
-Following Python packages are required: numpy, scipy, networkx, pandas, openmm, mstool (0.3.9 or 0.3.10).
+Following Python packages are required: numpy, scipy, networkx, pandas (below 3, for mstool), openmm, mstool (0.3.9
+or 0.3.10).
 We recommend using pip to install them on your local machine:
 
 ```
 pip install numpy
 pip install scipy
 pip install networkx
-pip install pandas
+pip install "pandas<3"
 pip install openmm
 pip install mstool==0.3.9
 ```
@@ -33,7 +34,7 @@ python -m membraneforger --aa protein.pdb --out output_directory
 | Option | Meaning |
 |---|---|
 | `--aa PDB` | your all-atom structure (required) |
-| `--cg 1` / `--cg 2` / `--cg FILE` | the membrane: `1` = bundled kappa opioid receptor frame (default), `2` = bundled GPR139 frame, or a Martini 3 frame of your own complex (add `--embed` to use only its membrane) |
+| `--cg 1` / `--cg 2` / `--cg FILE` | the membrane: `1` = one of the bundled GPR139 frames at random (default), `2` = one of the bundled kappa opioid receptor frames at random, or `custom=FILE`, a Martini 3 frame of your own complex (add `--embed` to use only its membrane) |
 | `--box X Y Z` | box edges in Å; default: the membrane's x and y, z from the protein height. Smaller x and y trim the membrane around the protein |
 | `--dellipid LIPID` | remove a lipid species (repeatable): CHOL, POPC, DOPC, POPE, DOPE, POPS, DOPS, PSM, DPG3, SAP6 |
 | `--addlipid LIPID` | turn the removed lipids into this one instead (POPC, DOPC, POPE, DOPE, POPS, DOPS, PSM) |

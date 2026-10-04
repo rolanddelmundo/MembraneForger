@@ -16,7 +16,7 @@ jobs:
       - name: Install GROMACS
         run: sudo apt-get update -qq && sudo apt-get install -y -qq gromacs
       - name: Install Python requirements
-        run: pip install numpy scipy networkx pandas openmm mstool==0.3.9 ruff
+        run: pip install numpy scipy networkx "pandas<3" openmm mstool==0.3.9 ruff
       - name: Lint
         run: ruff check membraneforger examples
       - name: Unit, negative and invariance tests
