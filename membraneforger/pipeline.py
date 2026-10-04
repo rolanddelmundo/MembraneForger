@@ -15,6 +15,7 @@ from .alignment import map_all_atom_to_cg
 from .audit import audit_run, check_ring_piercing, closest_contact_between
 from .backmapping import assemble_membrane_pdb, backmap_membrane, read_mapping
 from .config import AMINO, DEFAULT_LIGANDS, RENAME_MOLECULE, Settings
+from .embedding import edit_lipids, embed_complex, trim_membrane
 from .martini import classify_cg, make_membrane_whole
 from .minimization import run_em, validate_em
 from .reporting import write_run_manifest
@@ -24,7 +25,8 @@ from .structio import xyz_nm
 from .topology import build_topology, lipid_clashes, prepare_structure, repair_structure, resolve_lipid_clashes
 from .validation import check_inputs_unchanged, clear_stale_outputs, protect_inputs, read_all_atom, read_cg
 
-__all__ = ['Session', 'StageFailure', 'run_stage', 'prepare_inputs', 'backmap_and_assemble', 'heavy_atom_piercings', 'membrane_piercings', 'backmap_verdict',
+__all__ = ['Session', 'StageFailure', 'run_stage', 'prepare_inputs', 'backmap_and_assemble', 'heavy_atom_piercings', 'membrane_piercings',
+           'backmap_verdict',
            'build_topology_and_box', 'finish_system', 'build_from_two_inputs', 'build']
 
 # What to look at when a stage fails; {out} and {work} are filled in at run time.
@@ -61,6 +63,11 @@ class Session:
     ntomp: int
     nsteps: int
     settings: Settings = field(default_factory=Settings)
+    embed: bool = False  # place the complex into the frame's membrane instead of fitting it onto the frame's protein
+    box_a: tuple | None = None  # requested box edges (A); x and y trim the membrane, z sizes the water layers
+    bilayer_z_a: float | None = None  # z of the bilayer centre in the all-atom input (A) when embedding
+    delete_lipids: list = field(default_factory=list)
+    add_lipid: str | None = None
     work: Path | None = None
     timings: dict = field(default_factory=dict)
     record: dict = field(default_factory=dict)
@@ -119,20 +126,39 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
                               "membrane_composition": dict(cg["composition"]), "unused_beads": cg["dropped"],
                               "discarded": "CG solvent and ions are not backmapped; atomistic water and 0.15 M NaCl "
                                            "are rebuilt after the box is resized"}
-    run_stage(session, "classify", require_membrane_topologies, cg["membrane"], session.forcefield)
-    slab = run_stage(session, "classify", make_membrane_whole, cg["membrane"], box)
-    fit = run_stage(session, "mapping", map_all_atom_to_cg, aa_atoms, cg["protein"], box, slab, session.settings)
-    for note in fit["notes"]:
-        log(out, f"AA-CG: {note}", "WARN" if "keeps its all-atom pose" in note else "INFO")
-    (out / "aa_cg_mapping.tsv").write_text("aa_chain\taa_residue\tcg_segment\tcg_residue\tdeviation_A\tfit\n"
-                                           + "".join("\t".join(map(str, row)) + "\n" for row in fit["rows"]))
-    record["aa_cg_mapping"] = fit["metrics"]
-    log(out, f"AA-CG fit accepted: core RMSD {fit['metrics']['core_rmsd_A']} A <= {session.settings.fit_max_core_rmsd_a} A, "
-             f"core fraction {fit['metrics']['core_fraction']:.2f} >= {session.settings.fit_min_core_fraction}", "PASS")
+    membrane = cg["membrane"]
+    if session.delete_lipids or session.add_lipid:
+        membrane, edits = run_stage(session, "classify", edit_lipids, membrane, session.delete_lipids, session.add_lipid, mapping)
+        record["lipid_edits"] = edits
+        log(out, "lipid edits: " + "; ".join(f"{what} {', '.join(f'{n} {k}' for n, k in sorted(v.items())) or 'none'}"
+                                             for what, v in edits.items()), "WARN")
+    run_stage(session, "classify", require_membrane_topologies, membrane, session.forcefield)
+    slab = run_stage(session, "classify", make_membrane_whole, membrane, box)
+    if session.embed:
+        fit = run_stage(session, "mapping", embed_complex, aa_atoms, cg["protein"], membrane, box, slab, session.bilayer_z_a)
+        membrane = fit["membrane"]
+        for note in fit["notes"]:
+            log(out, f"embed: {note}", "WARN" if "removed" in note else "INFO")
+        record["embedding"] = fit["metrics"]
+        log(out, f"complex embedded: {fit['metrics']['membrane_molecules_kept']} membrane molecules kept around it", "PASS")
+    else:
+        fit = run_stage(session, "mapping", map_all_atom_to_cg, aa_atoms, cg["protein"], box, slab, session.settings)
+        for note in fit["notes"]:
+            log(out, f"AA-CG: {note}", "WARN" if "keeps its all-atom pose" in note else "INFO")
+        (out / "aa_cg_mapping.tsv").write_text("aa_chain\taa_residue\tcg_segment\tcg_residue\tdeviation_A\tfit\n"
+                                               + "".join("\t".join(map(str, row)) + "\n" for row in fit["rows"]))
+        record["aa_cg_mapping"] = fit["metrics"]
+        log(out, f"AA-CG fit accepted: core RMSD {fit['metrics']['core_rmsd_A']} A <= {session.settings.fit_max_core_rmsd_a} A, "
+                 f"core fraction {fit['metrics']['core_fraction']:.2f} >= {session.settings.fit_min_core_fraction}", "PASS")
     moved = xyz_nm(aa_atoms) @ fit["R"].T + fit["t"]
     placed = [dict(a, x=float(x), y=float(y), z=float(z)) for a, (x, y, z) in zip(aa_atoms, moved)]
-    return {"placed": placed, "membrane": cg["membrane"], "box": box, "mapping": mapping,
-            "composition": Counter(RENAME_MOLECULE.get(m["aa"], m["aa"]) for m in cg["membrane"]),
+    if session.box_a:
+        trimmed = run_stage(session, "mapping", trim_membrane, membrane, placed, box, (session.box_a[0] / 10.0, session.box_a[1] / 10.0))
+        membrane, placed, box = trimmed["membrane"], trimmed["placed"], trimmed["box"]
+        record["box_trim"] = {"requested_A": list(session.box_a), "removed_lipids": dict(trimmed["removed"]), "shift_A": trimmed["shift_A"]}
+        log(out, trimmed["note"], "WARN")
+    return {"placed": placed, "membrane": membrane, "box": box, "mapping": mapping,
+            "composition": Counter(RENAME_MOLECULE.get(m["aa"], m["aa"]) for m in membrane),
             "ligands": DEFAULT_LIGANDS | {a["resname"] for a in aa_atoms if a["resname"] not in AMINO}}
 
 
@@ -208,7 +234,7 @@ def build_topology_and_box(session: Session, membrane: Path, ligands: set, expec
     topology = run_stage(session, "topology", build_topology, system, work, gmx)
     for note in topology["notes"]:
         log(out, note)
-    box = run_stage(session, "box", rebox_system, system, topology)
+    box = run_stage(session, "box", rebox_system, system, topology, session.box_a[2] / 10.0 if session.box_a else None)
     rings = run_stage(session, "rings", review_ring_piercing, out, "boxed.gro")
     solute_atoms = sum(n * len(atoms) for _, n, atoms, group in topology["molecules"] if group == "Protein_LIG")
     contact = run_stage(session, "rings", closest_contact_between, out, "boxed.gro", solute_atoms)

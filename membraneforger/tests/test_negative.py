@@ -38,7 +38,8 @@ class Martini2AndUnknownContent(unittest.TestCase):
 
     def test_unexpected_bead_inventory(self):
         self.assertIn("unknown residue or bead set", failure(mf.classify_cg, small_system() + residue(8, "POPC", POPC[:-1] + ["ZZ9"]), MAPPING))
-        self.assertIn("not the Martini 3 beads BB SC1 SC2", failure(mf.classify_cg, residue(1, "LYS", ["BB", "SC1", "SC2", "CA"]) + small_system(), MAPPING))
+        self.assertIn("not the Martini 3 beads BB SC1 SC2",
+                      failure(mf.classify_cg, residue(1, "LYS", ["BB", "SC1", "SC2", "CA"]) + small_system(), MAPPING))
 
     def test_incomplete_glycolipid(self):
         bad = small_system() + residue(8, "GLC", ["A", "B", "C", "V"]) + residue(9, "GAL", ["A", "B", "C", "V"])
@@ -113,7 +114,8 @@ class InvalidAllAtomInput(unittest.TestCase):
         self.assertIn("duplicate atoms", self.read("d.pdb", AA_LINES[:50] + AA_LINES[:1]))
 
     def test_solvent(self):
-        self.assertIn("solvent or bulk ions", self.read("w.pdb", AA_LINES[:50] + ["HETATM 9999  OH2 TIP3W   1       0.000   0.000   0.000  1.00  0.00"]))
+        water = "HETATM 9999  OH2 TIP3W   1       0.000   0.000   0.000  1.00  0.00"
+        self.assertIn("solvent or bulk ions", self.read("w.pdb", AA_LINES[:50] + [water]))
 
     def test_ligand_without_topology(self):
         message = self.read("u.pdb", AA_LINES[:50] + ["HETATM 9999  C1  ZZZ X   1       0.000   0.000   0.000  1.00  0.00"])
@@ -195,7 +197,24 @@ class CommandLineRefusals(unittest.TestCase):
 
     def test_missing_input_and_missing_arguments(self):
         self.assertIn("missing input file", self.run_cli("--all-atom", "nope.pdb", "--coarse-grain", CG_GRO)[1])
-        self.assertIn("both required", self.run_cli("--all-atom", AA_PDB)[1])
+        self.assertIn("missing input file", self.run_cli("--aa", AA_PDB, "--cg", "nope.gro")[1])
+        self.assertIn("--aa is required", self.run_cli("--cg", CG_GRO)[1])
+        self.assertIn("--aa is required", self.run_cli("--cg", "1")[1])
+
+    def test_bundled_membrane_is_the_default_and_needs_no_cg(self):
+        out = self.tmp / "bundled"
+        code, output = self.run_cli("--aa", AA_PDB, "--out", out, "--gmx", self.gmx, "--mstool-python", "/usr/bin/python3")
+        self.assertEqual(code, 1)
+        self.assertIn("KOR1_cg_cellmem.gro", output)  # the bundled frame was picked up as input
+        self.assertIn("ERROR: mstool:", output)  # and the build stopped at the mstool stage, not at the parser
+        code, output = self.run_cli("--aa", AA_PDB, "--cg", "2", "--out", out, "--gmx", self.gmx, "--mstool-python", "/usr/bin/python3")
+        self.assertIn("GPR1_cg_cellmem.gro", output)
+
+    def test_lipid_and_box_options_are_checked(self):
+        self.assertIn("unknown lipid XYZ", self.run_cli("--aa", AA_PDB, "--dellipid", "XYZ")[1])
+        self.assertIn("unknown lipid", self.run_cli("--aa", AA_PDB, "--addlipid", "DPPC")[1])
+        self.assertIn("three positive edge lengths", self.run_cli("--aa", AA_PDB, "--box", "80", "80", "0")[1])
+        self.assertIn("need --aa and --cg", self.run_cli("--membrane", AA_PDB, "--box", "80", "80", "100")[1])
 
     def test_wrong_executable(self):
         code, output = self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--out", self.tmp / "o", "--gmx", "/no/gmx")

@@ -1,0 +1,12 @@
+# Lint settings for `ruff check membraneforger examples` (also run by .github/workflows/tests.yml).
+line-length = 150
+target-version = "py310"
+
+[lint]
+select = ["E", "F", "W", "B", "I"]
+# E731/E741: short lambdas and `l` for a file line are used deliberately throughout; B905: zip() over
+# sequences whose lengths are checked elsewhere; B008: Settings() as a default is a frozen dataclass.
+ignore = ["E731", "E741", "B905", "B008"]
+
+[lint.per-file-ignores]
+"membraneforger/__init__.py" = ["F401", "F403", "I001"]  # every module is star-exported, as in bandyt, in dependency order

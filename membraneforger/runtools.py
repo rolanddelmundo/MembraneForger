@@ -45,7 +45,7 @@ def run_command(out: Path, cmd: list, stdin: str | None = None, env: dict | None
     try:
         result = subprocess.run(cmd, cwd=cwd or out, text=True, capture_output=True, input=stdin, env=env)
     except OSError as exc:
-        raise SystemExit(f"cannot run {cmd[0]}: {exc}")
+        raise SystemExit(f"cannot run {cmd[0]}: {exc}") from None
     output = result.stdout + result.stderr
     log(out, f"$ {' '.join(cmd)}\n{output}", "DEBUG")
     step = next((c for c in cmd[1:] if not c.startswith("-") and "/" not in c), Path(cmd[0]).name)
