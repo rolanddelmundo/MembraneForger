@@ -15,7 +15,7 @@ from .alignment import map_all_atom_to_cg
 from .audit import audit_run, check_ring_piercing, closest_contact_between
 from .backmapping import assemble_membrane_pdb, backmap_membrane, read_mapping
 from .config import AMINO, DEFAULT_LIGANDS, RENAME_MOLECULE, Settings
-from .embedding import edit_lipids, embed_complex, trim_membrane
+from .embedding import check_box_z, edit_lipids, embed_complex, trim_membrane
 from .martini import classify_cg, make_membrane_whole
 from .minimization import run_em, validate_em
 from .reporting import write_run_manifest
@@ -157,6 +157,7 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
         membrane, placed, box = trimmed["membrane"], trimmed["placed"], trimmed["box"]
         record["box_trim"] = {"requested_A": list(session.box_a), "removed_lipids": dict(trimmed["removed"]), "shift_A": trimmed["shift_A"]}
         log(out, trimmed["note"], "WARN")
+        run_stage(session, "mapping", check_box_z, placed, slab, session.box_a[2] / 10.0)
     return {"placed": placed, "membrane": membrane, "box": box, "mapping": mapping,
             "composition": Counter(RENAME_MOLECULE.get(m["aa"], m["aa"]) for m in membrane),
             "ligands": DEFAULT_LIGANDS | {a["resname"] for a in aa_atoms if a["resname"] not in AMINO}}
