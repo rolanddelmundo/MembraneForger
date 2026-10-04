@@ -205,10 +205,13 @@ class CommandLineRefusals(unittest.TestCase):
         out = self.tmp / "bundled"
         code, output = self.run_cli("--aa", AA_PDB, "--out", out, "--gmx", self.gmx, "--mstool-python", "/usr/bin/python3")
         self.assertEqual(code, 1)
-        self.assertIn("KOR1_cg_cellmem.gro", output)  # the bundled frame was picked up as input
+        self.assertRegex(output, r"GPR[1-9]_cg_cellmem\.gro")  # a bundled GPR139 frame was picked up as input
         self.assertIn("ERROR: mstool:", output)  # and the build stopped at the mstool stage, not at the parser
         code, output = self.run_cli("--aa", AA_PDB, "--cg", "2", "--out", out, "--gmx", self.gmx, "--mstool-python", "/usr/bin/python3")
-        self.assertIn("GPR1_cg_cellmem.gro", output)
+        self.assertRegex(output, r"KOR[1-9]_cg_cellmem\.gro")
+        code, output = self.run_cli("--aa", AA_PDB, "--cg", f"custom={CG_GRO}", "--out", out, "--gmx", self.gmx,
+                                    "--mstool-python", "/usr/bin/python3")
+        self.assertIn("6WHC_MTZP_cg_cellmem.gro", output)
 
     def test_lipid_and_box_options_are_checked(self):
         self.assertIn("unknown lipid XYZ", self.run_cli("--aa", AA_PDB, "--dellipid", "XYZ")[1])
