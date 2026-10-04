@@ -9,12 +9,12 @@ from collections import Counter
 import numpy as np
 from scipy.spatial import cKDTree
 
-from .config import AMINO
+from .config import AMINO, MIN_Z_PAD_TOTAL_NM, SLAB_Z_PAD_NM
 from .structio import element, wrap, xyz_nm
 
 __all__ = ['LIPID_NAMES', 'LIPID_ALIASES', 'CONVERTIBLE', 'BELT_NM', 'OVERLAP_NM', 'HYDROPHOBIC', 'CHARGED',
            'EXPOSURE_RADIUS_NM', 'BURIED_ABOVE', 'lipid_name', 'hydrophobic_belt', 'periodic_mean', 'embed_complex',
-           'trim_membrane', 'edit_lipids']
+           'trim_membrane', 'edit_lipids', 'check_box_z']
 
 # User-facing Martini 3 lipid names (INSANE spelling) and how they are spelled inside the classifier.
 LIPID_NAMES = ("CHOL", "POPC", "DOPC", "POPE", "DOPE", "POPS", "DOPS", "PSM", "DPG3", "SAP6")
@@ -200,3 +200,17 @@ def edit_lipids(membrane: list[dict], delete: list[str], add: str | None, mappin
     if missing:
         raise SystemExit(f"the membrane has no {', '.join(missing)} to remove")
     return kept, {"deleted": dict(removed), "converted_to_" + target if target else "converted": dict(converted)}
+
+
+def check_box_z(placed: list[dict], slab: tuple[float, float], requested_z_nm: float) -> float:
+    """Refuse a requested box z that cannot hold the placed complex, before the slow backmapping is paid for."""
+    # Same rule as rebox_system (water padding above and below the complex, measured from the bilayer centre),
+    # estimated from the coarse-grained bilayer; rebox_system re-checks on the all-atom membrane. Returns the need (nm).
+    z = np.array([a["z"] for a in placed if element(a["atom"]) != "H"]) / 10.0
+    centre = 0.5 * (slab[0] + slab[1])
+    need = max(2.0 * (max(z.max() - centre, centre - z.min()) + SLAB_Z_PAD_NM),
+               max(z.max(), slab[1]) - min(z.min(), slab[0]) + MIN_Z_PAD_TOTAL_NM)
+    if requested_z_nm < need - 1e-6:
+        raise SystemExit(f"requested box z {requested_z_nm * 10:.0f} A is below the {need * 10:.0f} A this complex needs "
+                         f"({SLAB_Z_PAD_NM} nm of water above and below it); checked before backmapping")
+    return need
