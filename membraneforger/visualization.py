@@ -610,7 +610,7 @@ def stage_scenes(run: Path, all_atom: Path | None, coarse_grain: Path | None, so
         {"stage": "boxed", "file": run / "boxed.gro", "view": "side", "frame": "membrane", "draw": ["protein", "lipid_slab", "box"],
          "shows": "topology-ordered system in the rebuilt box"},
         {"stage": "solvated", "file": run / "solv.gro", "view": "side", "frame": "membrane",
-         "draw": ["protein", "lipid_slab", "water_slab", "box"], "shows": "water added; the bilayer core is dry (2.4 nm cross-section)"},
+         "draw": ["protein", "lipid_slab", "water_slab", "box"], "shows": "water added (2.4 nm cross-section): the lipid core holds no water except cavity waters within 1.0 nm of the protein"},
         {"stage": "ionized", "file": run / "solv_ions.gro", "view": "side", "frame": "membrane",
          "draw": ["protein", "lipid_slab", "ions", "box"], "shows": "0.15 M NaCl plus neutralizing ions (all ions shown)"},
         {"stage": "pre_em", "file": run / "solv_ions.gro", "view": "side", "frame": "membrane", "draw": ["protein", "lipid_slab"],
