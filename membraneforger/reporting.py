@@ -81,7 +81,7 @@ def write_run_manifest(session, status: str, error: dict | None, started: str, h
         "settings": vars(session.settings) if hasattr(session.settings, "__dict__") else
                     {f: getattr(session.settings, f) for f in session.settings.__dataclass_fields__},
         "stage_seconds": session.timings,
-        "orientation": orientation_summary(record.get("orientation")), "box": record.get("box"),
+        "orientation": orientation_summary(record.get("orientation")), "slice": record.get("slice"), "box": record.get("box"),
         "coarse_grain": record.get("coarse_grain"), "aa_cg_mapping": record.get("aa_cg_mapping"),
         "backmap_isomer_review": record.get("backmap_isomer_review"),
         "backmap_attempts": record.get("backmap_attempts"), "mstool": record.get("mstool"),

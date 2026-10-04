@@ -49,7 +49,7 @@ def rebox_system(system: dict, topology: dict, requested: tuple | None = None, z
         rx, ry, rz = (float(v) for v in requested)
         if abs(rx - box_x) > 0.01 or abs(ry - box_y) > 0.01:
             raise SystemExit(f"BOX x,y = {rx:.3f},{ry:.3f} nm must equal the membrane cell {box_x:.3f},{box_y:.3f} nm "
-                             "(the membrane is periodic in it); only z may be chosen")
+                             "(the membrane is periodic in it); only z may be chosen here")
         if rz < box_z:
             raise SystemExit(f"BOX z = {rz:.3f} nm is smaller than the {box_z:.3f} nm this system needs "
                              f"({z_pad_nm} nm of water beyond the solute and membrane on both sides of the midplane)")

@@ -107,8 +107,11 @@ def make_parser() -> argparse.ArgumentParser:
     orient.add_argument("--opm-file", type=Path, metavar="PDB", help="an already downloaded OPM/OPRLM coordinate file (offline use)")
     orient.add_argument("--opm-cache", type=Path, metavar="DIR", help="cache for downloaded OPM files (default: ~/.cache/membraneforger/opm)")
     parser.add_argument("--box", metavar="auto|X,Y,Z", default=None,
-                        help=f"auto: x,y from the membrane cell and z sized around the bilayer midplane; or an opt-in box in nm "
-                             f"whose x,y must equal the membrane cell (default: {BOX})")
+                        help=f"auto: slice the coarse-grained membrane to the complex plus --xy-buffer in x and y and size z "
+                             f"around the bilayer midplane; or an opt-in box in nm, with x,y no larger than the coarse-grained "
+                             f"cell (default: {BOX})")
+    parser.add_argument("--xy-buffer", type=float, default=defaults.box_xy_buffer_nm, metavar="NM",
+                        help="membrane kept around the complex on each side in x and y when --box is auto (default: %(default)s nm)")
     return parser
 
 
@@ -167,7 +170,10 @@ def main(argv: list | None = None) -> int:
         parser.error(f"missing --opm-file {orientation.opm_file}")
     source = args.membrane or args.coarse_grain
     out = (args.out or Path.cwd() / f"{source.stem}_membraneforger").resolve()
-    settings = Settings(fit_max_core_rmsd_a=args.fit_max_core_rmsd, fit_min_core_fraction=args.fit_min_core_fraction)
+    if not args.xy_buffer > 0:
+        parser.error("--xy-buffer must be positive")
+    settings = Settings(fit_max_core_rmsd_a=args.fit_max_core_rmsd, fit_min_core_fraction=args.fit_min_core_fraction,
+                        box_xy_buffer_nm=args.xy_buffer)
     session = Session(out=out, name=args.name or out.name, gmx=gmx, forcefield=forcefield, data=data, python=python,
                       ntomp=args.ntomp, nsteps=args.nsteps, settings=settings, orientation=orientation, box=box)
     resolved = [p.resolve() if p else None for p in (args.all_atom, args.coarse_grain, args.membrane)]
