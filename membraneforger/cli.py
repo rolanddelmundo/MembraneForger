@@ -10,12 +10,15 @@ import sys
 from pathlib import Path
 
 from .config import NSTEPS, Settings
+from .embedding import CONVERTIBLE, LIPID_NAMES, lipid_name
 from .pipeline import Session, build
 from .runtools import find_gromacs
 
-__all__ = ['make_parser', 'locate_forcefield', 'locate_data', 'main']
+__all__ = ['BUNDLED_MEMBRANES', 'make_parser', 'locate_forcefield', 'locate_data', 'main']
 
 REPOSITORY = Path(__file__).resolve().parents[1]
+# --cg 1 / --cg 2: the bundled pre-equilibrated membranes (examples/preeq_cg_cellmem/README.md lists all 18 frames).
+BUNDLED_MEMBRANES = {"1": "KOR1_cg_cellmem.gro", "2": "GPR1_cg_cellmem.gro"}
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -25,10 +28,24 @@ def make_parser() -> argparse.ArgumentParser:
         prog="membraneforger.py",
         description="Build a validated, energy-minimized all-atom CHARMM36 membrane system (em.gro) from an all-atom "
                     "protein/ligand PDB and a Martini 3 coarse-grained simulation frame.")
-    parser.add_argument("--all-atom", type=Path, metavar="PDB",
-                        help="all-atom protein/ligand complex; the only source of protein and ligand chemistry")
-    parser.add_argument("--coarse-grain", type=Path, metavar="PDB|GRO",
-                        help="Martini 3 system with its box; supplies the membrane and where the protein sits")
+    parser.add_argument("--aa", "--all-atom", dest="all_atom", type=Path, metavar="PDB",
+                        help="all-atom protein (or protein/ligand) structure with its membrane normal along z; "
+                             "the only source of protein and ligand chemistry")
+    parser.add_argument("--cg", "--coarse-grain", dest="coarse_grain", default="1", metavar="1|2|FILE",
+                        help="membrane: 1 = bundled kappa opioid receptor frame, 2 = bundled GPR139 frame (the protein "
+                             "is embedded into either), or a Martini 3 frame of your own complex (default: 1)")
+    parser.add_argument("--embed", action="store_true",
+                        help="embed the protein into the membrane of a --cg FILE instead of fitting it onto the frame's "
+                             "protein (always the case for the bundled membranes)")
+    parser.add_argument("--box", nargs=3, type=float, metavar=("X", "Y", "Z"),
+                        help="box edges in A (default: the membrane's x and y, z from the protein height); x and y may "
+                             "only be smaller than the membrane patch, which is then trimmed around the protein")
+    parser.add_argument("--bilayer-z", type=float, metavar="Z",
+                        help="z of the bilayer centre in the all-atom input, in A (default: found from the hydrophobic belt)")
+    parser.add_argument("--dellipid", action="append", default=[], metavar="LIPID",
+                        help=f"remove every molecule of this lipid (repeatable): {', '.join(LIPID_NAMES)}")
+    parser.add_argument("--addlipid", metavar="LIPID",
+                        help=f"turn the lipids removed by --dellipid into this lipid instead ({', '.join(CONVERTIBLE)})")
     parser.add_argument("-o", "--out", type=Path, help="output directory (default: ./<coarse-grain stem>_membraneforger)")
     parser.add_argument("--name", help="system name for logs and [ system ] (default: output directory name)")
     parser.add_argument("--toppar", type=Path, default=os.environ.get("MEMBRANEFORGER_TOPPAR"),
@@ -74,13 +91,30 @@ def main(argv: list | None = None) -> int:
     """Run one build from command-line arguments and return its exit code."""
     parser = make_parser()
     args = parser.parse_args(argv)
-    if args.membrane and (args.all_atom or args.coarse_grain):
-        parser.error("--membrane replaces --all-atom and --coarse-grain; give one or the other")
-    if not args.membrane and not (args.all_atom and args.coarse_grain):
-        parser.error("--all-atom and --coarse-grain are both required")
+    given_cg = "--cg" in sys.argv or "--coarse-grain" in sys.argv
+    if args.membrane and (args.all_atom or given_cg):
+        parser.error("--membrane replaces --aa and --cg; give one or the other")
+    if not args.membrane and not args.all_atom:
+        parser.error("--aa is required")
+    embed = args.embed
+    if str(args.coarse_grain) in BUNDLED_MEMBRANES:
+        args.coarse_grain, embed = REPOSITORY / "examples" / "preeq_cg_cellmem" / BUNDLED_MEMBRANES[str(args.coarse_grain)], True
+    else:
+        args.coarse_grain = Path(args.coarse_grain)
+    if args.membrane:
+        args.coarse_grain = None
     for path in (args.all_atom, args.coarse_grain, args.membrane):
         if path and not path.is_file():
             parser.error(f"missing input file {path}")
+    if args.box and (len(args.box) != 3 or min(args.box) <= 0):
+        parser.error("--box needs three positive edge lengths in A")
+    if args.membrane and (args.box or args.dellipid or args.addlipid or args.embed):
+        parser.error("--box, --dellipid, --addlipid and --embed need --aa and --cg, not --membrane")
+    try:
+        for name in args.dellipid + ([args.addlipid] if args.addlipid else []):
+            lipid_name(name)
+    except SystemExit as exc:
+        parser.error(str(exc))
     try:
         forcefield = locate_forcefield(args.toppar)
         gmx = find_gromacs(args.gmx)
@@ -97,7 +131,9 @@ def main(argv: list | None = None) -> int:
     out = (args.out or Path.cwd() / f"{source.stem}_membraneforger").resolve()
     settings = Settings(fit_max_core_rmsd_a=args.fit_max_core_rmsd, fit_min_core_fraction=args.fit_min_core_fraction)
     session = Session(out=out, name=args.name or out.name, gmx=gmx, forcefield=forcefield, data=data, python=python,
-                      ntomp=args.ntomp, nsteps=args.nsteps, settings=settings)
+                      ntomp=args.ntomp, nsteps=args.nsteps, settings=settings, embed=embed,
+                      box_a=tuple(args.box) if args.box else None, bilayer_z_a=args.bilayer_z,
+                      delete_lipids=list(args.dellipid), add_lipid=args.addlipid)
     resolved = [p.resolve() if p else None for p in (args.all_atom, args.coarse_grain, args.membrane)]
     return build(session, resolved[0], resolved[1], resolved[2], [sys.executable] + sys.argv)
 

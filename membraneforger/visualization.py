@@ -22,7 +22,8 @@ from pathlib import Path
 import numpy as np
 
 __all__ = ['RenderMode', 'MODES', 'RENDER', 'LIGHTS', 'MATERIALS', 'PALETTE', 'CHAIN_COLOURS', 'LIPID_TYPES', 'ELEMENT_COLOURS',
-           'COLOUR_IDS', 'VIEWS', 'Scene', 'find_tachyon', 'detect_renderer_capabilities', 'protein_chains', 'chain_colours', 'assign_secondary_structure',
+           'COLOUR_IDS', 'VIEWS', 'Scene', 'find_tachyon', 'detect_renderer_capabilities', 'protein_chains', 'chain_colours',
+           'assign_secondary_structure',
            'draw_complex_whole', 'draw_sticks', 'frame_scale', 'tune_scene_file', 'read_ppm48', 'write_png16', 'ray_trace',
            'verify_png', 'stage_scenes', 'render_run', 'main']
 
@@ -610,7 +611,8 @@ def stage_scenes(run: Path, all_atom: Path | None, coarse_grain: Path | None, so
         {"stage": "boxed", "file": run / "boxed.gro", "view": "side", "frame": "membrane", "draw": ["protein", "lipid_slab", "box"],
          "shows": "topology-ordered system in the rebuilt box"},
         {"stage": "solvated", "file": run / "solv.gro", "view": "side", "frame": "membrane",
-         "draw": ["protein", "lipid_slab", "water_slab", "box"], "shows": "water added (2.4 nm cross-section): the lipid core holds no water except cavity waters within 1.0 nm of the protein"},
+         "draw": ["protein", "lipid_slab", "water_slab", "box"],
+         "shows": "water added (2.4 nm cross-section): the lipid core holds no water except cavity waters within 1.0 nm of the protein"},
         {"stage": "ionized", "file": run / "solv_ions.gro", "view": "side", "frame": "membrane",
          "draw": ["protein", "lipid_slab", "ions", "box"], "shows": "0.15 M NaCl plus neutralizing ions (all ions shown)"},
         {"stage": "pre_em", "file": run / "solv_ions.gro", "view": "side", "frame": "membrane", "draw": ["protein", "lipid_slab"],
@@ -768,7 +770,8 @@ def render_run(run: Path, out: Path, tachyon: str, mode: RenderMode, all_atom: P
                      "png": checked, "validation_result": manifest.get("status", "unknown"),
                      "sha256": hashlib.sha256(png.read_bytes()).hexdigest()})
         print(f"rendered {png.name} {width}x{height} in {traced['seconds']} s fill {checked['content_fraction']} "
-              f"edge {checked['touches_edge']} clipped {checked['clipped_highlight_fraction']} crushed {checked['crushed_black_fraction']}", flush=True)
+              f"edge {checked['touches_edge']} clipped {checked['clipped_highlight_fraction']} "
+              f"crushed {checked['crushed_black_fraction']}", flush=True)
         if checked["touches_edge"] and not RENDER["crop"]:
             raise SystemExit(f"{png.name}: the drawn scene touches the image border")
         scene.clear()

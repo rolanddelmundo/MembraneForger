@@ -3,15 +3,15 @@
     python examples/leaflet_composition.py examples/preeq_cg_cellmem/*_cg_cellmem.gro
 
 Lipids are assigned to the upper or lower leaflet by the mean z of their beads relative to the bilayer midplane.
-GM3 is split into consecutive CER/GLC/GAL/NMC residues in Martini 3 frames and is counted by its CER residue.
+GM3 (DPG3) is split into consecutive CER/GLC/GAL/NMC residues in Martini 3 frames and is counted by its CER residue.
 Percentages are mole percent of each leaflet, averaged over frames and rounded to whole numbers.
 """
 import sys
 from collections import Counter, defaultdict
 from statistics import mean
 
-LIPIDS = ("CHOL", "POPC", "DOPC", "POPE", "DOPE", "PSM", "GM3", "POPS", "DOPS", "SAP6")
-ALIASES = {"CER": "GM3", "DPG3": "GM3", "DPSM": "PSM"}
+LIPIDS = ("CHOL", "POPC", "DOPC", "POPE", "DOPE", "PSM", "DPG3", "POPS", "DOPS", "SAP6")
+ALIASES = {"CER": "DPG3", "GM3": "DPG3", "DPSM": "PSM"}
 
 
 def leaflets(path):
