@@ -100,6 +100,9 @@ Eighteen frames (30 µs, Martini 3) of a GPCR in an asymmetric ten-species cell-
 | Outer | 28 | 19 | 19 | 5 | 5 | 14 | 10 | 0 | 0 | 0 |
 | Inner | 22 | 5 | 5 | 21 | 21 | 0 | 0 | 8 | 7 | 10 |
 
+**On a Slurm cluster**: `bash slurm/setup.sh` installs everything above (no Anaconda or modules needed) and
+`slurm/run_membraneforger.sbatch` builds one structure per array task; see `slurm/README.md`, which also covers PPM 3.0.
+
 Tests: `python -m unittest discover -s membraneforger/tests -t .`
 
 The force field under `forcefield/` and the mapping data under `backmap_data/` come from CHARMM36 / CHARMM-GUI,
