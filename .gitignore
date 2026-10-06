@@ -9,3 +9,8 @@ example_out/
 renders/
 mforger_*.log
 .ruff_cache/
+
+# Slurm setup (slurm/setup.sh): environment, micromamba, PPM 3.0 source (not redistributable)
+/env
+/.micromamba/
+/ppm3_code/
