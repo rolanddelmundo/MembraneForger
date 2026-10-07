@@ -215,7 +215,7 @@ class OPMReferenceMode(unittest.TestCase):
             result = mf.orient_complex(Fixtures.complex(), AA_PDB, request, mf.Settings(), out, work)
             report = result["report"]
             self.assertEqual((report["provider"], report["nterm_side"], report["status"]), ("opm", "out", "PASS"))
-            self.assertEqual(report["validation"]["nterm"]["status"], "PASS")
+            self.assertEqual(report["validation"]["sidedness"]["status"], "PASS")
             self.assertLess(report["validation"]["pairwise_distance_max_change_A"], 1e-6)
             self.assertTrue((out / "oriented.pdb").is_file())
             # the complex sits in the membrane frame: the receptor straddles z = 0, the G protein lies below (IN)
@@ -471,6 +471,166 @@ class RigidTransformOfTheWholeComplex(unittest.TestCase):
         self.assertTrue(np.allclose(result["R"], np.eye(3)))
 
 
+class Sidedness(unittest.TestCase):
+    """Reading the membrane sidedness of an oriented anchor from its two termini and its crossing count.
+
+    PPM is told the sidedness and cannot check it, so these tests cover the ways a complex flipped by 180 degrees
+    has to be caught: at the N terminus itself, through the C terminus when the N terminus is buried in the slab,
+    and by refusing to call a PPM orientation checked when neither terminus leaves the slab.
+    """
+    HALF = 12.9
+
+    @staticmethod
+    def chain(z_by_residue, chain="R"):
+        """A CA-only protein chain at the given z values, one residue per value (x and y are irrelevant here)."""
+        return [{"atom": "CA", "resname": "ALA", "resid": i + 1, "chain": chain, "segid": "",
+                 "x": 0.0, "y": 0.0, "z": float(z)} for i, z in enumerate(z_by_residue)]
+
+    def residues(self, z_by_residue):
+        return mf.residues_in_order(self.chain(z_by_residue))
+
+    # A buried N terminus: the first five residues stay in the slab, the chain then runs down to -55, crosses once
+    # and leaves at +85. Only the C terminus and the crossing parity can say which side the N terminus is on.
+    BURIED_NTERM = [2.0, 6.0, -8.0, 10.0, -5.0, -20.0, -40.0, -55.0, -26.0, 0.0, 12.0, -10.0, 6.0, 7.0, -14.0, 1.0,
+                    17.0, 33.0, 62.0, 85.0]
+
+    # ---- terminus_side -------------------------------------------------------------------------------------------
+    def test_terminus_side_walks_past_residues_inside_the_slab(self):
+        """The old single-atom reading saw only z = +2.0; the first residue that leaves the slab is three further in."""
+        report = mf.terminus_side(self.residues([2.0, 6.0, 11.0, -20.0, -24.0, -26.0, -28.0]), self.HALF, "N")
+        self.assertEqual(report["side"], "in")
+        self.assertEqual((report["first_residue"], report["first_residue_outside_slab"]), ("ALA1", "ALA4"))
+        self.assertEqual(report["residues_from_the_terminus"], 3)
+        self.assertEqual(report["residues_averaged"], 4)
+        self.assertAlmostEqual(report["mean_ca_z_A"], -24.5, places=3)
+
+    def test_terminus_side_reads_the_c_terminus_from_the_far_end(self):
+        report = mf.terminus_side(self.residues([-30.0, -20.0, 0.0, 8.0, 40.0, 44.0]), self.HALF, "C")
+        self.assertEqual((report["side"], report["first_residue"]), ("out", "ALA6"))
+        self.assertEqual(report["residues_from_the_terminus"], 0)
+        self.assertAlmostEqual(report["mean_ca_z_A"], 42.0, places=3)
+
+    def test_terminus_side_averages_only_the_run_that_stays_outside(self):
+        """A CA that dips back into the slab must not be averaged into the terminal reading."""
+        report = mf.terminus_side(self.residues([20.0, 22.0, 4.0, 24.0, 26.0]), self.HALF, "N")
+        self.assertEqual(report["residues_averaged"], 2)
+        self.assertAlmostEqual(report["mean_ca_z_A"], 21.0, places=3)
+
+    def test_a_loop_further_in_than_reach_is_not_read_as_the_terminus(self):
+        """Past `reach` residues the first CA outside the slab belongs to a loop, and says nothing about the terminus."""
+        buried = self.residues(self.BURIED_NTERM)
+        self.assertIsNone(mf.terminus_side(buried, self.HALF, "N")["side"])
+        self.assertIn("first 5 residues of the N terminus all lie inside",
+                      mf.terminus_side(buried, self.HALF, "N")["status"])
+        self.assertEqual(mf.terminus_side(buried, self.HALF, "N", reach=8)["side"], "in")  # reach is the only limit
+
+    def test_terminus_side_is_unreadable_when_every_ca_is_inside_the_slab(self):
+        report = mf.terminus_side(self.residues([0.0, 5.0, -6.0, 12.0]), self.HALF, "N")
+        self.assertIsNone(report["side"])
+        self.assertIn("inside the +-12.9 A hydrophobic slab", report["status"])
+
+    def test_terminus_side_without_ca_atoms(self):
+        residues = mf.residues_in_order([{"atom": "CB", "resname": "ALA", "resid": 1, "chain": "R", "segid": "",
+                                          "x": 0.0, "y": 0.0, "z": 30.0}])
+        self.assertIsNone(mf.terminus_side(residues, self.HALF, "N")["side"])
+
+    # ---- membrane_crossings --------------------------------------------------------------------------------------
+    def test_membrane_crossings_counts_alternations_of_the_outside_excursions(self):
+        for z, expected in (([30.0, 0.0, -30.0], 1),                        # one crossing
+                            ([30.0, 0.0, -30.0, 0.0, 30.0], 2),             # and back again
+                            ([30.0, 25.0, 0.0, 28.0], 0),                   # never reaches the other side
+                            ([-20.0, 0.0, 20.0, 0.0, -20.0, 0.0, 20.0], 3),
+                            ([0.0, 1.0, -2.0], 0)):                         # entirely inside the slab
+            self.assertEqual(mf.membrane_crossings(self.residues(z), self.HALF), expected, z)
+
+    # ---- sidedness_check -----------------------------------------------------------------------------------------
+    def check(self, z, nterm, provider="ppm", chain="R"):
+        return mf.sidedness_check(self.chain(z, chain), chain, nterm, self.HALF, provider)
+
+    def test_correctly_oriented_anchor_passes(self):
+        report = self.check([30.0, 20.0, 0.0, -20.0, -30.0], "out")
+        self.assertEqual((report["status"], report["observed"]), ("PASS", "out"))
+        self.assertEqual((report["membrane_crossings"], report["observed_from"]), (1, "the N-terminal residues"))
+
+    def test_flipped_anchor_is_refused_at_the_n_terminus(self):
+        message = failure(self.check, [-30.0, -20.0, 0.0, 20.0, 30.0], "out")
+        self.assertIn("N terminus in", message)
+        self.assertIn("upside down", message)
+
+    def test_a_flip_is_caught_through_the_c_terminus_when_the_n_terminus_is_buried(self):
+        """The reported case: the N-terminal residues stay in the slab, so the C terminus and the parity decide."""
+        message = failure(self.check, self.BURIED_NTERM, "out")
+        self.assertIsNotNone(message, "a flipped complex was reported as correctly oriented")
+        self.assertIn("upside down", message)
+        self.assertIn("the C terminus and 1 membrane crossing(s)", message)
+
+    def test_the_same_buried_n_terminus_passes_on_the_side_it_really_has(self):
+        report = self.check(self.BURIED_NTERM, "in")
+        self.assertEqual((report["status"], report["observed"]), ("PASS", "in"))
+        self.assertIsNone(report["N_terminus"]["side"])
+        self.assertEqual((report["C_terminus"]["side"], report["N_terminus_inferred_from_C"]), ("out", "in"))
+
+    def test_an_even_crossing_count_leaves_both_termini_on_the_same_side(self):
+        """A re-entrant anchor is not a flip: with 0 or 2 crossings the termini agree, and that must still pass."""
+        report = self.check([30.0, 20.0, 0.0, -20.0, 0.0, 20.0, 30.0], "out")
+        self.assertEqual((report["status"], report["membrane_crossings"]), ("PASS", 2))
+        same_side = self.check([40.0, 30.0, 20.0, 25.0, 35.0], "out")
+        self.assertEqual((same_side["status"], same_side["membrane_crossings"]), ("PASS", 0))
+
+    def test_a_buried_n_terminus_uses_the_parity_of_an_even_crossing_count_too(self):
+        z = [1.0, 2.0, -3.0, 4.0, -5.0, -30.0, -40.0, 0.0, 35.0, 0.0, -45.0, -50.0]
+        report = self.check(z, "in")
+        self.assertEqual((report["membrane_crossings"], report["C_terminus"]["side"]), (2, "in"))
+        self.assertEqual((report["observed"], report["status"]), ("in", "PASS"))
+
+    def test_unverifiable_sidedness_is_refused_for_a_ppm_orientation(self):
+        message = failure(self.check, [0.0, 5.0, -8.0, 12.0, -3.0], "out")
+        self.assertIn("cannot be verified", message)
+        self.assertIn("both of its termini lie inside", message)
+        self.assertIn("--orientation opm --pdb-id", message)
+        self.assertIn("--opm-file", message)
+
+    def test_unverifiable_sidedness_is_accepted_for_an_opm_orientation(self):
+        """An exact OPM superposition cannot be satisfied by a flipped structure, so there is nothing left to check."""
+        report = self.check([0.0, 5.0, -8.0, 12.0, -3.0], "out", provider="opm")
+        self.assertIn("pinned by the exact OPM reference", report["status"])
+        self.assertIsNone(report["observed"])
+
+    def test_the_side_is_reported_when_none_was_requested(self):
+        report = self.check([30.0, 0.0, -30.0], None)
+        self.assertIn("N terminus is out", report["status"])
+        self.assertIn("not requested", report["status"])
+
+    def test_an_anchor_without_protein_residues(self):
+        self.assertIn("no protein residues", mf.sidedness_check([], "R", "out", self.HALF, "ppm")["status"])
+
+    # ---- through orient_complex ----------------------------------------------------------------------------------
+    def test_the_report_carries_both_terminal_readings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out, work = Fixtures.session_dirs(Path(tmp))
+            request = mf.OrientationRequest(mode="ppm", chains=("R",), ppm_exe=str(Fixtures.fake_ppm(Path(tmp))),
+                                            nterm_side="out")
+            report = mf.orient_complex(Fixtures.complex(), AA_PDB, request, mf.Settings(), out, work)["report"]
+            sidedness = report["validation"]["sidedness"]
+            self.assertEqual((sidedness["status"], sidedness["observed"]), ("PASS", "out"))
+            for key in ("N_terminus", "C_terminus", "N_terminus_inferred_from_C", "membrane_crossings",
+                        "slab_half_thickness_A", "requested", "observed_from"):
+                self.assertIn(key, sidedness)
+            self.assertEqual(json.loads(json.dumps(sidedness))["N_terminus"]["side"], "out")  # the report serialises
+            self.assertIn("N terminus out", (out / mf.LOG_NAME).read_text())
+
+    def test_a_flipped_orientation_is_refused_end_to_end(self):
+        """Asking for the side the oriented structure does not have must stop the build, not be reported as a PASS."""
+        with tempfile.TemporaryDirectory() as tmp:
+            out, work = Fixtures.session_dirs(Path(tmp))
+            request = mf.OrientationRequest(mode="ppm", chains=("R",), ppm_exe=str(Fixtures.fake_ppm(Path(tmp))),
+                                            nterm_side="in")
+            message = failure(mf.orient_complex, Fixtures.complex(), AA_PDB, request, mf.Settings(), out, work)
+            self.assertIn("upside down", message)
+            self.assertIn("N terminus out", message)
+            self.assertFalse((out / "oriented.pdb").exists())  # the failure precedes the written structure
+
+
 class RegistrationKeepsTheOrientation(unittest.TestCase):
     """After CG registration the membrane normal is still z and the complex is still at its membrane depth."""
 
@@ -639,7 +799,7 @@ class RealPPM(unittest.TestCase):
             result = mf.orient_complex(Fixtures.complex(), AA_PDB, request, mf.Settings(), out, work)
             report = result["report"]
             self.assertLess(report["fit"]["rmsd_A"], 0.01)
-            self.assertEqual(report["validation"]["nterm"]["status"], "PASS")
+            self.assertEqual(report["validation"]["sidedness"]["status"], "PASS")
             frame = report["validation"]["frame"]
             self.assertGreater(frame["anchor_ca_inside_slab"], 100)
             self.assertTrue(frame["anchor_ca_above_slab"] > 0 and frame["anchor_ca_below_slab"] > 0)

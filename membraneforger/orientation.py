@@ -37,10 +37,12 @@ __all__ = ['ORIENTATION_MODES', 'NTERM_SIDES', 'OPM_ASSET_URL', 'PPM_MEMBRANE_CO
            'select_anchor_chains', 'OPMReference', 'parse_opm_file', 'fetch_opm_reference', 'match_chains',
            'atom_pairs', 'rigid_fit', 'apply_transform', 'spanning_chains', 'nterm_side_from_reference',
            'orientation_from_opm', 'find_ppm_executable', 'LocalPPM', 'orientation_from_ppm',
-           'validate_full_transform', 'orient_complex', 'check_orientation_preserved', 'rotation_angle_deg']
+           'validate_full_transform', 'orient_complex', 'check_orientation_preserved', 'rotation_angle_deg',
+           'terminus_side', 'membrane_crossings', 'sidedness_check']
 
 ORIENTATION_MODES = ("auto", "ppm", "opm", "none")
 NTERM_SIDES = ("auto", "in", "out")
+OPPOSITE = {"in": "out", "out": "in"}
 # OPM publishes every oriented entry (the same coordinates OPRLM serves) in this public bucket, keyed by lower-case PDB ID.
 OPM_ASSET_URL = "https://opm-assets.storage.googleapis.com/pdb/{pdb_id}.pdb"
 # PPM 3.0 membrane codes (ppm3_instructions). "" is PPM's "undefined membrane": a flat bilayer whose hydrophobic
@@ -514,23 +516,92 @@ def frame_metrics(oriented: list[dict], anchors: list[str], half_thickness_a: fl
             "complex_z_range_A": [round(float(whole[:, 2].min()), 3), round(float(whole[:, 2].max()), 3)]}
 
 
-def nterm_check(oriented: list[dict], anchor: str, nterm: str | None, half_thickness_a: float) -> dict:
-    """Check that the first anchor residue sits on the requested side (in: z < 0, out: z > 0) when it is outside the slab."""
+def terminus_side(residues: list, half_thickness_a: float, end: str = "N", window: int = 5, reach: int = 5) -> dict:
+    """Side of the membrane a chain terminus lies on, read from the first of its residues whose CA leaves the slab.
+
+    The first (or last) modelled residue frequently sits inside the hydrophobic slab, where its single CA says
+    nothing about sidedness; averaging the short run of residues that stays on the side it reaches gives a reading
+    that does not hinge on one atom. The search stops after `reach` residues on purpose: further in, the first CA
+    outside the slab belongs to a loop of the bundle, whose side is no evidence about the terminus. Such a buried
+    terminus is reported with side None, for the caller to read the other end instead.
+    """
+    order = residues if end == "N" else list(reversed(residues))
+    trace = [(resid, resname, ca) for resid, resname, atoms in order
+             if (ca := next((a for a in atoms if a["atom"] == "CA"), None)) is not None]
+    report = {"terminus": end, "side": None}
+    if not trace:
+        return report | {"status": f"the anchor has no CA atom to read its {end} terminus from"}
+    report |= {"first_residue": f"{trace[0][1]}{trace[0][0]}", "first_ca_z_A": round(trace[0][2]["z"], 3)}
+    k = next((i for i, (_, _, ca) in enumerate(trace[:reach]) if abs(ca["z"]) > half_thickness_a), None)
+    if k is None:
+        return report | {"status": f"the first {min(reach, len(trace))} residues of the {end} terminus all lie inside "
+                                   f"the +-{half_thickness_a} A hydrophobic slab"}
+    resid, resname, ca = trace[k]
+    run = []  # the contiguous residues from there on that stay outside the slab on the same side
+    for _, _, c in trace[k:k + window]:
+        if abs(c["z"]) <= half_thickness_a or (c["z"] > 0) != (ca["z"] > 0):
+            break
+        run.append(c["z"])
+    side = "out" if ca["z"] > 0 else "in"
+    return report | {"first_residue_outside_slab": f"{resname}{resid}", "residues_from_the_terminus": k,
+                     "ca_z_A": round(ca["z"], 3), "mean_ca_z_A": round(float(np.mean(run)), 3),
+                     "residues_averaged": len(run), "side": side, "status": f"{end} terminus is {side}"}
+
+
+def membrane_crossings(residues: list, half_thickness_a: float) -> int:
+    """How often the CA trace passes right across the slab, counted as alternations of its fully outside excursions."""
+    sides: list[str] = []
+    for _, _, atoms in residues:
+        ca = next((a for a in atoms if a["atom"] == "CA"), None)
+        if ca is None or abs(ca["z"]) <= half_thickness_a:
+            continue
+        side = "out" if ca["z"] > 0 else "in"
+        if not sides or sides[-1] != side:
+            sides.append(side)
+    return max(len(sides) - 1, 0)
+
+
+def sidedness_check(oriented: list[dict], anchor: str, nterm: str | None, half_thickness_a: float,
+                    provider: str | None = None) -> dict:
+    """Check the oriented anchor has its N terminus on the requested side (in: z < 0, out: z > 0), from both termini.
+
+    PPM takes the sidedness from --nterm-side and cannot check it, so a complex flipped by 180 degrees arrives here
+    looking perfectly well embedded. The N terminus is read from its own residues when they leave the slab. When
+    they do not, the side is inferred from the C terminus and the number of membrane crossings: an odd count leaves
+    the two termini on opposite sides, an even count on the same side. When neither terminus leaves the slab,
+    nothing here can tell a flip from a correct build, so a PPM orientation is refused rather than called checked.
+    """
     residues = protein_chains([a for a in oriented if (a["chain"] or a.get("segid") or "A") == anchor]).get(anchor, [])
-    ca = next((a for _, _, atoms in residues for a in atoms if a["atom"] == "CA"), None)
-    if ca is None:
-        return {"status": "no CA atom in the anchor"}
-    report = {"first_residue": f"{residues[0][1]}{residues[0][0]}", "first_ca_z_A": round(ca["z"], 3), "requested": nterm}
+    if not residues:
+        return {"requested": nterm, "status": f"anchor chain {anchor} has no protein residues"}
+    n_term = terminus_side(residues, half_thickness_a, "N")
+    c_term = terminus_side(residues, half_thickness_a, "C")
+    crossings = membrane_crossings(residues, half_thickness_a)
+    inferred = None if c_term["side"] is None else (c_term["side"] if crossings % 2 == 0 else OPPOSITE[c_term["side"]])
+    observed, source = ((n_term["side"], "the N-terminal residues") if n_term["side"] is not None
+                        else (inferred, f"the C terminus and {crossings} membrane crossing(s)"))
+    report = {"requested": nterm, "slab_half_thickness_A": half_thickness_a, "membrane_crossings": crossings,
+              "N_terminus": n_term, "C_terminus": c_term, "N_terminus_inferred_from_C": inferred,
+              "observed": observed, "observed_from": source if observed is not None else None}
+    if observed is None:
+        if provider == "opm":
+            report["status"] = ("not testable from either terminus; the orientation is pinned by the exact OPM "
+                                "reference, which a flipped structure could not have superposed on")
+            return report
+        report["status"] = "FAIL: sidedness is not testable from either terminus"
+        raise OrientationFailure(
+            f"the membrane sidedness of anchor chain {anchor} cannot be verified: both of its termini lie inside the "
+            f"+-{half_thickness_a} A hydrophobic slab, so neither says which side of the membrane it is on.\n\n"
+            "PPM takes the sidedness from --nterm-side and cannot check it, so a complex flipped by 180 degrees "
+            "would pass unnoticed. Orient against the exact reference entry instead:\n\n"
+            "    --orientation opm --pdb-id <ID>\n\nor:\n\n    --orientation opm --opm-file <downloaded>.pdb\n")
     if nterm not in ("in", "out"):
-        report["status"] = "not requested"
-    elif abs(ca["z"]) <= half_thickness_a:
-        report["status"] = "first residue inside the hydrophobic slab; sidedness not testable from it"
-    else:
-        observed = "out" if ca["z"] > 0 else "in"
-        report["status"] = "PASS" if observed == nterm else f"FAIL: N terminus is {observed}"
-        if observed != nterm:
-            raise OrientationFailure(f"the oriented anchor has its N terminus {observed} (z {ca['z']:+.1f} A) although {nterm} "
-                                     "was specified")
+        report["status"] = f"N terminus is {observed} (not requested; read from {source})"
+        return report
+    report["status"] = "PASS" if observed == nterm else f"FAIL: N terminus is {observed}"
+    if observed != nterm:
+        raise OrientationFailure(f"the oriented anchor has its N terminus {observed} according to {source}, although "
+                                 f"{nterm} was specified: the complex is upside down in the membrane")
     return report
 
 
@@ -620,7 +691,8 @@ def orient_complex(aa_atoms: list[dict], aa_path: Path, request: OrientationRequ
     oriented = apply_transform(aa_atoms, R, t)
     validation = validate_full_transform(aa_atoms, oriented, R, t)
     validation["frame"] = frame_metrics(oriented, anchors, derived["half_thickness_a"])
-    validation["nterm"] = nterm_check(oriented, anchors[0], nterm, derived["half_thickness_a"])
+    validation["sidedness"] = sidedness_check(oriented, anchors[0], nterm,
+                                              derived["half_thickness_a"], provider)
     validation["status"] = "PASS"
     oriented_path = out / "oriented.pdb"
     write_pdb(oriented, oriented_path)
@@ -632,7 +704,9 @@ def orient_complex(aa_atoms: list[dict], aa_path: Path, request: OrientationRequ
                    "status": "PASS"})
     log(out, f"orientation by {provider}: rotation {report['rotation_angle_deg']} deg, {len(oriented)} atoms moved as one body; "
              f"{validation['frame']['anchor_ca_inside_slab']}/{validation['frame']['anchor_ca_atoms']} anchor CA inside the "
-             f"+-{derived['half_thickness_a']} A slab; pairwise distances changed by <= {validation['pairwise_distance_max_change_A']:.1e} A", "PASS")
+             f"+-{derived['half_thickness_a']} A slab; N terminus "
+             f"{validation['sidedness'].get('observed') or 'not testable'}; pairwise distances changed by "
+             f"<= {validation['pairwise_distance_max_change_A']:.1e} A", "PASS")
     return {"oriented": oriented, "report": report, "R": R, "t": t}
 
 

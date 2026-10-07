@@ -69,6 +69,14 @@ normal along +z, bilayer midplane at z = 0, cytoplasmic side negative z):
 - PPM needs the side of the N terminus of the first anchor chain. It is read from the OPM entry when there is one;
   otherwise give `--nterm-side in` or `out`. It is never guessed from a protein family or name, and the build stops
   before anything expensive runs if it is missing.
+- That side is then verified on the oriented complex rather than taken on trust. The N terminus is read from the
+  first of its residues whose CA leaves the hydrophobic slab; when those residues are all buried in the slab it is
+  inferred from the C terminus and the number of membrane crossings (an odd count leaves the two termini on
+  opposite sides, an even count on the same side). A complex that comes out upside down stops the build. When
+  neither terminus leaves the slab, a PPM orientation cannot be checked at all and is refused: use
+  `--orientation opm` with `--pdb-id` or `--opm-file`, where a flipped structure could not have superposed on the
+  reference in the first place. Both readings are recorded in `orientation_report.json` under
+  `validation.sidedness`.
 - With several protein chains `--orient-chain` is required; the error lists the chains.
 - PPM 3.0 is not bundled. Compile its Fortran source (distributed by the OPM team, `ppm3_code/`) with `make` and pass the
   `immers` executable; `res.lib` must sit next to it. Advanced: `--ppm-membrane CODE`, `--ppm-heteroatoms`,
