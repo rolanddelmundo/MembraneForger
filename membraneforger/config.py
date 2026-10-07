@@ -21,7 +21,9 @@ __all__ = ['ORIENTATION', 'ORIENT_CHAINS', 'NTERM_SIDE', 'PDB_ID', 'PPM_MEMBRANE
 # options (--orientation, --orient-chain(s), --nterm-side, --pdb-id, --ppm-membrane) override these defaults.
 ORIENTATION = "auto"       # auto | ppm | opm | none      (none: use the input coordinates as given)
 ORIENT_CHAINS = ""         # e.g. "R", "A", or "A,B"      (empty: the only protein chain, else fail and ask)
-NTERM_SIDE = "auto"        # auto | in | out              (side of the N terminus of the first anchor chain)
+NTERM_SIDE = "auto"        # auto | in | out              (side of the N terminus of the first anchor chain;
+                           #                              "inside"/"cytoplasmic" and "outside"/"extracellular"
+                           #                              are accepted too. in = cytoplasmic = negative z)
 PDB_ID = ""                # optional exact PDB ID         (else the HEADER record of the input, else none)
 PPM_MEMBRANE = ""          # advanced: PPM 3.0 membrane code, "" = undefined flat bilayer (e.g. "PMm", "GnI")
 
@@ -268,6 +270,14 @@ class Settings:
     # PPM only repositions the submitted atoms (it writes 3 decimals), so its output must be a rigid copy of the
     # anchor to within rounding; anything larger means the wrong atoms were matched or the output is not the input's.
     orient_ppm_max_fit_rmsd_a: float = 0.05
+    # The positive-inside rule, an independent check that the complex is not upside down: Lys and Arg are
+    # enriched in the cytoplasmic juxtamembrane loops. Counted over the orient_positive_inside_flank residues
+    # at each end of every excursion out of the slab, the rule is read only when at least
+    # orient_positive_inside_min_charges of those residues are Lys or Arg and one side is at least
+    # orient_positive_inside_min_ratio times denser than the other; below that it reports no side at all.
+    orient_positive_inside_flank: int = 20
+    orient_positive_inside_min_charges: int = 4
+    orient_positive_inside_min_ratio: float = 1.5
     orient_ppm_min_matched_fraction: float = 0.9
     orient_ppm_timeout_s: int = 3600
     # CG registration after orientation. The CG membrane has a cavity shaped around the CG protein's own pose; a

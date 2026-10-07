@@ -38,11 +38,20 @@ __all__ = ['ORIENTATION_MODES', 'NTERM_SIDES', 'OPM_ASSET_URL', 'PPM_MEMBRANE_CO
            'atom_pairs', 'rigid_fit', 'apply_transform', 'spanning_chains', 'nterm_side_from_reference',
            'orientation_from_opm', 'find_ppm_executable', 'LocalPPM', 'orientation_from_ppm',
            'validate_full_transform', 'orient_complex', 'check_orientation_preserved', 'rotation_angle_deg',
-           'terminus_side', 'membrane_crossings', 'sidedness_check']
+           'terminus_side', 'membrane_crossings', 'positive_inside_bias', 'sidedness_check',
+           'NTERM_SIDE_ALIASES', 'normalise_nterm_side']
 
 ORIENTATION_MODES = ("auto", "ppm", "opm", "none")
 NTERM_SIDES = ("auto", "in", "out")
 OPPOSITE = {"in": "out", "out": "in"}
+# The words users reach for, all meaning one of auto, in and out. "in" is the cytoplasmic side, negative z.
+NTERM_SIDE_ALIASES = {"auto": "auto",
+                      "in": "in", "inside": "in", "cyto": "in", "cytosolic": "in", "cytoplasmic": "in",
+                      "intracellular": "in", "n-in": "in",
+                      "out": "out", "outside": "out", "extracellular": "out", "exoplasmic": "out",
+                      "periplasmic": "out", "luminal": "out", "lumenal": "out", "n-out": "out"}
+# The positively charged residues of the positive-inside rule.
+POSITIVE_RESIDUES = ("LYS", "ARG")
 # OPM publishes every oriented entry (the same coordinates OPRLM serves) in this public bucket, keyed by lower-case PDB ID.
 OPM_ASSET_URL = "https://opm-assets.storage.googleapis.com/pdb/{pdb_id}.pdb"
 # PPM 3.0 membrane codes (ppm3_instructions). "" is PPM's "undefined membrane": a flat bilayer whose hydrophobic
@@ -69,6 +78,17 @@ class OrientationRequest:
 
 class OrientationFailure(SystemExit):
     """Orientation could not be established safely; the message says what the user must supply."""
+
+
+def normalise_nterm_side(value: str) -> str:
+    """Turn any of the words users write for the N-terminal side into one of auto, in and out."""
+    key = str(value).strip().lower().replace("_", "-")
+    if key not in NTERM_SIDE_ALIASES:
+        raise OrientationFailure(f"--nterm-side says which side of the membrane the N terminus of the first "
+                                 f"anchor chain lies on: in (cytoplasmic, also inside/cytoplasmic/"
+                                 f"intracellular), out (also outside/extracellular/luminal/periplasmic) or "
+                                 f"auto; not {value!r}")
+    return NTERM_SIDE_ALIASES[key]
 
 
 def protein_chains(atoms: list[dict]) -> OrderedDict:
@@ -561,40 +581,121 @@ def membrane_crossings(residues: list, half_thickness_a: float) -> int:
     return max(len(sides) - 1, 0)
 
 
+def positive_inside_bias(residues: list, half_thickness_a: float, flank: int = 20, min_charges: int = 4,
+                         min_ratio: float = 1.5) -> dict:
+    """The positive-inside rule: Lys and Arg are enriched in the cytoplasmic juxtamembrane loops of a membrane protein.
+
+    The bias belongs to the loops that flank the membrane, so only the first and last `flank` residues of every
+    excursion out of the hydrophobic slab are counted; the middle of a large soluble domain would otherwise dilute
+    it. The verdict names the side the charges put the cytoplasm on, which in this frame is negative z for a
+    correctly built complex. It is evidence rather than proof: the rule is statistical, so it decides only with
+    enough charges counted and a clear margin between the two densities, and reports no side otherwise.
+    """
+    trace = [(resname, ca["z"]) for _, resname, atoms in residues
+             if (ca := next((a for a in atoms if a["atom"] == "CA"), None)) is not None]
+    counted: dict[str, list] = {"negative_z": [], "positive_z": []}
+
+    def close(run: list) -> None:
+        """Add the membrane-facing ends of one excursion out of the slab to the side it lies on."""
+        if run:
+            counted["positive_z" if run[0][1] > 0 else "negative_z"] += (
+                run if len(run) <= 2 * flank else run[:flank] + run[-flank:])
+
+    run: list = []
+    for resname, z in trace:
+        if abs(z) <= half_thickness_a or (run and (z > 0) != (run[-1][1] > 0)):
+            close(run)
+            run = [] if abs(z) <= half_thickness_a else [(resname, z)]
+            continue
+        run.append((resname, z))
+    close(run)
+    sides = {}
+    for key, members in counted.items():
+        charges = sum(1 for resname, _ in members if resname in POSITIVE_RESIDUES)
+        sides[key] = {"residues_counted": len(members), "lys_arg": charges,
+                      "lys_arg_per_100_residues": round(100.0 * charges / len(members), 2) if members else None}
+    report = {"rule": "Lys and Arg are enriched in the cytoplasmic juxtamembrane loops (positive-inside rule)",
+              "flank_residues": flank, "negative_z": sides["negative_z"], "positive_z": sides["positive_z"],
+              "cytoplasmic_side": None}
+    neg, pos = sides["negative_z"], sides["positive_z"]
+    if not neg["residues_counted"] or not pos["residues_counted"]:
+        return report | {"status": "the anchor leaves the slab on one side only, so the two sides cannot be compared"}
+    if neg["lys_arg"] + pos["lys_arg"] < min_charges:
+        return report | {"status": f"only {neg['lys_arg'] + pos['lys_arg']} Lys/Arg in the juxtamembrane windows, "
+                                   f"fewer than the {min_charges} the rule is read from"}
+    rich, lean = sorted((neg["lys_arg_per_100_residues"], pos["lys_arg_per_100_residues"]), reverse=True)
+    ratio = float("inf") if lean == 0 else rich / lean
+    report["density_ratio"] = None if ratio == float("inf") else round(ratio, 2)
+    if ratio < min_ratio:
+        return report | {"status": f"Lys/Arg are spread evenly over the two sides ({neg['lys_arg_per_100_residues']} "
+                                   f"against {pos['lys_arg_per_100_residues']} per 100 residues, ratio {ratio:.2f} "
+                                   f"below {min_ratio}), so the rule says nothing here"}
+    side = "negative_z" if neg["lys_arg_per_100_residues"] > pos["lys_arg_per_100_residues"] else "positive_z"
+    return report | {"cytoplasmic_side": side,
+                     "status": f"Lys/Arg are {ratio:.2f} times denser on the {side} side, which the rule reads as "
+                               f"the cytoplasmic one"}
+
+
 def sidedness_check(oriented: list[dict], anchor: str, nterm: str | None, half_thickness_a: float,
-                    provider: str | None = None) -> dict:
-    """Check the oriented anchor has its N terminus on the requested side (in: z < 0, out: z > 0), from both termini.
+                    provider: str | None = None, settings: Settings | None = None) -> dict:
+    """Check the oriented anchor is the right way up, from its two termini and from the positive-inside rule.
 
     PPM takes the sidedness from --nterm-side and cannot check it, so a complex flipped by 180 degrees arrives here
-    looking perfectly well embedded. The N terminus is read from its own residues when they leave the slab. When
-    they do not, the side is inferred from the C terminus and the number of membrane crossings: an odd count leaves
-    the two termini on opposite sides, an even count on the same side. When neither terminus leaves the slab,
-    nothing here can tell a flip from a correct build, so a PPM orientation is refused rather than called checked.
+    looking perfectly well embedded. Three readings are taken, in order of how directly they bear on the question:
+    the N terminus from its own residues; failing that, the C terminus and the number of membrane crossings (an odd
+    count leaves the termini on opposite sides, an even count on the same side); and independently of both, the
+    Lys/Arg bias of the juxtamembrane loops. The termini decide when they can be read and the charge bias then
+    corroborates them; when both termini are buried in the slab the charge bias decides on its own, and when it is
+    inconclusive too a PPM orientation is refused rather than called checked.
     """
+    settings = settings or Settings()
     residues = protein_chains([a for a in oriented if (a["chain"] or a.get("segid") or "A") == anchor]).get(anchor, [])
     if not residues:
         return {"requested": nterm, "status": f"anchor chain {anchor} has no protein residues"}
     n_term = terminus_side(residues, half_thickness_a, "N")
     c_term = terminus_side(residues, half_thickness_a, "C")
     crossings = membrane_crossings(residues, half_thickness_a)
+    charge = positive_inside_bias(residues, half_thickness_a, settings.orient_positive_inside_flank,
+                                  settings.orient_positive_inside_min_charges, settings.orient_positive_inside_min_ratio)
     inferred = None if c_term["side"] is None else (c_term["side"] if crossings % 2 == 0 else OPPOSITE[c_term["side"]])
     observed, source = ((n_term["side"], "the N-terminal residues") if n_term["side"] is not None
                         else (inferred, f"the C terminus and {crossings} membrane crossing(s)"))
+    upright = None if charge["cytoplasmic_side"] is None else charge["cytoplasmic_side"] == "negative_z"
     report = {"requested": nterm, "slab_half_thickness_A": half_thickness_a, "membrane_crossings": crossings,
               "N_terminus": n_term, "C_terminus": c_term, "N_terminus_inferred_from_C": inferred,
-              "observed": observed, "observed_from": source if observed is not None else None}
+              "observed": observed, "observed_from": source if observed is not None else None,
+              "positive_inside": charge, "checked_by": None}
     if observed is None:
-        if provider == "opm":
-            report["status"] = ("not testable from either terminus; the orientation is pinned by the exact OPM "
-                                "reference, which a flipped structure could not have superposed on")
+        # Nothing about the termini is readable; the charge bias is the only evidence left that the complex is upright.
+        report["checked_by"] = "the positive-inside rule"
+        if upright is True:
+            report["status"] = ("PASS: both termini are buried in the slab, but the positive-inside rule puts the "
+                                "cytoplasm on the negative-z side, as a correctly built complex has it")
             return report
-        report["status"] = "FAIL: sidedness is not testable from either terminus"
+        if upright is False:
+            report["status"] = "FAIL: the positive-inside rule puts the cytoplasm on the positive-z side"
+            raise OrientationFailure(
+                f"the oriented complex is upside down in the membrane: {charge['status']}, but this frame puts the "
+                f"cytoplasmic side at negative z.\n\nNeither terminus of anchor chain {anchor} leaves the hydrophobic "
+                f"slab, so the Lys/Arg bias of its juxtamembrane loops is the only reading available. Build it with "
+                f"the other --nterm-side, or orient against the exact reference entry:\n\n"
+                "    --orientation opm --pdb-id <ID>\n")
+        if provider == "opm":
+            report["checked_by"] = None
+            report["status"] = ("not testable from the termini or the positive-inside rule; the orientation is pinned "
+                                "by the exact OPM reference, which a flipped structure could not have superposed on")
+            return report
+        report["status"] = "FAIL: the orientation cannot be verified by any reading"
         raise OrientationFailure(
             f"the membrane sidedness of anchor chain {anchor} cannot be verified: both of its termini lie inside the "
-            f"+-{half_thickness_a} A hydrophobic slab, so neither says which side of the membrane it is on.\n\n"
+            f"+-{half_thickness_a} A hydrophobic slab, and {charge['status']}.\n\n"
             "PPM takes the sidedness from --nterm-side and cannot check it, so a complex flipped by 180 degrees "
             "would pass unnoticed. Orient against the exact reference entry instead:\n\n"
             "    --orientation opm --pdb-id <ID>\n\nor:\n\n    --orientation opm --opm-file <downloaded>.pdb\n")
+    report["checked_by"] = source
+    if upright is False:
+        report["warning"] = (f"the positive-inside rule disagrees with the termini: {charge['status']}, while this "
+                             f"frame puts the cytoplasmic side at negative z; check the anchor chain and the side")
     if nterm not in ("in", "out"):
         report["status"] = f"N terminus is {observed} (not requested; read from {source})"
         return report
@@ -610,8 +711,9 @@ def orient_complex(aa_atoms: list[dict], aa_path: Path, request: OrientationRequ
     """Orient the complete complex from its anchor chain(s) and return the oriented atoms with the report."""
     if request.mode not in ORIENTATION_MODES:
         raise OrientationFailure(f"ORIENTATION must be one of {ORIENTATION_MODES}, not {request.mode!r}")
-    if request.nterm_side not in NTERM_SIDES:
-        raise OrientationFailure(f"NTERM_SIDE must be one of {NTERM_SIDES}, not {request.nterm_side!r}")
+    if normalise_nterm_side(request.nterm_side) != request.nterm_side:
+        raise OrientationFailure(f"NTERM_SIDE must already be one of {NTERM_SIDES}, not "
+                                 f"{request.nterm_side!r}; the command line normalises it")
     report = {"enabled": request.mode != "none", "mode": request.mode, "provider": None, "convention":
               "membrane normal +z, midplane z = 0, IN (cytoplasmic) negative z, OUT positive z, coordinates in A",
               "input_file": str(aa_path), "input_sha256": sha256(aa_path), "request": {**asdict(request),
@@ -691,8 +793,10 @@ def orient_complex(aa_atoms: list[dict], aa_path: Path, request: OrientationRequ
     oriented = apply_transform(aa_atoms, R, t)
     validation = validate_full_transform(aa_atoms, oriented, R, t)
     validation["frame"] = frame_metrics(oriented, anchors, derived["half_thickness_a"])
-    validation["sidedness"] = sidedness_check(oriented, anchors[0], nterm,
-                                              derived["half_thickness_a"], provider)
+    validation["sidedness"] = sidedness_check(oriented, anchors[0], nterm, derived["half_thickness_a"],
+                                              provider, settings)
+    if validation["sidedness"].get("warning"):
+        log(out, validation["sidedness"]["warning"], "WARN")
     validation["status"] = "PASS"
     oriented_path = out / "oriented.pdb"
     write_pdb(oriented, oriented_path)

@@ -12,7 +12,7 @@ from pathlib import Path
 
 from .config import BOX, NSTEPS, NTERM_SIDE, ORIENT_CHAINS, ORIENTATION, PDB_ID, PPM_MEMBRANE, Settings
 from .embedding import CONVERTIBLE, LIPID_NAMES, lipid_name
-from .orientation import NTERM_SIDES, ORIENTATION_MODES, OrientationRequest
+from .orientation import ORIENTATION_MODES, OrientationRequest, normalise_nterm_side
 from .pipeline import Session, build
 from .runtools import find_gromacs
 
@@ -62,9 +62,7 @@ def orientation_request(args) -> OrientationRequest:
     mode = (args.orientation or ORIENTATION).lower()
     if mode not in ORIENTATION_MODES:
         raise SystemExit(f"--orientation must be one of {', '.join(ORIENTATION_MODES)}, not {args.orientation!r}")
-    nterm = (args.nterm_side or NTERM_SIDE).lower()
-    if nterm not in NTERM_SIDES:
-        raise SystemExit(f"--nterm-side must be one of {', '.join(NTERM_SIDES)}, not {args.nterm_side!r}")
+    nterm = normalise_nterm_side(args.nterm_side or NTERM_SIDE)
     chains = parse_chains(args.orient_chain, args.orient_chains) or parse_chains(ORIENT_CHAINS)
     return OrientationRequest(mode=mode, chains=chains, nterm_side=nterm, pdb_id=(args.pdb_id or PDB_ID or None),
                               ppm_exe=args.ppm_exe, ppm_membrane=(args.ppm_membrane if args.ppm_membrane is not None else PPM_MEMBRANE),
@@ -125,9 +123,11 @@ def make_parser() -> argparse.ArgumentParser:
                              f"one provider; none: use the input coordinates as given (default: {ORIENTATION})")
     orient.add_argument("--orient-chain", metavar="CHAIN", help="the chain that spans or associates with the membrane")
     orient.add_argument("--orient-chains", metavar="A,B", help="several anchor chains (the first one sets the N-terminus side)")
-    orient.add_argument("--nterm-side", choices=NTERM_SIDES, default=None,
-                        help=f"side of the membrane the N terminus of the first anchor chain lies on; needed by PPM when no "
-                             f"exact OPM entry gives it (default: {NTERM_SIDE})")
+    orient.add_argument("--nterm-side", metavar="SIDE", default=None,
+                        help=f"side of the membrane the N terminus of the first anchor chain lies on: in or out "
+                             f"(inside/cytoplasmic/intracellular and outside/extracellular/luminal are accepted "
+                             f"too), or auto to read it from an exact OPM entry; needed by PPM when no such entry "
+                             f"exists (default: {NTERM_SIDE})")
     orient.add_argument("--pdb-id", metavar="ID", help="exact PDB ID of the structure, for the OPM reference (default: HEADER record)")
     orient.add_argument("--ppm-exe", metavar="PATH", help="PPM 3.0 executable (immers) with res.lib next to it "
                                                           "(default: $MEMBRANEFORGER_PPM, then immers/ppm3 on PATH)")

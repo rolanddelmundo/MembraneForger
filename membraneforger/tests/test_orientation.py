@@ -631,6 +631,163 @@ class Sidedness(unittest.TestCase):
             self.assertFalse((out / "oriented.pdb").exists())  # the failure precedes the written structure
 
 
+class PositiveInsideRule(unittest.TestCase):
+    """The Lys/Arg bias of the juxtamembrane loops, the one reading that needs neither a terminus nor a reference."""
+    HALF = 12.9
+    BURIED = [("ALA", 2.0), ("ALA", 6.0), ("ALA", -8.0), ("ALA", 10.0), ("ALA", -5.0)]
+
+    @staticmethod
+    def chain(spec, chain="R"):
+        """A CA-only chain from (resname, z) pairs."""
+        return [{"atom": "CA", "resname": rn, "resid": i + 1, "chain": chain, "segid": "",
+                 "x": 0.0, "y": 0.0, "z": float(z)} for i, (rn, z) in enumerate(spec)]
+
+    def residues(self, spec):
+        return mf.residues_in_order(self.chain(spec))
+
+    @staticmethod
+    def loop(z, charged, total=8):
+        """`total` residues at height z, `charged` of them Lys."""
+        return [("LYS" if i < charged else "ALA", z) for i in range(total)]
+
+    def buried(self, below, above):
+        """Both termini buried in the slab, with the given Lys counts in the loops below and above the membrane."""
+        return (self.BURIED + [("ALA", 0.0)] + self.loop(-30.0, below) + [("ALA", 0.0)]
+                + self.loop(35.0, above) + [("ALA", 0.0)] + self.BURIED)
+
+    # ---- the rule on its own -------------------------------------------------------------------------------------
+    def test_the_rule_reads_the_real_opm_reference_the_right_way_up(self):
+        """OPM 6WHC chain R is oriented by the OPM pipeline, so the rule must put the cytoplasm at negative z."""
+        reference = mf.parse_opm_file(OPM_6WHC, "6WHC", "test")
+        report = mf.positive_inside_bias(reference.chains["R"], reference.half_thickness_a)
+        self.assertEqual(report["cytoplasmic_side"], "negative_z")
+        self.assertGreater(report["negative_z"]["lys_arg_per_100_residues"],
+                           report["positive_z"]["lys_arg_per_100_residues"])
+        self.assertGreaterEqual(report["density_ratio"], 1.5)
+
+    def test_the_rule_detects_the_same_reference_flipped(self):
+        reference = mf.parse_opm_file(OPM_6WHC, "6WHC", "test")
+        flipped = [(rid, rn, [dict(a, z=-a["z"]) for a in atoms]) for rid, rn, atoms in reference.chains["R"]]
+        self.assertEqual(mf.positive_inside_bias(flipped, reference.half_thickness_a)["cytoplasmic_side"], "positive_z")
+
+    def test_only_the_membrane_facing_ends_of_a_long_domain_are_counted(self):
+        """Charges buried in the middle of a 60-residue domain are no evidence about the juxtamembrane loops."""
+        spec = (self.BURIED + [("ALA", -30.0)] * 20 + [("LYS", -30.0)] * 20 + [("ALA", -30.0)] * 20
+                + [("ALA", 0.0)] + self.loop(30.0, 3))
+        report = mf.positive_inside_bias(self.residues(spec), self.HALF, flank=20)
+        self.assertEqual(report["negative_z"]["residues_counted"], 40)  # the first and last 20 of the run only
+        self.assertEqual(report["negative_z"]["lys_arg"], 0)            # the middle 20 are left out
+
+    def test_the_rule_reports_no_side_when_the_anchor_leaves_the_slab_on_one_side_only(self):
+        report = mf.positive_inside_bias(self.residues(self.loop(30.0, 6, 12)), self.HALF)
+        self.assertIsNone(report["cytoplasmic_side"])
+        self.assertIn("one side only", report["status"])
+
+    def test_the_rule_reports_no_side_on_too_few_charges(self):
+        report = mf.positive_inside_bias(self.residues(self.buried(1, 0)), self.HALF)
+        self.assertIsNone(report["cytoplasmic_side"])
+        self.assertIn("fewer than the 4", report["status"])
+
+    def test_the_rule_reports_no_side_when_the_charges_are_spread_evenly(self):
+        report = mf.positive_inside_bias(self.residues(self.buried(3, 3)), self.HALF)
+        self.assertIsNone(report["cytoplasmic_side"])
+        self.assertIn("spread evenly", report["status"])
+        self.assertEqual(report["density_ratio"], 1.0)
+
+    def test_arginine_counts_as_well_as_lysine(self):
+        spec = [("ARG", -30.0)] * 4 + [("ALA", -30.0)] * 4 + [("ALA", 0.0)] + self.loop(30.0, 0)
+        self.assertEqual(mf.positive_inside_bias(self.residues(spec), self.HALF)["cytoplasmic_side"], "negative_z")
+
+    # ---- the rule inside sidedness_check -------------------------------------------------------------------------
+    def check(self, spec, nterm, provider="ppm", settings=None):
+        return mf.sidedness_check(self.chain(spec), "R", nterm, self.HALF, provider, settings)
+
+    def test_the_rule_decides_when_both_termini_are_buried(self):
+        report = self.check(self.buried(4, 0), "out")
+        self.assertTrue(report["status"].startswith("PASS"), report["status"])
+        self.assertEqual(report["checked_by"], "the positive-inside rule")
+        self.assertIsNone(report["observed"])
+        self.assertEqual(report["positive_inside"]["cytoplasmic_side"], "negative_z")
+
+    def test_the_rule_catches_a_flip_when_both_termini_are_buried(self):
+        message = failure(self.check, self.buried(0, 4), "out")
+        self.assertIn("upside down", message)
+        self.assertIn("positive_z", message)
+        self.assertIn("--orientation opm --pdb-id", message)
+
+    def test_buried_termini_and_an_inconclusive_rule_are_refused_for_ppm(self):
+        message = failure(self.check, self.buried(3, 3), "out")
+        self.assertIn("cannot be verified", message)
+        self.assertIn("spread evenly", message)          # the rule's own reason is quoted back
+        self.assertIn("--opm-file", message)
+
+    def test_buried_termini_and_an_inconclusive_rule_are_accepted_for_opm(self):
+        report = self.check(self.buried(3, 3), "out", provider="opm")
+        self.assertIn("pinned by the exact OPM reference", report["status"])
+        self.assertIsNone(report["checked_by"])
+
+    def test_a_readable_terminus_decides_and_a_disagreeing_rule_only_warns(self):
+        """The termini are the direct evidence; a disagreeing charge bias is recorded, never allowed to fail a build."""
+        report = self.check(self.loop(40.0, 6) + [("ALA", 0.0)] + self.loop(-40.0, 0), "out")
+        self.assertEqual((report["status"], report["checked_by"]), ("PASS", "the N-terminal residues"))
+        self.assertEqual(report["positive_inside"]["cytoplasmic_side"], "positive_z")
+        self.assertIn("disagrees with the termini", report["warning"])
+
+    def test_agreeing_readings_leave_no_warning(self):
+        report = self.check(self.loop(40.0, 0) + [("ALA", 0.0)] + self.loop(-40.0, 6), "out")
+        self.assertEqual(report["status"], "PASS")
+        self.assertNotIn("warning", report)
+
+    def test_the_thresholds_come_from_settings(self):
+        spec = self.buried(3, 2)  # densities 37.5 against 25.0 per 100 residues, a ratio of 1.5
+        lenient = self.check(spec, "out", settings=mf.Settings(orient_positive_inside_min_ratio=1.1))
+        self.assertEqual(lenient["positive_inside"]["cytoplasmic_side"], "negative_z")
+        self.assertTrue(lenient["status"].startswith("PASS"))
+        strict = failure(self.check, spec, "out", settings=mf.Settings(orient_positive_inside_min_ratio=3.0))
+        self.assertIn("cannot be verified", strict)
+
+    def test_the_report_carries_the_rule_through_orient_complex(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out, work = Fixtures.session_dirs(Path(tmp))
+            request = mf.OrientationRequest(mode="ppm", chains=("R",), ppm_exe=str(Fixtures.fake_ppm(Path(tmp))),
+                                            nterm_side="out")
+            report = mf.orient_complex(Fixtures.complex(), AA_PDB, request, mf.Settings(), out, work)["report"]
+            sidedness = json.loads(json.dumps(report["validation"]["sidedness"]))  # the report serialises
+            self.assertEqual(sidedness["status"], "PASS")
+            self.assertEqual(sidedness["checked_by"], "the N-terminal residues")
+            # The stand-in PPM moves the complex clear of the slab, so the rule has only one side to count.
+            self.assertIsNone(sidedness["positive_inside"]["cytoplasmic_side"])
+            self.assertIn("one side only", sidedness["positive_inside"]["status"])
+            self.assertNotIn("warning", sidedness)
+
+
+class NtermSideWords(unittest.TestCase):
+    """--nterm-side accepts the words users reach for and normalises them to in and out."""
+
+    def test_the_words_for_the_cytoplasmic_side(self):
+        for word in ("in", "IN", " inside ", "cyto", "cytosolic", "cytoplasmic", "intracellular", "n_in"):
+            self.assertEqual(mf.normalise_nterm_side(word), "in", word)
+
+    def test_the_words_for_the_far_side(self):
+        for word in ("out", "Outside", "extracellular", "exoplasmic", "periplasmic", "luminal", "lumenal"):
+            self.assertEqual(mf.normalise_nterm_side(word), "out", word)
+
+    def test_auto_stays_auto(self):
+        self.assertEqual(mf.normalise_nterm_side("auto"), "auto")
+
+    def test_an_unknown_word_names_the_accepted_ones(self):
+        message = failure(mf.normalise_nterm_side, "upwards")
+        self.assertIn("in (cytoplasmic", message)
+        self.assertIn("out (also outside/extracellular", message)
+        self.assertIn("'upwards'", message)
+
+    def test_a_request_must_carry_an_already_normalised_side(self):
+        """OrientationRequest is the internal contract: the command line normalises before one is built."""
+        request = mf.OrientationRequest(mode="ppm", chains=("R",), nterm_side="inside")
+        message = failure(mf.orient_complex, Fixtures.complex(), AA_PDB, request, mf.Settings(), Path("."), Path("."))
+        self.assertIn("must already be one of", message)
+
+
 class RegistrationKeepsTheOrientation(unittest.TestCase):
     """After CG registration the membrane normal is still z and the complex is still at its membrane depth."""
 
