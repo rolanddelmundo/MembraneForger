@@ -37,6 +37,7 @@ python -m membraneforger --aa complex.pdb --orient-chain R --out output_director
 |---|---|
 | `--aa PDB` | your all-atom structure (required) |
 | `--orient-chain C` | the chain that spans or associates with the membrane (optional when the input has one protein chain); `--orient-chains A,B` for several |
+| `--orient-residues FIRST-LAST` | orient on these residues of the anchor chain only (e.g. a transmembrane helix, `343-363`); PPM sees them alone and the whole complex follows |
 | `--nterm-side in\|out` | side of the membrane the N terminus of that chain lies on; required by PPM unless an OPM entry gives it |
 | `--orientation auto\|ppm\|opm\|none` | orientation source (default `auto`); `none` uses your coordinates as given |
 | `--pdb-id ID` | exact PDB ID, to use its OPM orientation (default: the `HEADER` record of the input, never the file name) |
@@ -70,6 +71,13 @@ normal along +z, bilayer midplane at z = 0, cytoplasmic side negative z):
   otherwise give `--nterm-side in` or `out`. It is never guessed from a protein family or name, and the build stops
   before anything expensive runs if it is missing.
 - With several protein chains `--orient-chain` is required; the error lists the chains.
+- `--orient-residues 343-363` submits only those residues of the anchor chain(s) to PPM (numbers as in the input),
+  so a single-pass protein is oriented on its transmembrane helix rather than on its ectodomain. The rest of the
+  complex follows the helix rigidly. `--nterm-side` is then required and gives the side of the first selected residue
+  (`out` for a type I protein such as RAGE); no OPM entry is used. The report lists every protein residue outside the
+  selection whose CA lies in the hydrophobic slab (`validation.frame.outside_segment_residues_inside_slab`, a `WARN`
+  in the log), which for a single-pass protein should be at most the residues flanking the helix:
+  `python -m membraneforger --aa rage.pdb --orientation ppm --orient-residues 343-363 --nterm-side out --out rage_out`.
 - PPM 3.0 is not bundled. Compile its Fortran source (distributed by the OPM team, `ppm3_code/`) with `make` and pass the
   `immers` executable; `res.lib` must sit next to it. Advanced: `--ppm-membrane CODE`, `--ppm-heteroatoms`,
   `--opm-file FILE`, `--opm-cache DIR`.

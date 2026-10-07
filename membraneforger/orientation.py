@@ -33,7 +33,8 @@ from .runtools import log, run_command, sha256
 from .structio import read_pdb, residues_in_order, source_element, write_pdb, xyz_nm
 
 __all__ = ['ORIENTATION_MODES', 'NTERM_SIDES', 'OPM_ASSET_URL', 'PPM_MEMBRANE_CODES', 'OrientationRequest',
-           'OrientationFailure', 'protein_chains', 'chain_sequence', 'pdb_id_from_header', 'resolve_pdb_id',
+           'OrientationFailure', 'parse_residue_ranges', 'select_residues', 'protein_chains', 'chain_sequence',
+           'pdb_id_from_header', 'resolve_pdb_id',
            'select_anchor_chains', 'OPMReference', 'parse_opm_file', 'fetch_opm_reference', 'match_chains',
            'atom_pairs', 'rigid_fit', 'apply_transform', 'spanning_chains', 'nterm_side_from_reference',
            'orientation_from_opm', 'find_ppm_executable', 'LocalPPM', 'orientation_from_ppm',
@@ -49,6 +50,9 @@ PPM_MEMBRANE_CODES = {"", "PMm", "PMp", "PMf", "Erf", "ERm", "GOL", "LYS", "END"
                       "GnO", "GnI", "GpI", "ARC", "LPC", "MPC", "OPC", "EPC", "MIC"}
 BACKBONE = ("N", "CA", "C", "O")
 PPM_INPUT_NAME = "anchor.pdb"  # PPM derives its output name from this: anchorout.pdb
+# A residue selection submitted to PPM must hold at least one transmembrane helix (about 20 residues); fewer than
+# this many residues per anchor chain is refused rather than oriented.
+MIN_SEGMENT_RESIDUES = 10
 
 
 @dataclass(frozen=True)
@@ -63,10 +67,42 @@ class OrientationRequest:
     ppm_heteroatoms: bool = False   # submit the anchor chains' heteroatoms to PPM
     opm_file: Path | None = None    # an already downloaded OPM/OPRLM coordinate file (offline use)
     opm_cache: Path | None = None   # where downloaded OPM files are kept (default ~/.cache/membraneforger/opm)
+    residues: tuple = ()            # ((first, last), ...) residue numbers of the anchor chain(s) submitted to PPM; () = all
 
 
 class OrientationFailure(SystemExit):
     """Orientation could not be established safely; the message says what the user must supply."""
+
+
+def parse_residue_ranges(text: str | None) -> tuple:
+    """Turn "343-363" or "343-363,370-380" or "350" into ((343, 363), ...); the empty string selects everything."""
+    ranges = []
+    for part in (text or "").replace(" ", ",").split(","):
+        if not part:
+            continue
+        found = re.fullmatch(r"(-?\d+)(?:-(-?\d+))?", part)
+        if not found:
+            raise OrientationFailure(f"--orient-residues {text!r}: {part!r} is not a residue number or a first-last range")
+        first, last = int(found.group(1)), int(found.group(2) if found.group(2) is not None else found.group(1))
+        if last < first:
+            raise OrientationFailure(f"--orient-residues {text!r}: range {part} ends before it starts")
+        ranges.append((first, last))
+    return tuple(ranges)
+
+
+def select_residues(anchors: OrderedDict, ranges: tuple) -> OrderedDict:
+    """Keep the anchor residues whose numbers fall in the ranges; every anchor chain must keep a helix-sized segment."""
+    if not ranges:
+        return anchors
+    inside = lambda resid: any(first <= resid <= last for first, last in ranges)
+    selected = OrderedDict((label, [r for r in residues if inside(r[0])]) for label, residues in anchors.items())
+    short = {label: len(residues) for label, residues in selected.items() if len(residues) < MIN_SEGMENT_RESIDUES}
+    if short:
+        spans = ", ".join(f"{first}-{last}" for first, last in ranges)
+        raise OrientationFailure(f"--orient-residues {spans} selects too few residues of anchor chain(s) " + ", ".join(
+            f"{label} ({n}; residues {anchors[label][0][0]}-{anchors[label][-1][0]} are present)" for label, n in short.items())
+            + f"; at least {MIN_SEGMENT_RESIDUES} are needed. The numbers are those of the input file.")
+    return selected
 
 
 def protein_chains(atoms: list[dict]) -> OrderedDict:
@@ -359,8 +395,8 @@ class LocalPPM:
         return (f"2\n{'yes' if self.heteroatoms else 'no'}\n{PPM_INPUT_NAME}\n1\n{self.membrane:<3s}\nplanar\n"
                 f"{nterm:<3s}\n{','.join(chains)}\n")
 
-    def run(self, atoms: list[dict], anchors: list[str], nterm: str, out: Path, work: Path) -> dict:
-        """Write the anchor, run PPM in an isolated directory, and return its validated outputs."""
+    def run(self, atoms: list[dict], anchors: list[str], nterm: str, out: Path, work: Path, ranges: tuple = ()) -> dict:
+        """Write the anchor (only the residues in ranges, when given), run PPM in isolation, and return its outputs."""
         if nterm not in ("in", "out"):
             raise OrientationFailure("PPM needs the N-terminal side (in or out) of the first anchor chain")
         workdir = work / "ppm"
@@ -371,7 +407,8 @@ class LocalPPM:
             relabel[label] = letters[len(relabel)]
         for a in atoms:
             label = a["chain"] or a.get("segid") or "A"
-            if label in relabel and (a["resname"] in AMINO or self.heteroatoms):
+            if label in relabel and (a["resname"] in AMINO or self.heteroatoms) and (
+                    not ranges or any(first <= a["resid"] <= last for first, last in ranges)):
                 submitted.append(dict(a, chain=relabel[label], segid=""))
         if not submitted:
             raise OrientationFailure("no atoms to submit to PPM")
@@ -388,6 +425,7 @@ class LocalPPM:
         residues = len({(a["chain"], a["resid"], a["resname"]) for a in submitted})
         result.update({"workdir": str(workdir), "seconds": round(time.time() - started, 1), "input": inp,
                        "chain_relabel": relabel, "atoms_submitted": len(submitted), "residues_submitted": residues,
+                       "residue_ranges_submitted": [list(r) for r in ranges] or "all",
                        "heteroatoms_submitted": self.heteroatoms, "membrane_code": self.membrane or "(undefined)",
                        "curvature": "planar", "nterm_side": nterm, "executable": str(self.exe),
                        "executable_sha256": sha256(self.exe), "res_lib_sha256": sha256(self.exe.parent / "res.lib"),
@@ -501,8 +539,8 @@ def rotation_angle_deg(R: np.ndarray) -> float:
     return float(np.degrees(np.arccos(np.clip((np.trace(R) - 1.0) / 2.0, -1.0, 1.0))))
 
 
-def frame_metrics(oriented: list[dict], anchors: list[str], half_thickness_a: float) -> dict:
-    """Describe where the oriented anchor sits in the membrane frame."""
+def frame_metrics(oriented: list[dict], anchors: list[str], half_thickness_a: float, ranges: tuple = ()) -> dict:
+    """Describe where the oriented anchor sits in the membrane frame (and, with ranges, what lies outside the segment)."""
     ca = np.array([[a["x"], a["y"], a["z"]] for a in oriented
                    if a["atom"] == "CA" and (a["chain"] or a.get("segid") or "A") in anchors and a["resname"] in AMINO])
     inside = int((np.abs(ca[:, 2]) <= half_thickness_a).sum()) if len(ca) else 0
@@ -511,12 +549,30 @@ def frame_metrics(oriented: list[dict], anchors: list[str], half_thickness_a: fl
             "anchor_ca_above_slab": int((ca[:, 2] > half_thickness_a).sum()) if len(ca) else 0,
             "anchor_ca_below_slab": int((ca[:, 2] < -half_thickness_a).sum()) if len(ca) else 0,
             "anchor_ca_centroid_A": [round(float(v), 3) for v in ca.mean(axis=0)] if len(ca) else None,
-            "complex_z_range_A": [round(float(whole[:, 2].min()), 3), round(float(whole[:, 2].max()), 3)]}
+            "complex_z_range_A": [round(float(whole[:, 2].min()), 3), round(float(whole[:, 2].max()), 3)]} | (
+            segment_metrics(oriented, anchors, half_thickness_a, ranges) if ranges else {})
 
 
-def nterm_check(oriented: list[dict], anchor: str, nterm: str | None, half_thickness_a: float) -> dict:
-    """Check that the first anchor residue sits on the requested side (in: z < 0, out: z > 0) when it is outside the slab."""
-    residues = protein_chains([a for a in oriented if (a["chain"] or a.get("segid") or "A") == anchor]).get(anchor, [])
+def segment_metrics(oriented: list[dict], anchors: list[str], half_thickness_a: float, ranges: tuple) -> dict:
+    """With a residue selection: the protein residues outside it whose CA lies in the hydrophobic slab.
+
+    A single-pass protein oriented on its transmembrane helix should have everything else (ectodomain, linker,
+    cytoplasmic tail, partner chains) outside the slab; residues listed here sit in the bilayer core."""
+    in_segment = lambda a: (a["chain"] or a.get("segid") or "A") in anchors and any(f <= a["resid"] <= l for f, l in ranges)
+    ca = [a for a in oriented if a["atom"] == "CA" and a["resname"] in AMINO]
+    segment = [a for a in ca if in_segment(a)]
+    buried = [a for a in ca if not in_segment(a) and abs(a["z"]) <= half_thickness_a]
+    return {"segment_ranges": [list(r) for r in ranges], "segment_ca_atoms": len(segment),
+            "segment_ca_inside_slab": sum(abs(a["z"]) <= half_thickness_a for a in segment),
+            "outside_segment_ca_atoms": len(ca) - len(segment), "outside_segment_ca_inside_slab": len(buried),
+            "outside_segment_residues_inside_slab": [f"{a['chain'] or a.get('segid') or 'A'}:{a['resname']}{a['resid']} "
+                                                     f"z {a['z']:+.1f}" for a in buried]}
+
+
+def nterm_check(oriented: list[dict], anchor: str, nterm: str | None, half_thickness_a: float, ranges: tuple = ()) -> dict:
+    """Check that the first anchor residue (of the selection, with ranges) sits on the requested side when outside the slab."""
+    residues = select_residues(protein_chains([a for a in oriented if (a["chain"] or a.get("segid") or "A") == anchor]),
+                               ranges).get(anchor, [])
     ca = next((a for _, _, atoms in residues for a in atoms if a["atom"] == "CA"), None)
     if ca is None:
         return {"status": "no CA atom in the anchor"}
@@ -541,6 +597,14 @@ def orient_complex(aa_atoms: list[dict], aa_path: Path, request: OrientationRequ
         raise OrientationFailure(f"ORIENTATION must be one of {ORIENTATION_MODES}, not {request.mode!r}")
     if request.nterm_side not in NTERM_SIDES:
         raise OrientationFailure(f"NTERM_SIDE must be one of {NTERM_SIDES}, not {request.nterm_side!r}")
+    ranges = tuple(request.residues)
+    if ranges and (request.mode == "opm" or request.opm_file):
+        raise OrientationFailure("--orient-residues selects the residues submitted to PPM; it does not apply to --orientation opm "
+                                 "or --opm-file")
+    if ranges and request.nterm_side not in ("in", "out"):
+        # An OPM entry gives the side of a chain's N terminus, which need not be the side of the selection's first residue.
+        raise OrientationFailure("--orient-residues needs --nterm-side in or out: the side of the membrane on which the FIRST "
+                                 "SELECTED residue lies (for a type I single-pass protein oriented on its helix: out)")
     report = {"enabled": request.mode != "none", "mode": request.mode, "provider": None, "convention":
               "membrane normal +z, midplane z = 0, IN (cytoplasmic) negative z, OUT positive z, coordinates in A",
               "input_file": str(aa_path), "input_sha256": sha256(aa_path), "request": {**asdict(request),
@@ -556,7 +620,7 @@ def orient_complex(aa_atoms: list[dict], aa_path: Path, request: OrientationRequ
     if request.opm_file:
         reference = parse_opm_file(Path(request.opm_file), pdb_id, str(request.opm_file))
         log(out, f"OPM reference read from {request.opm_file} (sha256 {reference.sha256[:12]})")
-    elif pdb_id and request.mode in ("auto", "opm", "ppm"):
+    elif pdb_id and request.mode in ("auto", "opm", "ppm") and not ranges:  # a residue selection is oriented by PPM only
         try:
             reference = fetch_opm_reference(pdb_id, request.opm_cache, out)
         except OrientationFailure as exc:
@@ -568,12 +632,17 @@ def orient_complex(aa_atoms: list[dict], aa_path: Path, request: OrientationRequ
                                  "--opm-file with its downloaded coordinate file" + (f" (no entry for {pdb_id})" if pdb_id else ""))
     anchors, how = select_anchor_chains(chains, tuple(request.chains), reference, settings.orient_min_identity)
     anchor_residues = OrderedDict((label, chains[label]) for label in anchors)
+    segment = select_residues(anchor_residues, ranges)  # fails here, before anything expensive, on a bad selection
     report.update({"anchor_chains": anchors, "anchor_selection": how,
-                   "anchor_residues": {label: len(chains[label]) for label in anchors}})
+                   "anchor_residues": {label: len(chains[label]) for label in anchors},
+                   "anchor_segment": {"ranges": [list(r) for r in ranges],
+                                      "residues": {label: len(r) for label, r in segment.items()},
+                                      "role": "only these residues are submitted to PPM; the whole complex follows them "
+                                              "rigidly"} if ranges else None})
     log(out, f"orientation anchor chain(s) {','.join(anchors)} ({how}); PDB ID {pdb_id or 'none'} ({id_source})")
     # N-terminal side: the command line, else the exact reference, else unknown.
     nterm, nterm_source = (request.nterm_side, "command line") if request.nterm_side in ("in", "out") else (None, "unknown")
-    if reference is not None:
+    if reference is not None:  # never with a residue selection: the reference is not loaded then
         best = match_chains(anchor_residues[anchors[0]], reference.chains, settings.orient_min_identity)
         if best is not None:
             side, why = nterm_side_from_reference(reference, best["chain"])
@@ -607,10 +676,11 @@ def orient_complex(aa_atoms: list[dict], aa_path: Path, request: OrientationRequ
                 + (f"\n({nterm_source})" if nterm_source != "unknown" else ""))
         exe = find_ppm_executable(request.ppm_exe)
         ppm = LocalPPM(exe, request.ppm_membrane, request.ppm_heteroatoms, settings.orient_ppm_timeout_s)
-        log(out, f"running PPM 3.0 ({exe}) on {sum(len(r) for r in anchor_residues.values())} anchor residues, "
+        log(out, f"running PPM 3.0 ({exe}) on {sum(len(r) for r in segment.values())} anchor residues"
+                 + (f" (residues {', '.join(f'{a}-{b}' for a, b in ranges)})" if ranges else "") + ", "
                  f"membrane {request.ppm_membrane or 'undefined (flat bilayer)'}, N terminus {nterm}")
-        result = ppm.run(aa_atoms, anchors, nterm, out, work)
-        derived = orientation_from_ppm(anchor_residues, result, settings)
+        result = ppm.run(aa_atoms, anchors, nterm, out, work, ranges)
+        derived = orientation_from_ppm(segment, result, settings)
         provider = "ppm"
         report["ppm"] = {k: v for k, v in result.items() if k != "oriented"} | {"chain_matches": derived["matches"]}
         log(out, f"PPM: hydrophobic thickness {result['hydrophobic_thickness_a']} +- {result['thickness_sd_a']} A, tilt "
@@ -619,8 +689,8 @@ def orient_complex(aa_atoms: list[dict], aa_path: Path, request: OrientationRequ
     R, t = derived["R"], derived["t"]
     oriented = apply_transform(aa_atoms, R, t)
     validation = validate_full_transform(aa_atoms, oriented, R, t)
-    validation["frame"] = frame_metrics(oriented, anchors, derived["half_thickness_a"])
-    validation["nterm"] = nterm_check(oriented, anchors[0], nterm, derived["half_thickness_a"])
+    validation["frame"] = frame_metrics(oriented, anchors, derived["half_thickness_a"], ranges)
+    validation["nterm"] = nterm_check(oriented, anchors[0], nterm, derived["half_thickness_a"], ranges)
     validation["status"] = "PASS"
     oriented_path = out / "oriented.pdb"
     write_pdb(oriented, oriented_path)
@@ -633,6 +703,13 @@ def orient_complex(aa_atoms: list[dict], aa_path: Path, request: OrientationRequ
     log(out, f"orientation by {provider}: rotation {report['rotation_angle_deg']} deg, {len(oriented)} atoms moved as one body; "
              f"{validation['frame']['anchor_ca_inside_slab']}/{validation['frame']['anchor_ca_atoms']} anchor CA inside the "
              f"+-{derived['half_thickness_a']} A slab; pairwise distances changed by <= {validation['pairwise_distance_max_change_A']:.1e} A", "PASS")
+    if ranges:
+        frame = validation["frame"]
+        buried = frame["outside_segment_residues_inside_slab"]
+        log(out, f"anchor segment: {frame['segment_ca_inside_slab']}/{frame['segment_ca_atoms']} CA inside the slab; "
+                 f"{len(buried)}/{frame['outside_segment_ca_atoms']} protein CA outside the segment lie inside it"
+                 + (f" ({', '.join(buried[:12])}{', ...' if len(buried) > 12 else ''})" if buried else ""),
+            "WARN" if buried else "INFO")
     return {"oriented": oriented, "report": report, "R": R, "t": t}
 
 
