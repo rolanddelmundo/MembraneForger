@@ -15,7 +15,7 @@ from .alignment import map_all_atom_to_cg
 from .audit import audit_run, check_ring_piercing, closest_contact_between
 from .backmapping import assemble_membrane_pdb, backmap_membrane, read_mapping
 from .config import AMINO, DEFAULT_LIGANDS, RENAME_MOLECULE, Settings
-from .embedding import check_box_z, edit_lipids, embed_complex
+from .embedding import check_box_z, edit_lipids, embed_complex, frame_protein_in_slice
 from .martini import bilayer_midplane, classify_cg, make_membrane_whole
 from .membrane_report import MembraneValidation, protein_of_cg_frame, stage_from_gro, stage_from_membrane_pdb
 from .minimization import run_em, validate_em
@@ -30,7 +30,7 @@ from .topology import build_topology, lipid_clashes, prepare_structure, repair_s
 from .validation import align_frame_to_box, check_inputs_unchanged, clear_stale_outputs, protect_inputs, read_all_atom, read_cg
 
 __all__ = ['Session', 'StageFailure', 'run_stage', 'prepare_inputs', 'backmap_and_assemble', 'heavy_atom_piercings', 'membrane_piercings',
-           'backmap_verdict',
+           'backmap_verdict', 'refuse_frame_protein_in_slice',
            'build_topology_and_box', 'finish_system', 'build_from_two_inputs', 'build']
 
 # What to look at when a stage fails; {out} and {work} are filled in at run time.
@@ -74,6 +74,7 @@ class Session:
     settings: Settings = field(default_factory=Settings)
     orientation: OrientationRequest = field(default_factory=lambda: OrientationRequest(mode="none"))
     embed: bool = False  # place the complex into the frame's membrane instead of fitting it onto the frame's protein
+    embed_site: str = "hole"  # with embed: "hole" (where the frame's protein was) or "free" (farthest from it; embedding.free_site)
     box_a: tuple | None = None  # opt-in box edges (A): x and y cut the membrane, z sizes the water layers; None = BOX auto
     bilayer_z_a: float | None = None  # z of the bilayer centre in the all-atom input (A) when embedding without orientation
     delete_lipids: list = field(default_factory=list)
@@ -168,7 +169,7 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
     if session.embed:
         # An oriented complex has its bilayer centre at z = 0 and goes straight in; the midplane is the CG bilayer's own.
         fit = run_stage(session, "mapping", embed_complex, aa_atoms, cg["protein"], membrane, box, slab,
-                        0.0 if enabled else session.bilayer_z_a, midplane if enabled else None)
+                        0.0 if enabled else session.bilayer_z_a, midplane if enabled else None, site=session.embed_site)
         membrane = fit["membrane"]
         for note in fit["notes"]:
             log(out, f"embed: {note}", "WARN" if "removed" in note else "INFO")
@@ -207,6 +208,10 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
     cut = run_stage(session, "slice", slice_membrane_cg, membrane, placed, box, midplane, session.settings, requested,
                     session.analysis.slice_reference())
     record["slice"] = cut["report"]
+    if session.embed and session.embed_site == "free":
+        reached = run_stage(session, "slice", refuse_frame_protein_in_slice, cg["protein"], slab, box, placed, cut)
+        record["slice"]["frame_protein_beads_in_window"] = reached
+        log(out, "slice window holds no bead of the frame's own protein: the hole it leaves stays outside the cut membrane", "PASS")
     report, seam = cut["report"], cut["report"]["seam"]
     if requested:
         record["box_trim"] = {"requested_A": list(session.box_a), "see": "slice"}
@@ -244,6 +249,16 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
     return {"placed": placed, "membrane": membrane, "box": box, "mapping": mapping,
             "composition": Counter(RENAME_MOLECULE.get(m["aa"], m["aa"]) for m in membrane),
             "ligands": DEFAULT_LIGANDS | {a["resname"] for a in aa_atoms if a["resname"] not in AMINO}}
+
+
+def refuse_frame_protein_in_slice(cg_protein: list, slab: tuple, box: list, placed: list, cut: dict) -> int:
+    """With --embed-site free the cut membrane must not reach the frame's own protein, whose hole would come with it."""
+    reached = frame_protein_in_slice(cg_protein, slab, box, placed, cut)
+    if reached:
+        raise SystemExit(f"the slice window ({cut['box'][0]:.2f} x {cut['box'][1]:.2f} nm) reaches {reached} bead(s) of the frame's own "
+                         "protein, so the hole it leaves would be in the cut membrane; this complex is too wide to sit clear of it "
+                         "in this frame: use a smaller --xy-buffer or --box, or --embed-site hole")
+    return reached
 
 
 def backmap_and_assemble(session: Session, prepared: dict, seed: int) -> Path:

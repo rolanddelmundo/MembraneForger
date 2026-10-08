@@ -172,6 +172,92 @@ class LipidAnchoredComplex(unittest.TestCase):
         self.assertIn("lower leaflet", message)
 
 
+TM6 = range(349, 377)  # chain R of the example receptor: one helix crossing the bilayer, CA z from -18 to +15 A
+
+
+def single_helix(aa):
+    """TM6 of the example receptor alone: a stand-in for a single-pass membrane protein. Returns it and the belt z (A)."""
+    return [a for a in aa if a["chain"] == "R" and a["resid"] in TM6], mf.hydrophobic_belt(aa)["z_a"]
+
+
+class SinglePassProteinAwayFromTheHole(unittest.TestCase):
+    """One transmembrane helix in a frame equilibrated around a GPCR: the receptor's hole cannot be filled by it, so the
+    'free' site puts it on the unbroken bilayer farthest from the frame's protein."""
+
+    @classmethod
+    def setUpClass(cls):
+        aa, cls.cg, cls.box, cls.slab = load(GPR1)
+        cls.helix, cls.centre_a = single_helix(aa)
+        cls.result = mf.embed_complex(cls.helix, cls.cg["protein"], cls.cg["membrane"], cls.box, cls.slab,
+                                      bilayer_z_a=cls.centre_a, site="free")
+
+    def test_the_helix_is_one_transmembrane_segment(self):
+        ca = [a["z"] - self.centre_a for a in self.helix if a["atom"] == "CA"]
+        self.assertEqual(len(ca), len(TM6))
+        self.assertLess(ca[0], -15.0)
+        self.assertGreater(ca[-1], 10.0)
+        self.assertGreater(np.corrcoef(np.arange(len(ca)), ca)[0, 1], 0.95)  # climbs through the bilayer once
+
+    def test_free_site_is_far_from_the_frames_protein(self):
+        site, distance = mf.free_site(self.cg["protein"], self.slab, self.box)
+        self.assertGreater(distance, 6.0)  # an 18.3 nm cell around a ~4 nm receptor
+        beads = mf.frame_protein_beads(self.cg["protein"], self.slab)
+        gap = np.abs((beads[:, :2] - site + 0.5 * np.array(self.box[:2])) % np.array(self.box[:2]) - 0.5 * np.array(self.box[:2]))
+        self.assertAlmostEqual(float(np.linalg.norm(gap, axis=1).min()), distance, places=6)
+        metrics = self.result["metrics"]
+        self.assertEqual(metrics["site"], "free")
+        self.assertAlmostEqual(metrics["distance_to_frame_protein_nm"], round(distance, 3))
+        self.assertTrue(np.allclose(metrics["target_xy_nm"], np.round(site, 3)))
+
+    def test_the_push_makes_room_with_few_removals_and_no_pocket(self):
+        result = self.result
+        self.assertLess(sum(result["removed"].values()), 15)
+        self.assertGreater(result["metrics"]["lipids_touching_complex"], sum(result["removed"].values()))
+        self.assertLessEqual(result["metrics"]["voids"]["largest_pocket_nm3"], mf.MAX_VOID_NM3)
+        self.assertGreaterEqual(result["metrics"]["closest_bead_to_complex_nm"], mf.HARD_CORE_NM)
+
+    def test_the_receptor_hole_stops_the_build_and_names_the_free_site(self):
+        message = failure(mf.embed_complex, self.helix, self.cg["protein"], self.cg["membrane"], self.box, self.slab,
+                          bilayer_z_a=self.centre_a, relax_steps=300)
+        self.assertIn("empty pocket", message)
+        self.assertIn("--embed-site free", message)
+
+    def test_unknown_site_is_refused(self):
+        self.assertIn("unknown embedding site", failure(mf.embed_complex, self.helix, self.cg["protein"], self.cg["membrane"],
+                                                        self.box, self.slab, bilayer_z_a=self.centre_a, site="middle"))
+
+
+class FreeSiteHelpers(unittest.TestCase):
+    box = [10.0, 10.0, 12.0]
+    slab = (4.0, 8.0)
+
+    def protein(self, *xyz):
+        return [[{"atom": "BB", "x": x, "y": y, "z": z} for x, y, z in xyz]]
+
+    def test_without_protein_in_the_bilayer_the_patch_centre_is_used(self):
+        site, distance = mf.free_site(self.protein((1.0, 1.0, 11.0)), self.slab, self.box)  # above the bilayer only
+        self.assertTrue(np.allclose(site, [5.0, 5.0]))
+        self.assertIsNone(distance)
+
+    def test_the_site_is_opposite_the_protein_under_periodicity(self):
+        site, distance = mf.free_site(self.protein((0.5, 0.5, 6.0)), self.slab, self.box, grid_nm=0.5)
+        self.assertTrue(np.allclose(site, [5.25, 5.25]) or np.allclose(site, [5.75, 5.75]))
+        self.assertAlmostEqual(distance, float(np.hypot(4.75, 4.75)), places=6)
+
+    def test_protein_beads_inside_the_slice_window_are_counted(self):
+        protein = self.protein((1.0, 1.0, 6.0), (6.0, 6.0, 6.0), (9.5, 1.0, 6.0))
+        placed = [{"x": 50.0, "y": 50.0}]
+        cut = lambda lower, size: {"box": [size[0], size[1], 12.0], "placed": [{"x": 50.0 - 10 * lower[0], "y": 50.0 - 10 * lower[1]}]}
+        self.assertEqual(mf.frame_protein_in_slice(protein, self.slab, self.box, placed, cut((4.0, 4.0), (3.0, 3.0))), 1)
+        self.assertEqual(mf.frame_protein_in_slice(protein, self.slab, self.box, placed, cut((3.0, 3.0), (2.0, 2.0))), 0)
+        self.assertEqual(mf.frame_protein_in_slice(protein, self.slab, self.box, placed, cut((9.0, 0.5), (3.0, 1.0))), 2)  # across the edge
+        self.assertEqual(mf.frame_protein_in_slice(protein, self.slab, self.box, placed, cut((3.0, 0.0), (2.0, 10.0))), 0)
+        self.assertEqual(mf.frame_protein_in_slice(protein, self.slab, self.box, placed, cut((0.0, 0.0), (10.0, 10.0))), 3)  # uncut
+        self.assertIn("reaches 1 bead(s) of the frame's own protein",
+                      failure(mf.refuse_frame_protein_in_slice, protein, self.slab, self.box, placed, cut((4.0, 4.0), (3.0, 3.0))))
+        self.assertEqual(mf.refuse_frame_protein_in_slice(protein, self.slab, self.box, placed, cut((3.0, 3.0), (2.0, 2.0))), 0)
+
+
 def lattice_membrane(box, spacing=0.4, half_thickness=2.0, midplane=5.0):
     """A dense synthetic bilayer: per leaflet, one 'lipid' per lattice column, a PO4 bead on top and tail beads down to the midplane."""
     names = ("PO4", "GL1", "C1A", "C2A", "C3A", "C4A")
