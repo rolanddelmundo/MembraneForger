@@ -9,8 +9,8 @@
     python examples/check_gm3_stereo.py membrane.pdb
 
 Reads GLPA residues (the CHARMM36 topology name) by atom order, and GM3 residues (the backmapping name) by atom
-name. Each centre is tested with the corrected definitions in backmap_data/map.dat (all 15 sugar stereocentres:
-glucose C1-C5, galactose C1-C5, sialic acid C2, C4-C6 and C8). A stereocentre cannot invert in a classical MD run,
+name. Each centre is tested with the corrected definitions in backmap_data/map.dat (all 16 sugar stereocentres:
+glucose C1-C5, galactose C1-C5, sialic acid C2 and C4-C8). A stereocentre cannot invert in a classical MD run,
 so the result for the first frame holds for the whole trajectory.
 """
 import sys
@@ -26,7 +26,8 @@ from membraneforger.config import GM3_XML_TO_GLPA  # noqa: E402
 # GM3 centre -> sugar position, for the report
 POSITION = {"C1": "Glc C1", "C2": "Glc C2", "C3": "Glc C3", "C4": "Glc C4", "C5": "Glc C5",
             "C7": "Gal C1", "C8": "Gal C2", "C10": "Gal C3", "C11": "Gal C4", "C12": "Gal C5",
-            "C15": "Neu5Ac C2", "C17": "Neu5Ac C4", "C20": "Neu5Ac C5", "C18": "Neu5Ac C6", "C21": "Neu5Ac C8"}
+            "C15": "Neu5Ac C2", "C17": "Neu5Ac C4", "C20": "Neu5Ac C5", "C18": "Neu5Ac C6", "C19": "Neu5Ac C7",
+            "C21": "Neu5Ac C8"}
 
 
 def definitions() -> list:
@@ -84,7 +85,7 @@ def main() -> int:
                 flipped[centre] += 1
                 per_residue[key] += 1
     n = len(residues)
-    print(f"{path}: {n} GM3 molecules, 15 sugar stereocentres each")
+    print(f"{path}: {n} GM3 molecules, 16 sugar stereocentres each")
     for centre, position in POSITION.items():
         print(f"  {position:10s} ({centre:3s}): {flipped[centre]:3d} wrong ({100 * flipped[centre] / n:5.1f}%)")
     affected = len(per_residue)
