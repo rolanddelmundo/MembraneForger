@@ -10,6 +10,13 @@ from .martini import *
 from .validation import *
 from .alignment import *
 from .orientation import *
+from .lipids import *
+from .packing import *
+from .rdf import *
+from .structure_metrics import *
+from .trajectory import *
+from .qc import *
+from .membrane_report import *
 from .slicing import *
 from .embedding import *
 from .backmapping import *
