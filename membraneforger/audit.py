@@ -19,7 +19,7 @@ from .config import Settings
 
 __all__ = ['gro_table', 'topology_includes', 'topology_molecules', 'itp_atoms', 'gromacs', 'check_topology',
            'check_grompp', 'check_energy', 'same_image', 'superposed_rmsd', 'check_structure', 'closest_contact_between', 'itp_bonds',
-           'molecule_rings',
+           'itp_dihedral_restraints', 'dihedrals_pbc', 'check_dihedral_restraints', 'molecule_rings',
            'ring_piercings', 'check_ring_piercing', 'audit_run']
 
 PROTEIN = {"ALA", "ARG", "ASN", "ASP", "CYS", "CYS2", "CYSG", "CYSP", "GLN", "GLU", "GLY", "HIS", "HSD", "HSE", "HSP",
@@ -308,6 +308,85 @@ def itp_bonds(paths: list[Path]) -> dict:
     return molecules
 
 
+def itp_dihedral_restraints(paths: list[Path]) -> dict:
+    """Map each moleculetype to its [ dihedral_restraints ] rows: (zero-based atom quadruple, target angle in degrees)."""
+    molecules, current, section, fresh = {}, None, "", False
+    for path in paths:
+        for raw in path.read_text(errors="replace").splitlines():
+            s = raw.split(";", 1)[0].strip()
+            if not s or s.startswith("#"):  # rows inside #ifdef DIHRES are read: the check needs them either way
+                continue
+            if s.startswith("["):
+                section, fresh = s.strip("[] \t").lower(), True
+                continue
+            f = s.split()
+            if section == "moleculetype" and fresh:
+                current, fresh = f[0], False
+                molecules[current] = []
+            elif section == "dihedral_restraints" and current and len(f) >= 6 and all(v.isdigit() for v in f[:5]):
+                molecules[current].append((tuple(int(v) - 1 for v in f[:4]), float(f[5])))
+    return molecules
+
+
+def dihedrals_pbc(xyz: np.ndarray, cell: np.ndarray, quads: np.ndarray) -> np.ndarray:
+    """Dihedral angles (degrees) of atom quadruples, with minimum-image bond vectors in a rectangular cell."""
+    image = lambda v: v - cell * np.round(v / cell)
+    b0 = image(xyz[quads[:, 0]] - xyz[quads[:, 1]])
+    b1 = image(xyz[quads[:, 2]] - xyz[quads[:, 1]])
+    b2 = image(xyz[quads[:, 3]] - xyz[quads[:, 2]])
+    b1 = b1 / np.linalg.norm(b1, axis=1)[:, None]
+    v = b0 - (b0 * b1).sum(axis=1)[:, None] * b1
+    w = b2 - (b2 * b1).sum(axis=1)[:, None] * b1
+    return np.degrees(np.arctan2((np.cross(b1, v) * w).sum(axis=1), (v * w).sum(axis=1)))
+
+
+def check_dihedral_restraints(run: Path, structure: str) -> tuple[dict, list]:
+    """Evaluate every CHARMM-GUI dihedral restraint of the lipid topologies on the structure.
+
+    The +-120 rows fix stereocentres and the 0/180 rows fix double bonds: a structure on the wrong side has the wrong
+    molecule, which no MD run corrects, so it fails. The +-60 rows hold sugar and inositol rings in their chair;
+    a ring outside it is a conformation MD can repair, so it is reported, not failed."""
+    _, _, xyz, box = gro_table(run / structure)
+    cell = box[:3]
+    top = run / "topol.top"
+    includes = topology_includes(top, set())
+    atoms, rows = itp_atoms(includes), itp_dihedral_restraints(includes)
+    offset, report, fails = 0, {}, []
+    for mol, count in topology_molecules(top):
+        n, restraints = len(atoms[mol]), rows.get(mol, [])
+        if restraints and count:
+            quads = np.array([q for q, _ in restraints])
+            target = np.array([t for _, t in restraints])
+            starts = offset + n * np.arange(count)
+            phi = dihedrals_pbc(xyz, cell, (starts[:, None, None] + quads[None]).reshape(-1, 4)).reshape(count, -1)
+            kind = np.where(np.abs(np.abs(target) - 120) < 30, "configuration",
+                            np.where(np.abs(np.abs(target) - 60) < 30, "ring", "double_bond"))
+            wrong = np.where(kind == "double_bond", (np.abs(phi) < 90) != (np.abs(target) < 90),
+                             np.sign(phi) != np.sign(target))
+            names = [a for a, _ in atoms[mol]]
+            entry = {"molecules": int(count), "restraints": int(len(restraints))}
+            for label in ("configuration", "double_bond"):
+                bad = wrong[:, kind == label]
+                entry[f"wrong_{label}s"] = int(bad.sum())
+                if bad.any():
+                    k, r = np.argwhere(bad)[0]
+                    q = quads[kind == label][r]
+                    fails.append(f"{mol}: {int(bad.sum())} {label.replace('_', ' ')} restraint(s) on the wrong side, e.g. molecule "
+                                 f"{k + 1} {'-'.join(names[i] for i in q)} = {phi[k, kind == label][r]:+.0f} (target "
+                                 f"{target[kind == label][r]:+.0f})")
+            ring_rows = np.flatnonzero(kind == "ring")
+            if len(ring_rows):
+                graph = nx.Graph()
+                for r in ring_rows:  # the rows of one ring share its atoms
+                    graph.add_edges_from((r, ("atom", int(a))) for a in quads[r])
+                rings = [sorted(x for x in c if not isinstance(x, tuple)) for c in nx.connected_components(graph)]
+                out_of_chair = sum(int(wrong[:, ring].any(axis=1).sum()) for ring in rings)
+                entry.update({"rings": len(rings) * int(count), "rings_out_of_chair": out_of_chair})
+            report[mol] = entry
+        offset += n * count
+    return report, fails
+
+
 def molecule_rings(bonds: list) -> list[tuple]:
     """Find the 5- and 6-membered rings of one molecule from its bond graph."""
     graph = nx.Graph(bonds)
@@ -412,7 +491,8 @@ def audit_run(run: Path, gmx: str, structure: str = "em.gro", settings: Settings
     report, failures = {"structure": structure}, []
     for key, (part, fails) in (("topology", check_topology(run, names)), ("grompp", check_grompp(run, gmx, structure)),
                                ("energy", check_energy(run, gmx)), ("geometry", check_structure(run, structure, settings)),
-                               ("ring_piercing", check_ring_piercing(run, structure))):
+                               ("ring_piercing", check_ring_piercing(run, structure)),
+                               ("dihedral_restraints", check_dihedral_restraints(run, structure))):
         report[key] = part
         failures += fails
     report["checks"] = ["atom names and count match topol.top", "net charge is zero", "no stray toppar files",
@@ -420,7 +500,8 @@ def audit_run(run: Path, gmx: str, structure: str = "em.gro", settings: Settings
                         "gmx energy agrees with em.log", "EM converged and lowered the potential",
                         "index groups partition the system", "protein CA RMSD across EM", "lipid-solute contacts",
                         "two flat phosphate leaflets", "no water in the bilayer core", "membrane XY cell preserved",
-                        "no covalent bond threads a 5- or 6-membered ring"]
+                        "no covalent bond threads a 5- or 6-membered ring",
+                        "lipid stereocentres and double bonds satisfy their CHARMM-GUI dihedral restraints"]
     report["failures"] = failures
     report["result"] = "FAIL" if failures else "PASS"
     (run / "audit.json").write_text(json.dumps(report, indent=2) + "\n")
