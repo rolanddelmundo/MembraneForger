@@ -332,7 +332,8 @@ class MembraneValidation:
                                       round(float(np.median(rdf_windows[leaflet]["rms"])), 4), None, rdf_windows[leaflet]["windows"], percentile,
                                       status if settings.rdf_validate else "NOT RUN",
                                       f"RMS deviation of the slice from the whole-cell g(r) at percentile {percentile} of "
-                                      f"{rdf_windows[leaflet]['windows']} equal-size windows (central 95 % PASS)"))
+                                      f"{rdf_windows[leaflet]['windows']} equal-size windows (one-sided: PASS below the 95th percentile, "
+                                      "WARNING below the 99th, FAIL above; a smaller deviation than the windows' is never graded down)"))
         integrity = check_integrity(cut, membrane, placed, box)
         records.append(metric("slice integrity", "slice", int(integrity["pass"]), "bool", None, 1, None, len(cut["membrane"]), None,
                               "PASS" if integrity["pass"] else "FAIL",
