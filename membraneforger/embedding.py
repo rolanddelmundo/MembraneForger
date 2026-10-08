@@ -10,10 +10,13 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from .config import AMINO, MIN_Z_PAD_TOTAL_NM, SLAB_Z_PAD_NM
+from .lipids import anchor_bead, anchor_xyz, leaflet_of
+from .slicing import relax_seam
 from .structio import element, wrap, xyz_nm
 
 __all__ = ['LIPID_NAMES', 'LIPID_ALIASES', 'CONVERTIBLE', 'BELT_NM', 'OVERLAP_NM', 'HYDROPHOBIC', 'CHARGED',
-           'EXPOSURE_RADIUS_NM', 'BURIED_ABOVE', 'lipid_name', 'hydrophobic_belt', 'periodic_mean', 'embed_complex',
+           'EXPOSURE_RADIUS_NM', 'BURIED_ABOVE', 'HARD_CORE_NM', 'MAX_VOID_NM3', 'lipid_name', 'hydrophobic_belt',
+           'periodic_mean', 'phosphate_planes', 'membrane_voids', 'embed_complex',
            'trim_membrane', 'edit_lipids', 'check_box_z']
 
 # User-facing Martini 3 lipid names (INSANE spelling) and how they are spelled inside the classifier.
@@ -22,7 +25,31 @@ LIPID_ALIASES = {"DPG3": "GM3", "GM3": "GM3", "PIP2": "SAP6", "SAPI25": "SAP6", 
 # Lipids with the same twelve-bead Martini 3 layout: one can be turned into another by renaming its beads.
 CONVERTIBLE = ("POPC", "DOPC", "POPE", "DOPE", "POPS", "DOPS", "PSM")
 BELT_NM = 3.0  # hydrophobic thickness of the bilayer: the window that locates the transmembrane region
-OVERLAP_NM = 0.40  # a lipid with a bead this close to a protein heavy atom is removed before backmapping
+# Making room for the complex (embed_complex). Lipids closer than OVERLAP_NM to a heavy atom of the complex are pushed
+# away at the coarse-grained level (repulsion range OVERLAP_NM + PUSH_MARGIN_NM, so restrained beads settle at about
+# OVERLAP_NM) for at most RELAX_STEPS steps, without creating inter-lipid contacts closer than SEAM_CONTACT_NM
+# (config.Settings.seam_min_bead_nm). Only lipids still closer than HARD_CORE_NM afterwards are removed: the complex
+# occupies their place. On the 6WHC receptor-Gs complex the earlier rule (remove every lipid with any bead within
+# OVERLAP_NM) deleted about 99 lipids per bundled frame, 39 of them only for touching the Ggamma geranylgeranyl chain
+# or the Galpha N-terminus, and left an empty column of about 4 nm^3 in the inner leaflet. Removing lipids whose
+# headgroup anchor the complex occupies was also tried and rejected: next to a thin lipid anchor it still deletes
+# lipids whose volume nothing replaces (3 nm^3 pocket on GPR1). Over the 18 bundled frames this embedding removes
+# 24-41 lipids instead of 88-110. RELAX_STEPS: the largest pocket stops shrinking after about 1200 steps on GPR1
+# (600 steps: 1.5 nm^3, 1200: 0.44, 4000: 0.44); one embedding takes about a minute.
+OVERLAP_NM = 0.40
+PUSH_MARGIN_NM = 0.05
+HARD_CORE_NM = 0.30
+RELAX_STEPS = 1200
+SEAM_CONTACT_NM = 0.30
+# Empty pockets in the acyl region (membrane_voids): grid points farther than VOID_EMPTY_NM from every lipid bead and
+# solute atom, on a VOID_GRID_NM grid between VOID_MARGIN_NM off the midplane and VOID_MARGIN_NM inside the PO4 plane.
+# The embedding stops when a pocket exceeds MAX_VOID_NM3, less than the volume of one phospholipid. With the 6WHC
+# complex in the 18 bundled frames: the uncut frames' largest pocket is 0.00-0.20 nm^3, this embedding leaves
+# 0.02-0.76 nm^3, and the earlier remove-on-contact rule left 1.2-6.8 nm^3 in the inner leaflet.
+VOID_GRID_NM = 0.1
+VOID_EMPTY_NM = 0.60
+VOID_MARGIN_NM = 0.30
+MAX_VOID_NM3 = 1.0
 HYDROPHOBIC = {"ALA", "VAL", "LEU", "ILE", "MET", "PHE", "TRP", "CYS", "GLY", "PRO"}
 CHARGED = {"ASP", "GLU", "LYS", "ARG"}
 # A residue is on the surface when at most this many protein heavy atoms lie within this radius of its side chain.
@@ -86,12 +113,92 @@ def periodic_mean(values: np.ndarray, length: float) -> float:
     return (math.atan2(np.sin(angle).mean(), np.cos(angle).mean()) / (2.0 * math.pi) * length) % length
 
 
+def phosphate_planes(membrane: list[dict], midplane_nm: float) -> dict:
+    """Median z (nm) of the PO4 beads of each leaflet; 2 nm from the midplane for a leaflet without phosphate."""
+    z = np.array([p[2] for mol in membrane for bead, p in zip(mol["beads"], mol["xyz"]) if bead["atom"] == "PO4"])
+    lower, upper = z[z < midplane_nm], z[z >= midplane_nm]
+    return {"lower": float(np.median(lower)) if len(lower) else midplane_nm - 2.0,
+            "upper": float(np.median(upper)) if len(upper) else midplane_nm + 2.0}
+
+
+def membrane_voids(membrane: list[dict], obstacles_nm: np.ndarray, box: list[float], midplane_nm: float,
+                   grid_nm: float = VOID_GRID_NM, empty_nm: float = VOID_EMPTY_NM) -> dict:
+    """Empty pockets in the acyl region of each leaflet: grid points with no lipid bead and no solute within empty_nm.
+
+    The acyl region of a leaflet runs from VOID_MARGIN_NM off the midplane to VOID_MARGIN_NM inside the median plane
+    of its phosphate (PO4) beads. Empty points that touch on the grid form one pocket; the largest pocket volume
+    (nm^3) and the number of empty points per leaflet are returned. In the uncut bundled frames (equilibrated, with
+    their own protein as the obstacle) the largest pocket is at most 0.2 nm^3, so a larger one is a hole the build made.
+    """
+    cell = np.asarray(box[:3], float)
+    beads = np.vstack([np.asarray(mol["xyz"], float) for mol in membrane])
+    planes = phosphate_planes(membrane, midplane_nm)
+    solids = np.vstack([beads, obstacles_nm]) if len(obstacles_nm) else beads
+    tree = cKDTree(wrap(solids, cell), boxsize=cell)
+    nx, ny = max(1, int(round(cell[0] / grid_nm))), max(1, int(round(cell[1] / grid_nm)))
+    gx, gy = (np.arange(nx) + 0.5) * cell[0] / nx, (np.arange(ny) + 0.5) * cell[1] / ny
+    out = {"grid_nm": grid_nm, "empty_nm": empty_nm}
+    for leaflet, sign in (("lower", -1.0), ("upper", 1.0)):
+        z0, z1 = sorted((midplane_nm + sign * VOID_MARGIN_NM, planes[leaflet] - sign * VOID_MARGIN_NM))
+        gz = np.arange(z0, z1 + 1e-9, grid_nm) if z1 > z0 else np.array([0.5 * (z0 + z1)])
+        X, Y, Z = np.meshgrid(gx, gy, gz, indexing="ij")
+        points = np.column_stack([X.ravel(), Y.ravel(), Z.ravel()])
+        distance = tree.query(wrap(points, cell), distance_upper_bound=empty_nm)[0]
+        empty = np.isinf(distance).reshape(X.shape)
+        pockets, sizes = label_periodic(empty)
+        voxel = (cell[0] / nx) * (cell[1] / ny) * grid_nm
+        largest = int(max(sizes)) if sizes else 0
+        where = None
+        if largest:
+            k = int(np.argmax(sizes)) + 1
+            centre = points[(pockets == k).ravel()]
+            where = [round(periodic_mean(centre[:, 0], cell[0]), 2), round(periodic_mean(centre[:, 1], cell[1]), 2),
+                     round(float(centre[:, 2].mean()), 2)]
+        out[leaflet] = {"acyl_z_nm": [round(z0, 3), round(z1, 3)], "empty_points": int(empty.sum()),
+                        "pockets": len(sizes), "largest_pocket_nm3": round(largest * voxel, 4), "largest_pocket_centre_nm": where}
+    out["largest_pocket_nm3"] = max(out["lower"]["largest_pocket_nm3"], out["upper"]["largest_pocket_nm3"])
+    return out
+
+
+def label_periodic(mask: np.ndarray) -> tuple[np.ndarray, list[int]]:
+    """Connected components of a boolean grid (6-neighbour), periodic in the first two axes; labels and sizes."""
+    labels = np.zeros(mask.shape, dtype=int)
+    sizes, shape = [], mask.shape
+    for start in zip(*np.nonzero(mask)):
+        if labels[start]:
+            continue
+        sizes.append(0)
+        labels[start] = len(sizes)
+        stack = [start]
+        while stack:
+            i, j, k = stack.pop()
+            sizes[-1] += 1
+            for di, dj, dk in ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)):
+                n = ((i + di) % shape[0], (j + dj) % shape[1], k + dk)
+                if 0 <= n[2] < shape[2] and mask[n] and not labels[n]:
+                    labels[n] = len(sizes)
+                    stack.append(n)
+    return labels, sizes
+
+
 def embed_complex(aa_atoms: list[dict], cg_protein: list[list[dict]], membrane: list[dict], box: list[float],
                   slab: tuple[float, float], bilayer_z_a: float | None = None, midplane_nm: float | None = None,
-                  overlap_nm: float = OVERLAP_NM) -> dict:
-    """Put the complex where the frame's own protein was, with its hydrophobic belt on the midplane, and clear overlaps."""
+                  overlap_nm: float = OVERLAP_NM, hard_core_nm: float = HARD_CORE_NM, relax_steps: int = RELAX_STEPS,
+                  max_void_nm3: float = MAX_VOID_NM3) -> dict:
+    """Put the complex where the frame's own protein was, with its hydrophobic belt on the midplane, and make room for it.
+
+    Room is made by moving lipids, not by deleting every lipid the complex touches: the lipids closer than overlap_nm
+    to a heavy atom are pushed out of the way at the coarse-grained level (slicing.relax_seam: soft repulsion from the
+    heavy atoms until no bead is closer than overlap_nm, weak position restraints, intramolecular shape restraints,
+    and repulsion between lipid beads that the push brings together). Only a lipid still closer than hard_core_nm to a
+    heavy atom afterwards is removed: the complex occupies its place in the leaflet. A lipid anchor of the complex (a
+    prenyl chain, a palmitoylated N-terminus) therefore displaces the lipids around it instead of emptying a column of
+    the leaflet. The acyl region is then searched for empty pockets (membrane_voids); a pocket larger than
+    max_void_nm3 stops the build.
+    """
     # Returns the identity rotation and the translation (A) applied to the complex, the placed atoms, the membrane
-    # molecules that remain, and notes/metrics for the log and manifest. The complex is not rotated.
+    # molecules that remain (at the positions the push gave them), the indices of the removed ones in `membrane`, and
+    # notes/metrics for the log and manifest. `membrane` itself is not modified.
     cell = np.array(box)
     # midplane_nm: the bilayer midplane to put the bilayer centre on (default: the middle of the membrane's z extent).
     midplane = 0.5 * (slab[0] + slab[1]) if midplane_nm is None else float(midplane_nm)
@@ -114,28 +221,64 @@ def embed_complex(aa_atoms: list[dict], cg_protein: list[list[dict]], membrane: 
     shift_nm = np.array([target_xy[0] - xyz[tm, 0].mean(), target_xy[1] - xyz[tm, 1].mean(), midplane - centre_z])
     t = shift_nm * 10.0
     placed = [dict(a, x=a["x"] + t[0], y=a["y"] + t[1], z=a["z"] + t[2]) for a in aa_atoms]
-    tree = cKDTree(wrap(xyz[heavy] + shift_nm, box), boxsize=box)
-    kept, removed = [], Counter()
-    for mol in membrane:
-        beads = wrap(np.array([[b["x"], b["y"], b["z"]] for b in mol["beads"]]), box)
-        if any(tree.query_ball_point(beads, overlap_nm)):
+    protein_nm = xyz[heavy] + shift_nm
+    whole = [np.asarray(mol["xyz"], float) if "xyz" in mol else xyz_nm(mol["beads"]) for mol in membrane]
+    tree = cKDTree(wrap(protein_nm, box), boxsize=box)
+    closest_start = np.array([tree.query(wrap(x, box))[0].min() for x in whole])
+    relaxed = relax_seam(whole, cell[:2], float(cell[2]), [False, False], protein_nm, SEAM_CONTACT_NM, relax_steps,
+                         protein_repulsion_nm=overlap_nm + PUSH_MARGIN_NM, protein_clearance_nm=overlap_nm)
+    closest = np.array([tree.query(wrap(x, box))[0].min() for x in relaxed["xyz"]])
+    kept, removed, removed_leaflets, removed_indices, displacement, shape = [], Counter(), Counter(), [], [], []
+    for index, (mol, new, gap) in enumerate(zip(membrane, relaxed["xyz"], closest)):
+        if gap < hard_core_nm:
             removed[mol["cg"]] += 1
-        else:
-            kept.append(mol)
+            removed_indices.append(index)
+            anchor = anchor_xyz(new, [b["atom"] for b in mol["beads"]], anchor_bead(mol["cg"]))
+            removed_leaflets[leaflet_of(float(anchor[2]), midplane)] += 1
+            continue
+        beads = [dict(b, x=float(p[0]), y=float(p[1]), z=float(p[2])) for b, p in zip(mol["beads"], new)]
+        kept.append(dict(mol, beads=beads, xyz=new.copy()))
+        old = whole[index]
+        i, j = np.triu_indices(len(new), 1)
+        displacement.append(float(np.linalg.norm(new - old, axis=1).max()))
+        shape.append(float(np.abs(np.linalg.norm(new[i] - new[j], axis=1) - np.linalg.norm(old[i] - old[j], axis=1)).max())
+                     if len(i) else 0.0)
     if not kept:
         raise SystemExit("every membrane molecule overlaps the placed complex; the input is not oriented along z")
+    clearance = float(closest[closest >= hard_core_nm].min())
+    voids = membrane_voids(kept, protein_nm, box, midplane)
+    touching = int((closest_start < overlap_nm).sum())
     notes = [f"bilayer centre of the all-atom input at z = {belt['z_a']:.1f} A "
              + ("(given)" if belt.get("given") else f"(hydrophobic belt: {belt['hydrophobic']} hydrophobic and "
                                                     f"{belt['charged']} charged residues in {belt['width_nm']:.1f} nm)"),
              f"complex moved by ({t[0]:+.1f}, {t[1]:+.1f}, {t[2]:+.1f}) A onto {where}, midplane z = {midplane:.2f} nm; "
              "it is not rotated: orient the input with the membrane normal along z before the build",
-             f"{sum(removed.values())} membrane molecule(s) within {overlap_nm:.2f} nm of the complex removed: "
-             + (", ".join(f"{name} {n}" for name, n in sorted(removed.items())) or "none")]
+             f"{touching} membrane molecule(s) within {overlap_nm:.2f} nm of the complex were pushed aside "
+             f"({relaxed['steps']} steps, largest bead displacement of a kept lipid {max(displacement):.2f} nm); "
+             f"{sum(removed.values())} still closer than {hard_core_nm:.2f} nm removed: "
+             + (", ".join(f"{name} {n}" for name, n in sorted(removed.items())) or "none")
+             + f"; closest lipid bead to a heavy atom {clearance:.3f} nm",
+             f"largest empty pocket in the acyl region {voids['largest_pocket_nm3']:.3f} nm^3 (limit {max_void_nm3} nm^3)"]
     metrics = {"mode": "embed", "bilayer_centre_input_A": belt["z_a"], "hydrophobic_belt": belt,
                "translation_A": [round(float(v), 3) for v in t], "target_xy_nm": [round(float(v), 3) for v in target_xy],
-               "midplane_nm": round(midplane, 3), "overlap_cutoff_nm": overlap_nm, "removed_lipids": dict(removed),
-               "membrane_molecules_kept": len(kept)}
-    return {"R": np.eye(3), "t": t, "placed": placed, "membrane": kept, "removed": removed, "notes": notes, "metrics": metrics}
+               "midplane_nm": round(midplane, 3), "overlap_cutoff_nm": overlap_nm, "hard_core_nm": hard_core_nm,
+               "lipids_touching_complex": touching, "removed_lipids": dict(removed),
+               "removed_by_leaflet": dict(removed_leaflets),
+               # displacement and shape change of the lipids that are kept
+               "relaxation": {"steps": relaxed["steps"], "converged": relaxed["converged"],
+                              "lipids_moved_over_0.1_nm": int(sum(d > 0.1 for d in displacement)),
+                              "max_bead_displacement_nm": round(max(displacement), 4),
+                              "max_intramolecular_distance_change_nm": round(max(shape), 4),
+                              "closest_created_pair_nm": relaxed["closest_created_pair_nm"]},
+               "closest_bead_to_complex_nm": round(clearance, 4), "voids": voids, "membrane_molecules_kept": len(kept)}
+    if voids["largest_pocket_nm3"] > max_void_nm3:
+        side = max(("lower", "upper"), key=lambda k: voids[k]["largest_pocket_nm3"])
+        raise SystemExit(f"embedding left an empty pocket of {voids['largest_pocket_nm3']:.2f} nm^3 in the acyl region of the "
+                         f"{side} leaflet at {voids[side]['largest_pocket_centre_nm']} nm (limit {max_void_nm3} nm^3): the "
+                         "frame's lipids cannot be moved around this complex without a hole; use a coarse-grained frame "
+                         "of this complex (--cg FILE) or another frame")
+    return {"R": np.eye(3), "t": t, "placed": placed, "membrane": kept, "removed": removed, "removed_indices": removed_indices,
+            "notes": notes, "metrics": metrics}
 
 
 def trim_membrane(membrane: list[dict], placed: list[dict], box: list[float], xy_nm: tuple[float, float]) -> dict:
