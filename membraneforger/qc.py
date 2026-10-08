@@ -13,7 +13,8 @@ Statuses: PASS, WARNING, FAIL, INSUFFICIENT SAMPLING (the data cannot decide), R
 to judge against: the value is reported, never graded), NOT RUN. Poor sampling is never turned into a PASS or a FAIL.
 
 classify() grades an absolute deviation against a (pass, warning) ceiling pair; classify_percentile() grades a value
-against the empirical distribution of a matched control (central 95 % PASS, 95-99 % WARNING, beyond FAIL).
+against the empirical distribution of a matched control (central 95 % PASS, 95-99 % WARNING, beyond FAIL; one-sided
+for a deviation, where only the upper tail warns or fails).
 overall_status() reduces a list of records to one of PASS, PASS WITH WARNINGS, FAIL or INSUFFICIENT SAMPLING.
 """
 import numpy as np
