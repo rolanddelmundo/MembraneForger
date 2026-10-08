@@ -54,7 +54,8 @@ python -m membraneforger --aa complex.pdb --orient-chain R --out output_director
 | `--ntomp N`, `--gmx CMD`, `--mstool-python PATH` | threads, GROMACS command, Python with mstool |
 
 Run `python -m membraneforger --help` for the rest. The protein is oriented, moved as one rigid body onto the spot
-the frame's own receptor occupied, lipids overlapping it are removed, the membrane is cut around it and backmapped;
+the frame's own receptor occupied, the lipids it touches are pushed aside at the coarse-grained level (only those still
+overlapping it afterwards are removed, and an empty pocket in a leaflet stops the build), the membrane is cut around it and backmapped;
 the build then adds water and 0.15 M NaCl, minimizes, and audits the result (`grompp -maxwarn 0`, `gmx check`,
 energies, geometry, lipid stereochemistry including every GM3 sugar centre). `em.gro` is written only when every check passes, with `topol.top`, `toppar/`,
 `index_ini.ndx` and `run_manifest.json`; the last line of `membranebuilder.log` says `PASS` or `FAIL`. Disulfides are
