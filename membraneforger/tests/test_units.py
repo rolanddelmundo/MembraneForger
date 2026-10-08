@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .common import AA_PDB, CG_GRO, FORCEFIELD, MAPPING, POPC, failure, mf, residue, small_system
+from .common import AA_PDB, CG_GRO, DATA, FORCEFIELD, MAPPING, POPC, failure, mf, residue, small_system
 
 
 class MartiniClassification(unittest.TestCase):
@@ -129,6 +129,29 @@ class MstoolCompatibility(unittest.TestCase):
         good, bad = ["O2", "C2", "C1", "H2", "C3"], ["O2", "C2", "C1", "H2", "C4"]  # C4 is not bonded to C2
         self.assertEqual(malformed_chirals([good], bonds), [])
         self.assertEqual(malformed_chirals([good, bad], bonds), ["C2"])
+
+    def test_gm3_chirality_definitions_are_well_formed_and_correct(self):
+        """Every GM3 definition names four neighbours of its centre and, on the sugars, reads correct on a reference."""
+        import json
+        import xml.etree.ElementTree as ET
+
+        from membraneforger.mstool_worker import malformed_chirals
+        block = (DATA / "map.dat").read_text().split("RESI GM3")[1].split("RESI ")[0].split("[ chiral ]")[1]
+        chirals = [line.split() for line in block.splitlines() if line.strip() and not line.startswith("[")]
+        gm3 = next(r for r in ET.parse(DATA / "GM3.xml").getroot().iter("Residue") if r.get("name") == "GM3")
+        bonds = [(b.get("atomName1"), b.get("atomName2")) for b in gm3.iter("Bond")]
+        self.assertEqual(len(chirals), 18)
+        self.assertEqual(malformed_chirals(chirals, bonds), [])
+        reference = json.loads((Path(__file__).parent / "data/gm3_sugar_reference.json").read_text())["sugars"]
+        checked = 0
+        for target, centre, c, d, e in chirals:
+            sugar = next((m for m in reference.values() if all(n in m for n in (target, centre, c, d, e))), None)
+            if sugar is None:  # ceramide centres and the C22 methylene (prochiral H names) are not on the sugar models
+                continue
+            t, x, p, q, r = (np.array(sugar[n]) for n in (target, centre, c, d, e))
+            self.assertGreater((t - x) @ np.cross(q - p, r - q), 0, f"GM3 {centre} reads flipped on the reference")
+            checked += 1
+        self.assertEqual(checked, 15)  # 5 glucose, 5 galactose, 5 sialic acid centres
 
     def test_worker_declares_tested_versions(self):
         self.assertIn("0.3.9", mf.backmapping.TESTED_MSTOOL)
