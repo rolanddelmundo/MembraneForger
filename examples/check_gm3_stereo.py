@@ -14,7 +14,7 @@ glucose C1-C5, galactose C1-C5, sialic acid C2 and C4-C8). A stereocentre cannot
 so the result for the first frame holds for the whole trajectory.
 """
 import sys
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
@@ -37,22 +37,41 @@ def definitions() -> list:
     return [d for d in rows if d[1] in POSITION]
 
 
-def read_residues(path: Path) -> dict:
-    """(resid, resname) -> list of (name, xyz in A) for GM3/GLPA residues, in file order."""
-    residues = defaultdict(list)
+# A GLPA molecule (CHARMM-GUI GM3) is written as four consecutive residues: ceramide, Glc, Gal, Neu5Ac.
+GLPA_PARTS = ("CER16", "BGLC", "BGAL", "ANE5")  # .gro truncates CER160 and ANE5AC to five characters
+
+
+def read_atoms(path: Path) -> list:
+    """(residue key, residue name, atom name, xyz in A) for every atom, in file order."""
     lines = path.read_text(errors="replace").splitlines()
     if path.suffix == ".gro":
-        for line in lines[2:2 + int(lines[1])]:
-            name = line[5:10].strip()
-            if name in ("GLPA", "GM3"):
-                xyz = np.array([float(line[20:28]), float(line[28:36]), float(line[36:44])]) * 10.0
-                residues[(int(line[0:5]), name)].append((line[10:15].strip(), xyz))
-    else:
-        for line in lines:
-            if line.startswith(("ATOM", "HETATM")) and line[17:21].strip() in ("GLPA", "GM3"):
-                xyz = np.array([float(line[30:38]), float(line[38:46]), float(line[46:54])])
-                residues[(line[21], int(line[22:26]), line[17:21].strip())].append((line[12:16].strip(), xyz))
-    return residues
+        return [((int(l[0:5]), l[5:10].strip()), l[5:10].strip(), l[10:15].strip(),
+                 np.array([float(l[20:28]), float(l[28:36]), float(l[36:44])]) * 10.0) for l in lines[2:2 + int(lines[1])]]
+    return [((l[21], int(l[22:26]), l[17:21].strip()), l[17:21].strip(), l[12:16].strip(),
+             np.array([float(l[30:38]), float(l[38:46]), float(l[46:54])]))
+            for l in lines if l.startswith(("ATOM", "HETATM"))]
+
+
+def read_residues(path: Path) -> dict:
+    """(molecule number, first residue number, resname) -> list of (name, xyz in A), in file order: GM3/GLPA
+    residues, or GLPA split into its CHARMM sugars (which restart their residue numbers in every molecule)."""
+    atoms, molecules, k = read_atoms(path), {}, 0
+    while k < len(atoms):
+        key, resname = atoms[k][0], atoms[k][1]
+        if resname in ("GLPA", "GM3"):
+            run = [a for a in atoms[k:k + len(GM3_XML_TO_GLPA) + 1] if a[0] == key]
+            molecules[(len(molecules) + 1, key[-2], resname)] = [(a[2], a[3]) for a in run]
+            k += len(run)
+        elif resname.startswith(GLPA_PARTS[0]):
+            run = atoms[k:k + len(GM3_XML_TO_GLPA)]
+            parts = [p for p in dict.fromkeys(a[1] for a in run)]
+            if len(parts) != 4 or not all(n.startswith(part) for n, part in zip(parts, GLPA_PARTS)):
+                raise SystemExit(f"{path}: the GLPA molecule starting at {resname} {key} is not CER160, BGLC, BGAL, ANE5AC")
+            molecules[(len(molecules) + 1, key[-2], "GLPA")] = [(a[2], a[3]) for a in run]
+            k += len(run)
+        else:
+            k += 1
+    return molecules
 
 
 def named(atoms: list, resname: str) -> dict:
@@ -90,7 +109,7 @@ def main() -> int:
         print(f"  {position:10s} ({centre:3s}): {flipped[centre]:3d} wrong ({100 * flipped[centre] / n:5.1f}%)")
     affected = len(per_residue)
     print(f"molecules with at least one wrong centre: {affected}/{n}"
-          + ("" if not affected else " -> " + ", ".join(f"{k[-2]}" for k in sorted(per_residue))))
+          + ("" if not affected else " -> molecule(s) " + ", ".join(f"{k[0]} (residue {k[1]})" for k in sorted(per_residue))))
     return 1 if affected else 0
 
 
