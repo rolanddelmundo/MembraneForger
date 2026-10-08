@@ -15,14 +15,14 @@ from .alignment import map_all_atom_to_cg
 from .audit import audit_run, check_ring_piercing, closest_contact_between
 from .backmapping import assemble_membrane_pdb, backmap_membrane, read_mapping
 from .config import AMINO, DEFAULT_LIGANDS, RENAME_MOLECULE, Settings
-from .embedding import check_box_z, edit_lipids, embed_complex, frame_protein_in_slice
+from .embedding import FRAME_PROTEIN_CLEARANCE_NM, check_box_z, edit_lipids, embed_complex, frame_protein_in_slice
 from .martini import bilayer_midplane, classify_cg, make_membrane_whole
 from .membrane_report import MembraneValidation, protein_of_cg_frame, stage_from_gro, stage_from_membrane_pdb
 from .minimization import run_em, validate_em
 from .orientation import OrientationRequest, check_orientation_preserved, orient_complex
 from .reporting import write_run_manifest
 from .runtools import LOG_NAME, gromacs_version, log, sha256
-from .slicing import slice_membrane_cg
+from .slicing import offset_slack, slice_membrane_cg
 from .solvation import add_ions, make_index, rebox_system, solvate_system
 from .stereo import check_gm3_stereo
 from .structio import xyz_nm
@@ -172,8 +172,11 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
         # --orient-residues names (orientation.embedded_segment), else the hydrophobic-belt search (None)
         centre_a = 0.0 if enabled else (session.bilayer_z_a if session.bilayer_z_a is not None
                                         else oriented["report"].get("segment_bilayer_centre_A"))
+        settings = session.settings
         fit = run_stage(session, "mapping", embed_complex, aa_atoms, cg["protein"], membrane, box, slab,
-                        centre_a, midplane if enabled else None, site=session.embed_site)
+                        centre_a, midplane if enabled else None, site=session.embed_site, window_buffer_nm=settings.box_xy_buffer_nm,
+                        window_slack_nm=offset_slack(settings),
+                        requested_xy_nm=(session.box_a[0] / 10.0, session.box_a[1] / 10.0) if session.box_a else None)
         membrane = fit["membrane"]
         for note in fit["notes"]:
             log(out, f"embed: {note}", "WARN" if "removed" in note else "INFO")
@@ -215,7 +218,8 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
     if session.embed and session.embed_site == "free":
         reached = run_stage(session, "slice", refuse_frame_protein_in_slice, cg["protein"], slab, box, placed, cut)
         record["slice"]["frame_protein_beads_in_window"] = reached
-        log(out, "slice window holds no bead of the frame's own protein: the hole it leaves stays outside the cut membrane", "PASS")
+        log(out, f"slice window keeps {FRAME_PROTEIN_CLEARANCE_NM} nm from every bead of the frame's own protein: the hole it "
+                 "leaves stays outside the cut membrane", "PASS")
     report, seam = cut["report"], cut["report"]["seam"]
     if requested:
         record["box_trim"] = {"requested_A": list(session.box_a), "see": "slice"}
@@ -259,8 +263,9 @@ def refuse_frame_protein_in_slice(cg_protein: list, slab: tuple, box: list, plac
     """With --embed-site free the cut membrane must not reach the frame's own protein, whose hole would come with it."""
     reached = frame_protein_in_slice(cg_protein, slab, box, placed, cut)
     if reached:
-        raise SystemExit(f"the slice window ({cut['box'][0]:.2f} x {cut['box'][1]:.2f} nm) reaches {reached} bead(s) of the frame's own "
-                         "protein, so the hole it leaves would be in the cut membrane; this complex is too wide to sit clear of it "
+        raise SystemExit(f"the slice window ({cut['box'][0]:.2f} x {cut['box'][1]:.2f} nm) comes within "
+                         f"{FRAME_PROTEIN_CLEARANCE_NM} nm of {reached} bead(s) of the frame's own protein, so the hole it leaves "
+                         "would reach the cut membrane; this complex is too wide to sit clear of it "
                          "in this frame: use a smaller --xy-buffer or --box, or --embed-site hole")
     return reached
 

@@ -60,7 +60,8 @@ from .lipids import anchor_bead, anchor_xyz, leaflet_of
 from .structio import element, xyz_nm
 
 __all__ = ['solute_extent', 'crop_windows', 'image_molecule', 'make_whole', 'lipid_anchor', 'anchor_image_shift',
-           'all_beads_inside', 'select_lipids', 'seam_clashes', 'created_pairs', 'pair_keys', 'relax_seam', 'remove_hard_core_overlaps',
+           'all_beads_inside', 'select_lipids', 'seam_clashes', 'created_pairs', 'pair_keys', 'offset_slack', 'relax_seam',
+           'remove_hard_core_overlaps',
            'composition_distance', 'score_offset', 'choose_offset', 'leaflet_counts', 'selection_diagnostics',
            'slice_membrane_cg']
 
@@ -302,6 +303,13 @@ def score_offset(decisions: list[dict], reference: dict, accessible_nm2: dict, h
     return {"score": round(float(score), 3), "hard_core_overlaps": int(hard_overlaps), **detail}
 
 
+def offset_slack(settings: Settings) -> float:
+    """How far (nm) choose_offset may shift a cropped window on each side: the search range, never past the minimum margin."""
+    if not settings.slice_optimize_offset:
+        return 0.0
+    return min(settings.slice_offset_search_nm, max(settings.box_xy_buffer_nm - settings.box_xy_min_buffer_nm, 0.0))
+
+
 def choose_offset(whole: list[tuple], windows: dict, cell: np.ndarray, cell_z: float, midplane_nm: float, reference: dict | None,
                   protein_area_nm2: dict, settings: Settings) -> dict:
     """Try shifting the window on the cropped axes by a coarse grid of offsets and keep the best-scoring position."""
@@ -309,7 +317,7 @@ def choose_offset(whole: list[tuple], windows: dict, cell: np.ndarray, cell_z: f
     lower0, size, centre = windows["lower"], windows["size"], windows["centre"]
     area = float(size[0] * size[1])
     accessible = {leaflet: max(area - protein_area_nm2.get(leaflet, 0.0), 1e-6) for leaflet in ("lower", "upper")}
-    slack = min(settings.slice_offset_search_nm, max(settings.box_xy_buffer_nm - settings.box_xy_min_buffer_nm, 0.0))
+    slack = offset_slack(settings)
     steps = int(round(slack / settings.slice_offset_step_nm)) if settings.slice_offset_step_nm > 0 else 0
     grid = [k * settings.slice_offset_step_nm for k in range(-steps, steps + 1)]
     candidates = sorted({(dx if cropped[0] else 0.0, dy if cropped[1] else 0.0) for dx in grid for dy in grid},

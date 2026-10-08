@@ -201,13 +201,27 @@ class SinglePassProteinAwayFromTheHole(unittest.TestCase):
     def test_free_site_is_far_from_the_frames_protein(self):
         site, distance = mf.free_site(self.cg["protein"], self.slab, self.box)
         self.assertGreater(distance, 6.0)  # an 18.3 nm cell around a ~4 nm receptor
-        beads = mf.frame_protein_beads(self.cg["protein"], self.slab)
+        beads = mf.frame_protein_beads(self.cg["protein"], self.slab, self.box)
         gap = np.abs((beads[:, :2] - site + 0.5 * np.array(self.box[:2])) % np.array(self.box[:2]) - 0.5 * np.array(self.box[:2]))
         self.assertAlmostEqual(float(np.linalg.norm(gap, axis=1).min()), distance, places=6)
+
+    def test_the_site_keeps_the_slice_window_clear_of_the_receptor(self):
         metrics = self.result["metrics"]
         self.assertEqual(metrics["site"], "free")
-        self.assertAlmostEqual(metrics["distance_to_frame_protein_nm"], round(distance, 3))
+        self.assertGreaterEqual(metrics["slice_window_clearance_nm"], mf.FRAME_PROTEIN_CLEARANCE_NM)
+        self.assertGreater(metrics["distance_to_frame_protein_nm"], metrics["slice_window_clearance_nm"])
+        xyz = mf.xyz_nm(self.helix) / 10.0
+        tm = np.abs(xyz[:, 2] - self.centre_a / 10.0) <= mf.BELT_NM / 2.0
+        window = mf.slice_window(xyz, xyz[tm, :2].mean(axis=0), np.array(self.box[:2]), 1.0, 0.5)
+        site, clear = mf.free_site(self.cg["protein"], self.slab, self.box, window)
         self.assertTrue(np.allclose(metrics["target_xy_nm"], np.round(site, 3)))
+        self.assertAlmostEqual(metrics["slice_window_clearance_nm"], round(clear, 3))
+
+    def test_a_cut_too_large_to_clear_the_receptor_is_refused_before_the_push(self):
+        message = failure(mf.embed_complex, self.helix, self.cg["protein"], self.cg["membrane"], self.box, self.slab,
+                          bilayer_z_a=self.centre_a, site="free", requested_xy_nm=(self.box[0] - 1.0, self.box[1] - 1.0))
+        self.assertIn("no place in this", message)
+        self.assertIn("--embed-site hole", message)
 
     def test_the_push_makes_room_with_few_removals_and_no_pocket(self):
         result = self.result
@@ -248,14 +262,59 @@ class FreeSiteHelpers(unittest.TestCase):
         protein = self.protein((1.0, 1.0, 6.0), (6.0, 6.0, 6.0), (9.5, 1.0, 6.0))
         placed = [{"x": 50.0, "y": 50.0}]
         cut = lambda lower, size: {"box": [size[0], size[1], 12.0], "placed": [{"x": 50.0 - 10 * lower[0], "y": 50.0 - 10 * lower[1]}]}
-        self.assertEqual(mf.frame_protein_in_slice(protein, self.slab, self.box, placed, cut((4.0, 4.0), (3.0, 3.0))), 1)
-        self.assertEqual(mf.frame_protein_in_slice(protein, self.slab, self.box, placed, cut((3.0, 3.0), (2.0, 2.0))), 0)
-        self.assertEqual(mf.frame_protein_in_slice(protein, self.slab, self.box, placed, cut((9.0, 0.5), (3.0, 1.0))), 2)  # across the edge
-        self.assertEqual(mf.frame_protein_in_slice(protein, self.slab, self.box, placed, cut((3.0, 0.0), (2.0, 10.0))), 0)
-        self.assertEqual(mf.frame_protein_in_slice(protein, self.slab, self.box, placed, cut((0.0, 0.0), (10.0, 10.0))), 3)  # uncut
-        self.assertIn("reaches 1 bead(s) of the frame's own protein",
-                      failure(mf.refuse_frame_protein_in_slice, protein, self.slab, self.box, placed, cut((4.0, 4.0), (3.0, 3.0))))
-        self.assertEqual(mf.refuse_frame_protein_in_slice(protein, self.slab, self.box, placed, cut((3.0, 3.0), (2.0, 2.0))), 0)
+        count = lambda lower, size, clearance: mf.frame_protein_in_slice(protein, self.slab, self.box, placed, cut(lower, size), clearance)
+        self.assertEqual(count((4.0, 4.0), (3.0, 3.0), 0.0), 1)
+        self.assertEqual(count((3.0, 3.0), (2.0, 2.0), 0.0), 0)
+        self.assertEqual(count((9.0, 0.5), (3.0, 1.0), 0.0), 2)  # across the periodic edge
+        self.assertEqual(count((3.0, 0.0), (2.0, 10.0), 0.0), 0)
+        self.assertEqual(count((0.0, 0.0), (10.0, 10.0), 0.0), 3)  # uncut: the whole cell
+        # the receptor's hole is wider than its bead centres: a bead just outside the window counts with a clearance
+        self.assertEqual(count((3.0, 3.0), (2.5, 2.5), 0.0), 0)                  # (6, 6) is 0.5 nm off the edge
+        self.assertEqual(count((3.0, 3.0), (2.5, 2.5), 1.0), 1)
+        self.assertEqual(mf.frame_protein_in_slice(protein, self.slab, self.box, placed, cut((3.0, 3.0), (2.5, 2.5))), 1)  # default 1 nm
+        self.assertEqual(count((3.0, 3.0), (1.5, 1.5), 1.0), 0)                  # 1.5 nm off
+        self.assertIn("comes within 1.0 nm of 1 bead(s) of the frame's own protein",
+                      failure(mf.refuse_frame_protein_in_slice, protein, self.slab, self.box, placed, cut((3.0, 3.0), (2.5, 2.5))))
+        self.assertEqual(mf.refuse_frame_protein_in_slice(protein, self.slab, self.box, placed, cut((3.0, 3.0), (1.5, 1.5))), 0)
+
+    def test_clearance_is_euclidean_at_a_corner_as_in_the_placement_check(self):
+        corner = self.protein((5.8, 5.8, 6.0))  # 0.8 nm past both edges of the window's corner: 1.13 nm away
+        edge = self.protein((5.8, 4.0, 6.0))    # 0.8 nm past one edge: 0.8 nm away
+        placed = [{"x": 50.0, "y": 50.0}]
+        cut = {"box": [2.0, 2.0, 12.0], "placed": [{"x": 50.0 - 30.0, "y": 50.0 - 30.0}]}  # window [3, 5) x [3, 5)
+        self.assertEqual(mf.frame_protein_in_slice(corner, self.slab, self.box, placed, cut), 0)
+        self.assertEqual(mf.frame_protein_in_slice(edge, self.slab, self.box, placed, cut), 1)
+        distance = mf.rectangle_distance(np.array([[5.8, 5.8], [5.8, 4.0]]), np.array([3.0, 3.0]), np.array([2.0, 2.0]),
+                                         np.array(self.box[:2]))[0]
+        self.assertTrue(np.allclose(distance, [np.hypot(0.8, 0.8), 0.8]))
+        # the placement check measures the same distance: one candidate point (5, 5) with the window [3, 5) x [3, 5) there
+        self.assertAlmostEqual(mf.free_site(corner, self.slab, self.box, window=((-2.0, -2.0), (0.0, 0.0)), grid_nm=10.0)[1],
+                               float(np.hypot(0.8, 0.8)), places=9)
+
+    def test_protein_beads_are_imaged_onto_the_bilayer_in_z(self):
+        # a bilayer made whole across the z boundary (slab 9-13 nm in a 12 nm cell) and a protein bead left at z = 0.5
+        beads = mf.frame_protein_beads(self.protein((2.0, 2.0, 0.5), (2.0, 2.0, 6.0)), (9.0, 13.0), self.box)
+        self.assertTrue(np.allclose(beads, [[2.0, 2.0, 12.5]]))
+        self.assertTrue(np.allclose(mf.image_onto_slab(np.array([[0.0, 0.0, -11.0]]), (4.0, 8.0), 12.0), [[0.0, 0.0, 1.0]]))
+
+    def test_the_window_decides_the_site(self):
+        protein = self.protein((5.0, 5.0, 6.0))
+        point, _ = mf.free_site(protein, self.slab, self.box, grid_nm=0.5)
+        # a window 8 nm wide in x and 1 nm in y leaves at most 1 nm of room in x but 4.5 nm in y: the site moves away
+        # from the receptor mostly along y (on the 0.5 nm grid: 0.75 nm gap in x, 4.25 nm in y)
+        site, clear = mf.free_site(protein, self.slab, self.box, window=((-4.0, -0.5), (4.0, 0.5)), grid_nm=0.5)
+        self.assertAlmostEqual(abs((site[1] - 5.0 + 5.0) % 10.0 - 5.0), 4.25 + 0.5, places=6)
+        self.assertAlmostEqual(abs((site[0] - 5.0 + 5.0) % 10.0 - 5.0), 0.75 + 4.0, places=6)
+        self.assertAlmostEqual(clear, float(np.hypot(0.75, 4.25)), places=6)
+        self.assertGreater(np.hypot(*(point - 5.0)), 6.0)
+
+    def test_slice_window_mirrors_the_slicer(self):
+        xyz = np.array([[1.0, 2.0, 0.0], [3.0, 2.5, 0.0]])
+        lower, upper = mf.slice_window(xyz, np.array([2.0, 2.0]), np.array([10.0, 10.0]), 1.0, 0.5)
+        # extent 2 x 0.5 nm centred at (2, 2.25); + 1 nm buffer and 0.5 nm slack on each side = 5 x 3.5 nm
+        self.assertTrue(np.allclose(lower, [-2.5, -1.5]) and np.allclose(upper, [2.5, 2.0]))
+        lower, upper = mf.slice_window(xyz, np.array([2.0, 2.0]), np.array([10.0, 10.0]), 1.0, 0.5, requested_xy_nm=(6.0, 10.0))
+        self.assertTrue(np.allclose(upper - lower, [7.0, 10.0]))  # requested x plus the slack; y is the whole cell
 
 
 def lattice_membrane(box, spacing=0.4, half_thickness=2.0, midplane=5.0):
