@@ -10,9 +10,9 @@ import shutil
 import sys
 from pathlib import Path
 
-from .config import BOX, NSTEPS, NTERM_SIDE, ORIENT_CHAINS, ORIENTATION, PDB_ID, PPM_MEMBRANE, Settings
+from .config import BOX, NSTEPS, NTERM_SIDE, ORIENT_CHAINS, ORIENT_RESIDUES, ORIENTATION, PDB_ID, PPM_MEMBRANE, Settings
 from .embedding import CONVERTIBLE, LIPID_NAMES, lipid_name
-from .orientation import NTERM_SIDES, ORIENTATION_MODES, OrientationRequest
+from .orientation import NTERM_SIDES, ORIENTATION_MODES, OrientationRequest, parse_residue_ranges
 from .pipeline import Session, build
 from .runtools import find_gromacs
 
@@ -69,6 +69,8 @@ def orientation_request(args) -> OrientationRequest:
     return OrientationRequest(mode=mode, chains=chains, nterm_side=nterm, pdb_id=(args.pdb_id or PDB_ID or None),
                               ppm_exe=args.ppm_exe, ppm_membrane=(args.ppm_membrane if args.ppm_membrane is not None else PPM_MEMBRANE),
                               ppm_heteroatoms=bool(args.ppm_heteroatoms),
+                              residues=parse_residue_ranges(args.orient_residues if args.orient_residues is not None
+                                                            else ORIENT_RESIDUES),
                               opm_file=args.opm_file.resolve() if args.opm_file else None,
                               opm_cache=args.opm_cache.resolve() if args.opm_cache else None)
 
@@ -125,6 +127,10 @@ def make_parser() -> argparse.ArgumentParser:
                              f"one provider; none: use the input coordinates as given (default: {ORIENTATION})")
     orient.add_argument("--orient-chain", metavar="CHAIN", help="the chain that spans or associates with the membrane")
     orient.add_argument("--orient-chains", metavar="A,B", help="several anchor chains (the first one sets the N-terminus side)")
+    orient.add_argument("--orient-residues", metavar="FIRST-LAST", default=None,
+                        help="orient on these residues of the anchor chain(s) only, e.g. the transmembrane helix 343-363 "
+                             "(several: 343-363,370-380; numbers as in the input). PPM is run on them alone and the whole "
+                             "complex follows rigidly; needs --nterm-side for the first selected residue")
     orient.add_argument("--nterm-side", choices=NTERM_SIDES, default=None,
                         help=f"side of the membrane the N terminus of the first anchor chain lies on; needed by PPM when no "
                              f"exact OPM entry gives it (default: {NTERM_SIDE})")
@@ -210,7 +216,7 @@ def main(argv: list | None = None) -> int:
         parser.error(str(exc))
     if orientation.mode != "none" and args.bilayer_z is not None and not args.membrane:
         parser.error("--bilayer-z applies with --orientation none; an oriented complex has its bilayer centre at z = 0")
-    if args.membrane and (orientation.mode != "none" and (orientation.chains or args.orientation or args.pdb_id)):
+    if args.membrane and (orientation.mode != "none" and (orientation.chains or orientation.residues or args.orientation or args.pdb_id)):
         parser.error("--membrane starts from an assembled system; membrane orientation options do not apply to it")
     if args.membrane:
         orientation = OrientationRequest(mode="none")
