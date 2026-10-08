@@ -35,7 +35,7 @@ from .lipids import LIPID_AA_ANCHORS, anchor_bead, anchor_xyz, cg_name, is_stero
 from .qc import classify, metric
 from .structio import element
 
-__all__ = ['TAIL_CARBON', 'CERAMIDE_CARBON', 'SOLVENT_RESNAMES', 'WATER_OXYGEN', 'bilayer_thickness', 'thickness_change',
+__all__ = ['layered_order', 'TAIL_CARBON', 'CERAMIDE_CARBON', 'SOLVENT_RESNAMES', 'WATER_OXYGEN', 'bilayer_thickness', 'thickness_change',
            'protein_orientation', 'orientation_change', 'z_density_profiles', 'aa_groups_from_atoms', 'core_hydration',
            'tail_interdigitation', 'interdigitation_change', 'leaflet_asymmetry', 'aa_leaflet_tail_split', 'is_tail_carbon']
 
@@ -363,3 +363,30 @@ def aa_leaflet_tail_split(residues: list[list[dict]], midplane_nm: float) -> tup
         tails = [xyz[i] for i, n in enumerate(names) if is_tail_carbon(n)]
         (upper if leaflet_of(z, midplane_nm) == "upper" else lower).extend(tails)
     return np.array(upper, dtype=float).reshape(-1, 3), np.array(lower, dtype=float).reshape(-1, 3)
+
+
+def layered_order(profiles: dict, midplane_nm: float, stage: str = "sample") -> dict:
+    """Does the Z-density show a bilayer: head peaks outside the tail region on both sides, cholesterol between, water outside?"""
+    # Peak positions are the density-weighted mean |z - midplane| of each group on each side of the midplane; the
+    # expected architecture is tails nearest the midplane, then cholesterol (its ring below the heads), then the
+    # heads, with water beyond the heads. A head peak inside the tail peak on either side is a gross defect.
+    z = np.asarray(profiles["z_nm"], dtype=float) - midplane_nm
+    rho = profiles["density_nm3"]
+    def position(label, side):
+        present = label in rho and rho[label][side].sum() > 0
+        return float(np.average(np.abs(z[side]), weights=rho[label][side])) if present else None
+    sides = {"upper": z >= 0, "lower": z < 0}
+    detail, ok = {}, True
+    for side, mask in sides.items():
+        heads, tails, chol, water = (position(k, mask) for k in ("headgroups", "tails", "cholesterol", "water"))
+        layered = heads is not None and tails is not None and heads > tails and (water is None or water > heads)
+        sterol_between = chol is None or tails is None or heads is None or (tails - 0.3 <= chol <= heads + 0.3)
+        detail[side] = {"heads_nm": heads, "tails_nm": tails, "cholesterol_nm": chol, "water_nm": water, "layered": bool(layered),
+                        "cholesterol_between": bool(sterol_between)}
+        ok = ok and layered
+    warning = not all(d["cholesterol_between"] for d in detail.values())
+    status = "FAIL" if not ok else "WARNING" if warning else "PASS"
+    reason = ("heads outside tails and water outside heads on both sides" if ok else "head density inside the tail region") + \
+        ("" if not warning else "; cholesterol not between tails and heads")
+    return {"status": status, "sides": detail,
+            "record": metric("Z-density layering", stage, int(ok), "bool", reference=1, status=status, reason=reason)}

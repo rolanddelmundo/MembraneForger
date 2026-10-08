@@ -21,7 +21,7 @@ a construction error. Distances are reported in A.
 import numpy as np
 from scipy.spatial import cKDTree
 
-__all__ = ['lateral_rdf', 'rdf_features', 'leaflet_rdfs', 'region_rdfs', 'compare_rdf', 'rdf_comparison']
+__all__ = ['lateral_rdf', 'rdf_features', 'leaflet_rdfs', 'region_rdfs', 'window_rdf_distribution', 'compare_rdf', 'rdf_comparison']
 
 MIN_PAIR_SPECIES = 20   # same-species curves are computed for species with at least this many molecules in the leaflet
 DR_NM = 0.1             # 1 A bins: a leaflet of 150-250 anchors gives about 10 pairs per bin in the first shell
@@ -145,6 +145,40 @@ def region_rdfs(stage: dict, indices: list[int], r_max_nm: float, accessible_nm2
         for curve in curves.values():
             curve["features"] = rdf_features(curve)
         out[leaflet] = curves
+    return out
+
+
+def window_rdf_distribution(stage: dict, size_nm, cropped: list[bool], r_max_nm: float, samples: int = 12) -> dict:
+    """RMS deviation of the all-anchor g(r) of equal-size windows of a stage from the stage's whole-cell curve, per leaflet.
+
+    Every window is a crop the slicer could have taken (anchor rule, half-open interval), measured in the uncut cell
+    with the lipid density of the window itself, so the spread of these deviations is the finite-window variability
+    of the lateral order at this crop size. A slice's deviation from the whole cell is graded against it (central
+    95 % PASS, 95-99 % WARNING, beyond FAIL): "within the parent-window distribution".
+    """
+    cell = np.array(stage["box_nm"][:2], dtype=float)
+    size = np.array(size_nm, dtype=float)
+    offsets = [np.linspace(0.0, cell[a], samples, endpoint=False) if cropped[a] else np.array([0.0]) for a in range(2)]
+    out = {}
+    for leaflet in ("lower", "upper"):
+        rows = [r for r in stage["lipids"] if r["leaflet"] == leaflet]
+        xy = np.array([[r["x_nm"], r["y_nm"]] for r in rows])
+        if len(xy) < 3:
+            out[leaflet] = {"rms": np.zeros(0), "windows": 0}
+            continue
+        whole = lateral_rdf(xy, cell, r_max=r_max_nm)
+        deviations = []
+        for ox in offsets[0]:
+            for oy in offsets[1]:
+                inside = np.all(np.mod(xy - np.array([ox, oy]), cell) < size - 1e-9, axis=1)
+                if inside.sum() < 3:
+                    continue
+                window = lateral_rdf(xy[inside], cell, r_max=r_max_nm, area=float(size[0] * size[1]))
+                n = min(len(window["g"]), len(whole["g"]))
+                r = whole["r_nm"][:n]
+                band = (r >= 0.3) & (r <= 2.0)
+                deviations.append(float(np.sqrt(np.mean((window["g"][:n][band] - whole["g"][:n][band]) ** 2))))
+        out[leaflet] = {"rms": np.array(deviations), "windows": len(deviations)}
     return out
 
 

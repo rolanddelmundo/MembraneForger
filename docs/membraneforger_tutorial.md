@@ -282,7 +282,9 @@ the coordination number up to the minimum.
 The decisive comparison is **sliced CG against the same lipids in the uncut embedded membrane**: same
 representation, same force field, same molecules, so the curves must agree within counting noise. The first-shell
 peak may move by 0.5 A (PASS) or 1.0 A (WARNING); the RMS difference of the curves between 3 and 20 A may be at most
-three times their combined Poisson noise. In the `KOR1` build the peak (7.5 A in both leaflets, the CHOL ROH-PO4
+three times their combined Poisson noise. The slice's deviation from the whole-cell curve is in addition graded
+against the empirical distribution of the same deviation over equal-size windows cut everywhere in the embedded
+membrane (central 95 % PASS, 95-99 % WARNING, beyond FAIL): the slice must look like one of the parent's own windows. In the `KOR1` build the peak (7.5 A in both leaflets, the CHOL ROH-PO4
 contact dominating the first shell; the POPC-POPC curve peaks near 8-9 A) does not move and the RMS difference is
 1.5 noise units in both leaflets; in the `6WHC` build 0.7 / 0.8. The slice therefore keeps the lateral organization
 of the membrane it was cut from. The whole-cell curve is reported alongside; it differs more (up to 3 noise units
@@ -297,22 +299,30 @@ CG-to-CG comparison above.
 
 ## 6. Thresholds in one place
 
-| Metric | PASS | WARNING | FAIL | Where |
-|---|---|---|---|---|
-| Slice: leaflet APL vs the same lipids uncut | <= 3 % | 3-5 % | > 5 % | `Settings.apl_slice_warning_percent`, `apl_slice_tolerance_percent` |
-| Slice: representativeness, composition | central 95 % of equal windows | 95-99 % | beyond 99 % (reported only for representativeness) | `slice_window_samples` |
-| Slice: RDF first-shell peak shift | <= 0.5 A | 0.5-1.0 A | > 1.0 A, or RMS > 3 noise units | `rdf_peak_warning_a`, `rdf_max_peak_shift_a`, `rdf_max_noise_units` |
-| Slice: thickness / tilt / depth | 3 % / 1 deg / 0.5 A | 5 % / 3 deg / 1.5 A | beyond | `membrane_report.CG_GATE` |
-| Slice: integrity (complete, unique, inside, no hard-core overlap, no new clash) | all true | | any false | `check_integrity` |
-| Backmap / minimize: thickness / tilt / depth | 10 % / 2 deg / 1 A | 15 % / 5 deg / 2.5 A | beyond | `membrane_report.AA_GATE` |
-| Core water / bulk | < 1 % | 1-5 % | > 5 %; any spanning water column | `structure_metrics.core_hydration` |
-| Interdigitation vs reference | <= 10 % | 10-20 % | > 20 % | `interdigitation_change` |
-| Convergence drift / half difference | < 1 % / < 2 % | 1-3 % / 2-5 % | beyond, or monotonic | `trajectory.convergence` |
-| S_CD profile RMSE vs reference | <= 0.03 | 0.03-0.05 | > 0.05 | `scd_profile_rmse` |
-| Diffusion exponent alpha | 0.9-1.1 | 0.8-0.9, 1.1-1.2 | not diffusive (not graded) | `diffusion_fit` |
-| D, K_A vs matched reference | factor 2 / 20 % | factor 5 / 40 % | beyond | `diffusion_vs_reference`, `ka_vs_reference` |
-| K_A relative uncertainty | <= 20 % | 20-40 % | > 40 % INSUFFICIENT SAMPLING | `area_compressibility` |
-| Leaflet differential tension | <= 5 mN/m | 5-10 | > 10 with supporting uncertainty | `TENSION_THRESHOLDS_MN_PER_M` |
+The twelve validation tests, the stage each is best read at, and the criteria the code applies (`membraneforger/qc.py`
+turns every one into a PASS / WARNING / FAIL / INSUFFICIENT SAMPLING / REFERENCE NEEDED record):
+
+| # | Validation test | Best stage | What it validates | Primary output | PASS | WARNING | FAIL / investigate |
+|---|---|---|---|---|---|---|---|
+| 1 | Lateral headgroup RDF | CG frame -> embed -> slice | lateral lipid organization survives slicing | g(r) per leaflet, first-shell peak and minimum, coordination number, curve deviation | vs the same lipids uncut: peak shift <= 0.5 A and RMS <= 3 x counting noise; vs the whole cell: within the central 95 % of equal-size parent windows | 0.5-1.0 A shift, or 95-99 % of the window distribution | > 1.0 A shift, RMS > 3 x noise, or outside 99 % |
+| 2 | Bilayer thickness | all stages | expansion / compression, hydrophobic thickness | D_HH from the anchor planes, 1 nm local map | slice <= 3 % from embed; backmap / minimized <= 10 %; equilibrium <= 3 % from a matched reference | 3-5 % (CG), 10-15 % (AA), 3-5 % (reference) | beyond; REFERENCE NEEDED without a reference |
+| 3 | Lipid-tail order parameters | equilibrated AA | acyl-chain ordering, phase | S_CD per species, chain (sn-1, sn-2) and leaflet | profile RMSE <= 0.03 vs a matched profile | 0.03-0.05 | > 0.05; REFERENCE NEEDED without a profile |
+| 4 | Z-density profiles | backmap -> minimized -> equilibrated | bilayer architecture along the normal | rho(z) of heads, tails, cholesterol, protein, ions, water | heads outside tails and water outside heads on both sides, cholesterol between; first-to-last change reported | cholesterol not between tails and heads | head density inside the tail region |
+| 5 | Composition and leaflet asymmetry | frame -> embed -> slice -> final | the intended composition is kept | N and mole fraction per species and leaflet, distance D | within the central 95 % of equal-size parent windows (or 3 sigma of a random crop with < 20 windows) | 95-99 % | outside 99 % for species with N >= 10; rarer species are flagged "(few)", never failed alone |
+| 6 | Leaflet differential tension | final equilibrated AA | mechanical balance of the asymmetric leaflets | gamma_upper, gamma_lower, delta gamma from a lateral pressure profile | abs(delta gamma) <= 5 mN/m with compatible uncertainty | 5-10 mN/m, or one leaflet above 10 mN/m | > 10 mN/m with the uncertainty supporting it; INSUFFICIENT SAMPLING otherwise |
+| 7 | Lipid lateral diffusion | final equilibrated AA | fluidity, lipid mobility | drift-corrected x, y MSD, D, exponent alpha | alpha 0.9-1.1 with R^2 >= 0.98; D within a factor 2 of a matched reference | alpha 0.8-0.9 or 1.1-1.2; factor 2-5 | not diffusive (not graded) or > 5-fold |
+| 8 | Area compressibility K_A | final equilibrated AA | elasticity | K_A from equilibrium area fluctuations, block-bootstrap uncertainty | <= 20 % from a matched reference, uncertainty <= 20 % | 20-40 % | > 40 %; uncertainty > 40 % = INSUFFICIENT SAMPLING |
+| 9 | Hydrophobic-core water | minimized -> equilibrated | pores, cavities, packing defects | core water / bulk water (protein-associated water excluded), spanning-column test, persistence over frames | < 1 %; no column in any frame | 1-5 %; a column in fewer than half the frames (transient) | > 5 %; a column in half the frames or more (persistent) |
+| 10 | Tail interdigitation | backmap -> minimized -> equilibrated | overlap of the opposing leaflets | overlap integral of the two tail-density profiles | <= 10 % from the reference (backmapped stage, then a matched reference) | 10-20 % | > 20 % |
+| 11 | Protein insertion and orientation | embed -> slice -> backmap -> equilibration | placement and hydrophobic matching | tilt, insertion depth, inversion, embedded fraction | slicing: tilt <= 1 deg, depth <= 0.5 A; AA stages 2 deg / 1 A; equilibrium drift < 3 deg and < 1 A | 1-3 deg / 0.5-1.5 A (slice); 2-5 deg / 1-2.5 A (AA); 3-7 deg / 1-2 A drift | beyond, inversion, or a monotonic drift |
+| 12 | Box-area / volume convergence | AA equilibration | stationarity of NPT equilibration | L_x L_y, V, APL and thickness vs time, block SEM | final-window drift < 1 % and half-window means within 2 % | 1-3 % or 2-5 % | > 3 %, > 5 %, or a persistent monotonic trend |
+
+Plus the hard construction checks that are PASS or FAIL only: complete residues, no duplicate lipid, every anchor
+inside the cell, no hard-core seam overlap, no new protein-lipid clash (gate 1); ring threading, stereochemistry
+and lipid-solute clashes (gate 2, the build's own checks). Where the thresholds live: `Settings` in `config.py`
+(APL and RDF ceilings, window samples), `membrane_report.CG_GATE` / `AA_GATE` (thickness, tilt, depth),
+`structure_metrics` (core water, interdigitation, layering), `trajectory` (convergence, S_CD, diffusion, K_A,
+`TENSION_THRESHOLDS_MN_PER_M`) and `equilibration.ORIENTATION_DRIFT`.
 
 ## 7. Limitations and assumptions
 

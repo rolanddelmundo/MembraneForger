@@ -74,5 +74,25 @@ class EquilibrationFromFiles(unittest.TestCase):
         self.assertIn(delta["status"], ("FAIL", "WARNING", "INSUFFICIENT SAMPLING"))    # a large imbalance never passes
 
 
+class OrientationDriftAndWaterPath(unittest.TestCase):
+    def test_tilt_drift_is_graded_in_degrees(self):
+        from membraneforger import equilibration
+        time = np.arange(0, 10000.0, 10.0)
+        steady = equilibration.absolute_drift_record("protein tilt", "equilibrated", mf.convergence(time, 70.0 + 0.2 * np.sin(time / 300.0)),
+                                                     "deg", equilibration.ORIENTATION_DRIFT["tilt_deg"])
+        self.assertEqual(steady["status"], "PASS")
+        drifting = equilibration.absolute_drift_record("protein tilt", "equilibrated", mf.convergence(time, 70.0 + 0.002 * time), "deg",
+                                                       equilibration.ORIENTATION_DRIFT["tilt_deg"])
+        self.assertEqual(drifting["status"], "FAIL")                                            # 10 degrees over the final window, monotonic
+        self.assertGreater(abs(drifting["deviation"]), 7.0)
+
+    def test_water_path_persistence(self):
+        from membraneforger import equilibration
+        self.assertEqual(equilibration.water_path_persistence([False] * 10)["status"], "PASS")
+        self.assertEqual(equilibration.water_path_persistence([True] + [False] * 9)["status"], "WARNING")
+        self.assertEqual(equilibration.water_path_persistence([True] * 6 + [False] * 4)["status"], "FAIL")
+        self.assertEqual(equilibration.water_path_persistence([None, None])["status"], "NOT RUN")
+
+
 if __name__ == "__main__":
     unittest.main()

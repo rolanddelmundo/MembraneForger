@@ -28,8 +28,8 @@ import numpy as np
 from .config import Settings
 from .membrane_report import AA_LIPIDS, CORE_HALF_NM, matrix_markdown, stage_from_gro, stage_matrix
 from .packing import measure_packing
-from .qc import metric, overall_status, records_table
-from .structure_metrics import bilayer_thickness, core_hydration, protein_orientation
+from .qc import classify, metric, overall_status, records_table
+from .structure_metrics import bilayer_thickness, core_hydration, layered_order, protein_orientation, tail_interdigitation, z_density_profiles
 from .trajectory import (
     CHARMM36_CHAINS,
     area_compressibility,
@@ -43,6 +43,7 @@ from .trajectory import (
     msd_xy,
     read_stress_profile,
     scd_profile_from_residues,
+    scd_profile_rmse,
     unwrap_xy,
 )
 
@@ -52,7 +53,7 @@ __all__ = ['frame_series', 'convergence_gate', 'equilibrium_gate', 'write_equili
 def frame_series(paths: list[Path], settings: Settings) -> dict:
     """Per-frame APL, thickness, core hydration and protein orientation from .gro frames, plus anchor and box series."""
     series = {"frame": [], "apl_upper_A2": [], "apl_lower_A2": [], "thickness_A": [], "core_water_percent": [], "tilt_deg": [],
-              "depth_A": [], "area_nm2": []}
+              "depth_A": [], "area_nm2": [], "water_path": [], "interdigitation": []}
     anchors, boxes = [], []
     for k, path in enumerate(paths):
         stage = stage_from_gro(Path(path), name="equilibrated")
@@ -69,10 +70,16 @@ def frame_series(paths: list[Path], settings: Settings) -> dict:
         series["tilt_deg"].append(orientation["tilt_deg"] if orientation else np.nan)
         series["depth_A"].append(orientation["depth_A"] if orientation else np.nan)
         series["area_nm2"].append(stage["box_nm"][0] * stage["box_nm"][1])
+        series["water_path"].append(bool(hydration["transmembrane_water_path"]) if hydration else None)
+        series["interdigitation"].append(tail_interdigitation(stage["tails"][0], stage["tails"][1], stage["midplane_nm"])["overlap"]
+                                         if "tails" in stage else np.nan)
+        if k == 0:
+            series["first_profiles"] = z_density_profiles(stage["z_groups"], stage["box_nm"]) if "z_groups" in stage else None
         anchors.append(np.array([[r["x_nm"], r["y_nm"]] for r in stage["lipids"]]))
         boxes.append(stage["box_nm"][:2])
         if k == len(paths) - 1:
             series["last_stage"] = stage
+            series["last_profiles"] = z_density_profiles(stage["z_groups"], stage["box_nm"]) if "z_groups" in stage else None
     series["anchors"] = anchors
     series["boxes"] = np.array(boxes)
     series["species"] = [r["resname"] for r in series["last_stage"]["lipids"]] if paths else []
@@ -81,6 +88,31 @@ def frame_series(paths: list[Path], settings: Settings) -> dict:
 
 SERIES_NAMES = {"apl_upper_A2": "APL", "apl_lower_A2": "APL", "thickness_A": "bilayer thickness", "core_water_percent": "core water",
                 "tilt_deg": "protein tilt", "depth_A": "protein insertion depth"}
+# Protein orientation drifts are judged in their own units, not in percent of a mean angle: (PASS, WARNING) ceilings.
+ORIENTATION_DRIFT = {"tilt_deg": (3.0, 7.0), "depth_A": (1.0, 2.0)}
+
+
+def absolute_drift_record(name: str, stage: str, result: dict, units: str, ceilings: tuple) -> dict:
+    """A convergence record graded on the absolute drift over the final window (slope x window length) in the series' units."""
+    drift = result["slope_per_ps"] * result["window_ps"] if result.get("slope_per_ps") is not None else None
+    status = "INSUFFICIENT SAMPLING" if result["status"] == "INSUFFICIENT SAMPLING" else classify(drift, *ceilings)
+    if status != "INSUFFICIENT SAMPLING" and result.get("monotonic") and drift is not None and abs(drift) > ceilings[0]:
+        status = "FAIL"
+    reason = (f"drift {drift:+.2f} {units} over the final window (PASS <= {ceilings[0]}, WARNING <= {ceilings[1]})"
+              + ("; monotonic trend" if result.get("monotonic") else "")) if drift is not None else result["reason"]
+    return metric(name, stage, result["mean"], units, uncertainty=result["sem"], n=result["n"], deviation=drift, status=status, reason=reason)
+
+
+def water_path_persistence(flags: list, stage: str = "equilibrated") -> dict:
+    """Fraction of frames with a water column through the core: none PASS, transient (< half) WARNING, persistent FAIL."""
+    seen = [f for f in flags if f is not None]
+    if not seen:
+        return metric("transmembrane water path persistence", stage, None, "fraction of frames", status="NOT RUN", reason="no water in the frames")
+    fraction = sum(bool(f) for f in seen) / len(seen)
+    status = "PASS" if fraction == 0 else "WARNING" if fraction < 0.5 else "FAIL"
+    return metric("transmembrane water path persistence", stage, fraction, "fraction of frames", n=len(seen), status=status,
+                  reason=f"a spanning water column in {sum(bool(f) for f in seen)} of {len(seen)} frames"
+                  + (" (transient)" if 0 < fraction < 0.5 else " (persistent)" if fraction >= 0.5 else ""))
 
 
 def convergence_gate(energy: dict | None, frames: dict | None, frame_time_ps: np.ndarray | None, settings: Settings) -> list[dict]:
@@ -98,7 +130,20 @@ def convergence_gate(energy: dict | None, frames: dict | None, frame_time_ps: np
             if not np.isfinite(values).all():
                 records.append(metric(key, "equilibrated", None, units, leaflet, status="NOT RUN", reason="not measurable in these frames"))
                 continue
-            records.append(convergence_record(SERIES_NAMES[key], "equilibrated", convergence(frame_time_ps, values), units, leaflet))
+            result = convergence(frame_time_ps, values)
+            if key in ORIENTATION_DRIFT:
+                records.append(absolute_drift_record(SERIES_NAMES[key], "equilibrated", result, units, ORIENTATION_DRIFT[key]))
+            else:
+                records.append(convergence_record(SERIES_NAMES[key], "equilibrated", result, units, leaflet))
+        records.append(water_path_persistence(frames["water_path"]))
+        if frames.get("last_profiles"):
+            layered = layered_order(frames["last_profiles"], frames["last_stage"]["midplane_nm"], stage="equilibrated")
+            records.append(layered["record"])
+            if frames.get("first_profiles"):
+                first, last = frames["first_profiles"]["density_nm3"], frames["last_profiles"]["density_nm3"]
+                change = {k: float(np.sqrt(np.mean((last[k] - first[k]) ** 2)) / max(float(first[k].max()), 1e-9)) for k in last if k in first}
+                records.append(metric("Z-density profile change first-to-last frame", "equilibrated", max(change.values()) if change else None,
+                                      "fraction of peak", status="NOT RUN", reason="largest RMS change of a group profile over its peak; reported"))
     else:
         records.append(metric("APL", "equilibrated", None, "A^2", status="NOT RUN", reason="no --frames given (or their times are unknown)"))
     return records
@@ -134,6 +179,24 @@ def equilibrium_gate(energy: dict | None, frames: dict | None, frame_time_ps: np
                                   n=int(mask.sum()), deviation=fit["alpha"], status=versus["status"] if fit["status"] == "PASS" else fit["status"],
                                   reason=f"alpha {fit['alpha']}, R^2 {fit['r2']}; {versus['reason']}"))
         last = frames["last_stage"]
+        thickness = float(np.nanmean(frames["thickness_A"][-max(1, len(frames["thickness_A"]) // 2):]))
+        if args.reference_thickness:
+            deviation = 100.0 * (thickness - args.reference_thickness) / args.reference_thickness
+            records.append(metric("bilayer thickness vs reference", "final", thickness, "A", reference=args.reference_thickness, deviation=deviation,
+                                  status=classify(deviation, 3.0, 5.0), reason=f"{deviation:+.1f} % vs the matched reference (production mean)"))
+        else:
+            records.append(metric("bilayer thickness vs reference", "final", thickness, "A", status="REFERENCE NEEDED",
+                                  reason="production-window mean; no matched reference given (--reference-thickness)"))
+        inter = float(np.nanmean(frames["interdigitation"][-max(1, len(frames["interdigitation"]) // 2):]))
+        if np.isfinite(inter):
+            if args.reference_interdigitation:
+                deviation = 100.0 * (inter - args.reference_interdigitation) / args.reference_interdigitation
+                records.append(metric("tail interdigitation vs reference", "final", inter, "overlap", reference=args.reference_interdigitation,
+                                      deviation=deviation, status=classify(deviation, 10.0, 20.0),
+                                      reason=f"{deviation:+.1f} % vs the matched reference"))
+            else:
+                records.append(metric("tail interdigitation vs reference", "final", inter, "overlap", status="REFERENCE NEEDED",
+                                      reason="production-window mean; no matched reference given (--reference-interdigitation)"))
         if "core_hydration" in last:
             records.append(metric("final core water", "final", last["core_hydration"]["ratio_percent"], "% of bulk",
                                   status=last["core_hydration"]["status"], reason="last frame; see the convergence series for persistence"))
@@ -141,10 +204,13 @@ def equilibrium_gate(energy: dict | None, frames: dict | None, frame_time_ps: np
             residues = [res for res in last.get("residues", []) if res and res[0]["resname"] == name]
             if len(residues) >= 20 and name in AA_LIPIDS and name not in ("CHL1",):
                 profile = scd_profile_from_residues(residues, CHARMM36_CHAINS)
+                reference_scd = (args.reference_scd or {}).get(name, {})
                 for chain, values in profile.items():
                     if values["n"]:
+                        graded = scd_profile_rmse(reference_scd.get(chain), values["scd"])
                         records.append(metric(f"S_CD {name} {chain}", "final", float(np.nanmean(values["scd"])), "-", n=int(values["n"]),
-                                              status="REFERENCE NEEDED", reason="mean |S_CD| over the chain; no matched reference profile given"))
+                                              deviation=graded["rmse"], status=graded["status"],
+                                              reason="mean S_CD over the chain; " + graded["reason"]))
     else:
         records.append(metric("lateral diffusion D", "final", None, "um^2/s", status="INSUFFICIENT SAMPLING",
                               reason="fewer than 10 frames (or no --frames)"))
@@ -213,7 +279,13 @@ def main(argv: list | None = None) -> int:
     parser.add_argument("--stress", type=Path, help="lateral pressure profile: z (nm), P_N - P_L (bar)[, error]")
     parser.add_argument("--reference-ka", type=float, default=None, metavar="MN_PER_M", help="matched reference K_A (mN/m)")
     parser.add_argument("--reference-d", type=float, default=None, metavar="UM2_PER_S", help="matched reference lipid diffusion (um^2/s)")
+    parser.add_argument("--reference-thickness", type=float, default=None, metavar="A", help="matched reference bilayer thickness (A)")
+    parser.add_argument("--reference-interdigitation", type=float, default=None, metavar="OVERLAP",
+                        help="matched reference tail interdigitation (overlap fraction)")
+    parser.add_argument("--reference-scd", type=Path, default=None, metavar="JSON",
+                        help='matched S_CD profiles: {"POPC": {"sn1": [...], "sn2": [...]}, ...} in CHARMM36 carbon order')
     args = parser.parse_args(argv)
+    args.reference_scd = json.loads(args.reference_scd.read_text()) if args.reference_scd else None
     settings = Settings()
     energy = box_series_from_xvg(args.energy) if args.energy else None
     frames = frame_series(args.frames, settings) if args.frames else None
