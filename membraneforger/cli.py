@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 from .config import BOX, NSTEPS, NTERM_SIDE, ORIENT_CHAINS, ORIENT_RESIDUES, ORIENTATION, PDB_ID, PPM_MEMBRANE, Settings
-from .embedding import CONVERTIBLE, LIPID_NAMES, lipid_name
+from .embedding import CONVERTIBLE, EMBED_SITES, LIPID_NAMES, lipid_name
 from .orientation import NTERM_SIDES, ORIENTATION_MODES, OrientationRequest, parse_residue_ranges
 from .pipeline import Session, build
 from .runtools import find_gromacs
@@ -92,6 +92,10 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--embed", action="store_true",
                         help="embed the protein into the membrane of a --cg FILE instead of fitting it onto the frame's "
                              "protein (always the case for the bundled membranes)")
+    parser.add_argument("--embed-site", choices=EMBED_SITES, default="hole",
+                        help="where an embedded complex goes in the frame: hole = where the frame's own protein was; free = "
+                             "the stretch of membrane farthest from that protein, an unbroken bilayer, for a complex much smaller "
+                             "than the frame's receptor (e.g. one transmembrane helix) (default: %(default)s)")
     parser.add_argument("--box", nargs=3, type=float, metavar=("X", "Y", "Z"),
                         help=f"opt-in box edges in A (default: BOX = {BOX}: the membrane is sliced to the complex plus --xy-buffer "
                              "in x and y, and z is sized around the bilayer midplane); x and y may only be smaller than the "
@@ -130,7 +134,9 @@ def make_parser() -> argparse.ArgumentParser:
     orient.add_argument("--orient-residues", metavar="FIRST-LAST", default=None,
                         help="orient on these residues of the anchor chain(s) only, e.g. the transmembrane helix 343-363 "
                              "(several: 343-363,370-380; numbers as in the input). PPM is run on them alone and the whole "
-                             "complex follows rigidly; needs --nterm-side for the first selected residue")
+                             "complex follows rigidly; needs --nterm-side for the first selected residue. With --orientation "
+                             "none it names the membrane-embedded segment of an input already along z: nothing is rotated and "
+                             "the bilayer centre goes at the midpoint of that segment's CA z range")
     orient.add_argument("--nterm-side", choices=NTERM_SIDES, default=None,
                         help=f"side of the membrane the N terminus of the first anchor chain lies on; needed by PPM when no "
                              f"exact OPM entry gives it (default: {NTERM_SIDE})")
@@ -199,8 +205,10 @@ def main(argv: list | None = None) -> int:
             parser.error(f"missing input file {path}")
     if args.box and (len(args.box) != 3 or min(args.box) <= 0):
         parser.error("--box needs three positive edge lengths in A")
-    if args.membrane and (args.box or args.dellipid or args.addlipid or args.embed):
-        parser.error("--box, --dellipid, --addlipid and --embed need --aa and --cg, not --membrane")
+    if args.membrane and (args.box or args.dellipid or args.addlipid or args.embed or args.embed_site != "hole"):
+        parser.error("--box, --dellipid, --addlipid, --embed and --embed-site need --aa and --cg, not --membrane")
+    if args.embed_site != "hole" and not embed:
+        parser.error("--embed-site applies when the protein is embedded: a bundled membrane (--cg 1 or 2) or --embed")
     try:
         for name in args.dellipid + ([args.addlipid] if args.addlipid else []):
             lipid_name(name)
@@ -223,6 +231,12 @@ def main(argv: list | None = None) -> int:
         box = tuple(args.box) if args.box else (None if args.membrane else parse_box(BOX))
     except SystemExit as exc:
         parser.error(str(exc))
+    if orientation.mode == "none" and orientation.residues and not args.membrane:
+        if args.bilayer_z is not None:
+            parser.error("--orient-residues with --orientation none sets the bilayer centre from that segment; give it or --bilayer-z, not both")
+        if not embed:
+            parser.error("--orient-residues with --orientation none places an embedded protein (a bundled membrane or --embed); "
+                         "a fitted frame takes the coarse-grained protein's own pose")
     if orientation.mode != "none" and args.bilayer_z is not None and not args.membrane:
         parser.error("--bilayer-z applies with --orientation none; an oriented complex has its bilayer centre at z = 0")
     if args.membrane and (orientation.mode != "none" and (orientation.chains or orientation.residues or args.orientation or args.pdb_id)):
@@ -241,7 +255,7 @@ def main(argv: list | None = None) -> int:
                         box_xy_buffer_nm=args.xy_buffer, apl_validate=args.apl_validate == "yes", apl_slice_tolerance_percent=args.apl_tolerance,
                         rdf_validate=args.rdf_validate == "yes", slice_optimize_offset=not args.no_slice_offset)
     session = Session(out=out, name=args.name or out.name, gmx=gmx, forcefield=forcefield, data=data, python=python,
-                      ntomp=args.ntomp, nsteps=args.nsteps, settings=settings, embed=embed,
+                      ntomp=args.ntomp, nsteps=args.nsteps, settings=settings, embed=embed, embed_site=args.embed_site,
                       box_a=box, bilayer_z_a=args.bilayer_z, delete_lipids=list(args.dellipid), add_lipid=args.addlipid,
                       orientation=orientation)
     resolved = [p.resolve() if p else None for p in (args.all_atom, args.coarse_grain, args.membrane)]
