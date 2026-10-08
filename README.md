@@ -56,7 +56,7 @@ python -m membraneforger --aa complex.pdb --orient-chain R --out output_director
 Run `python -m membraneforger --help` for the rest. The protein is oriented, moved as one rigid body onto the spot
 the frame's own receptor occupied, lipids overlapping it are removed, the membrane is cut around it and backmapped;
 the build then adds water and 0.15 M NaCl, minimizes, and audits the result (`grompp -maxwarn 0`, `gmx check`,
-energies, geometry). `em.gro` is written only when every check passes, with `topol.top`, `toppar/`,
+energies, geometry, lipid stereochemistry including every GM3 sugar centre). `em.gro` is written only when every check passes, with `topol.top`, `toppar/`,
 `index_ini.ndx` and `run_manifest.json`; the last line of `membranebuilder.log` says `PASS` or `FAIL`.
 Backmapping dominates the run time (about 45 minutes on 8 cores). Equilibrate the system before production.
 
@@ -123,9 +123,10 @@ Eighteen frames (30 µs, Martini 3) of a GPCR in an asymmetric ten-species cell-
 | Outer | 28 | 19 | 19 | 5 | 5 | 14 | 10 | 0 | 0 | 0 |
 | Inner | 22 | 5 | 5 | 21 | 21 | 0 | 0 | 8 | 7 | 10 |
 
-The bundled frames were written with their coordinates rotated about z relative to the box (a rotational fit saved
-without its box), each by its own angle; MembraneForger detects this when it reads any frame, rotates it back onto its
-periodic cell and logs the angle, so the files are used as they are (`docs/membraneforger_tutorial.md` 1.1).
+The bundled frames had been written with their coordinates rotated about z relative to the box (a rotational fit
+saved without its box), each by its own angle; they have been rotated back in place (`examples/align_frames.py`), and
+MembraneForger checks every frame it reads, rotating a frame with the same artefact back onto its periodic cell and
+logging the angle (`docs/membraneforger_tutorial.md` 1.1).
 
 **On a Slurm cluster**: `bash slurm/setup.sh` installs everything above (no Anaconda or modules needed) and
 `slurm/run_membraneforger.sbatch` builds one structure per array task; see `slurm/README.md`, which also covers PPM 3.0.

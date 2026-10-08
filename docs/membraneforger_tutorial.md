@@ -36,8 +36,10 @@ cell on the frame's box line. A frame whose coordinates were rotated about z aft
 a rotational fit, `gmx trjconv -fit rotxy+transxy` or similar, written without transforming the box) is no longer
 periodic in that box: wrapping folds the corners of the rotated square onto its edges, beads of different molecules
 land on top of each other there, the opposite corners stay empty, and the "diamond" one sees when rendering the file
-is real data, not drift. The 18 bundled KOR and GPR139 frames are affected, each by its own angle (3 to 83 degrees);
-the 6WHC example frame is not.
+is real data, not drift. The 18 bundled KOR and GPR139 frames were shipped like that, each with its own angle (3 to
+83 degrees; the 6WHC example frame was not), and have been rotated back onto their boxes in place with
+`examples/align_frames.py` (coordinates and velocities, same names, same formatting), so the files in the repository
+are periodic now.
 
 MembraneForger detects this when it reads a frame (`validation.align_frame_to_box`): it counts bead pairs of
 different lipids closer than 0.30 nm after wrapping (an equilibrated Martini membrane has none; a rotated frame has
@@ -45,8 +47,9 @@ hundreds to thousands), scans the 90 degrees a square box allows for the rotatio
 0.01 degree, and rotates the whole frame, water and ions included, back about the box centre. The angle and the
 overlap counts before and after are logged (`WARN`) and recorded in `run_manifest.json` (`coarse_grain.frame_alignment`).
 A frame that no rotation makes periodic (a non-square box, or coordinates that simply do not belong to the box line)
-stops the build with a message saying so. On KOR1 the correction is 48.0 degrees (2610 overlapping pairs become 0),
-on GPR3 8.4 degrees (543 become 0). All numbers in this document come from corrected frames.
+stops the build with a message saying so. The check stays on for every frame, so a user frame with the same
+artefact is corrected the same way (on the original KOR1 file the correction was 48.0 degrees, 2610 overlapping
+pairs becoming 0; on GPR3 8.4 degrees). All numbers in this document come from corrected frames.
 
 ## 2. Placement and embedding
 
@@ -245,7 +248,15 @@ interdigitation (the overlap of the two leaflets' tail z-density profiles; the m
 backmapped one, 10 / 20 %), and on `em.gro` the Z-density profiles and the core hydration: water oxygens within
 0.8 nm of the midplane that are not within 0.5 nm of a protein heavy atom, as a percentage of the bulk water density
 (PASS below 1 %, WARNING to 5 %), with a connected-component test for a water column spanning the core. A single
-structure cannot tell a transient from a persistent path; the record says so. The GIPR data that motivated this work
+structure cannot tell a transient from a persistent path; the record says so.
+
+The build's own audit of `em.gro` was extended as well. Its dihedral-restraint check reads the DIHRES rows of the
+lipid topologies, and for GM3 (GLPA) those 23 rows cover only the ceramide C2/C3 centres, the C4=C5 bond, the three
+ring chairs and sialic acid C7/C8; a sugar carbon with an inverted configuration can sit in a correct chair and pass
+them. The audit therefore also tests, geometrically, all 16 sugar stereocentres (glucose C1-C5, galactose C1-C5,
+sialic acid C2 and C4-C8) and the two ceramide trans bonds of every GM3 with the chirality definitions of
+`backmap_data/map.dat` (`membraneforger/stereo.py`, the same test as `examples/check_gm3_stereo.py`), and fails the
+build on any inverted centre or cis bond: a configuration never corrects itself in MD. The GIPR data that motivated this work
 (backmap 57 / 59, minimized 57 / 59 against a slice at 56 / 59 A^2) are consistent with what the report measures:
 backmapping and minimization keep the lipid count and the cell, hence the leaflet mean; what they change is local.
 
@@ -343,8 +354,9 @@ turns every one into a PASS / WARNING / FAIL / INSUFFICIENT SAMPLING / REFERENCE
 | 12 | Box-area / volume convergence | AA equilibration | stationarity of NPT equilibration | L_x L_y, V, APL and thickness vs time, block SEM | final-window drift < 1 % and half-window means within 2 % | 1-3 % or 2-5 % | > 3 %, > 5 %, or a persistent monotonic trend |
 
 Plus the hard construction checks that are PASS or FAIL only: complete residues, no duplicate lipid, every anchor
-inside the cell, no hard-core seam overlap, no new protein-lipid clash (gate 1); ring threading, stereochemistry
-and lipid-solute clashes (gate 2, the build's own checks). Where the thresholds live: `Settings` in `config.py`
+inside the cell, no hard-core seam overlap, no new protein-lipid clash (gate 1); ring threading, the CHARMM-GUI
+dihedral restraints, the 16 GM3 sugar stereocentres and 2 ceramide trans bonds, and lipid-solute clashes (gate 2,
+the build's own checks). Where the thresholds live: `Settings` in `config.py`
 (APL and RDF ceilings, window samples), `membrane_report.CG_GATE` / `AA_GATE` (thickness, tilt, depth),
 `structure_metrics` (core water, interdigitation, layering), `trajectory` (convergence, S_CD, diffusion, K_A,
 `TENSION_THRESHOLDS_MN_PER_M`) and `equilibration.ORIENTATION_DRIFT`.
@@ -367,9 +379,9 @@ and lipid-solute clashes (gate 2, the build's own checks). Where the thresholds 
   and only needed to read xtc/trr directly (write frames with `gmx trjconv -sep` otherwise).
 - No GIPR build or trajectory is part of this repository; the before/after numbers above are from the bundled
   frames and the 6WHC example, which show the same defect with the old rule and the same repair.
-- The bundled frame files are shipped as they were produced, rotated about z; they are corrected in memory at read
-  time, not rewritten on disk. A user frame with the same artefact is corrected the same way; one whose coordinates
-  do not fit its box at all is refused rather than guessed at.
+- The bundled frame files were rotated back onto their boxes in place (`examples/align_frames.py`); the reader still
+  checks every frame, corrects a rotated user frame the same way, and refuses one whose coordinates do not fit its
+  box at all rather than guessing.
 
 ## 8. Settings
 

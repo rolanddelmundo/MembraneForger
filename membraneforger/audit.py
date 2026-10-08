@@ -16,6 +16,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from .config import Settings
+from .stereo import check_gm3_stereo
 
 __all__ = ['gro_table', 'topology_includes', 'topology_molecules', 'itp_atoms', 'gromacs', 'check_topology',
            'check_grompp', 'check_energy', 'same_image', 'superposed_rmsd', 'check_structure', 'closest_contact_between', 'itp_bonds',
@@ -484,15 +485,20 @@ def check_ring_piercing(run: Path, structure: str) -> tuple[dict, list]:
     return report, fails
 
 
-def audit_run(run: Path, gmx: str, structure: str = "em.gro", settings: Settings = Settings()) -> dict:
+DEFAULT_DATA = Path(__file__).resolve().parents[1] / "backmap_data"  # map.dat: the GM3 chirality definitions the stereo check uses
+
+
+def audit_run(run: Path, gmx: str, structure: str = "em.gro", settings: Settings = Settings(), data: Path | None = None) -> dict:
     """Audit one build directory and write audit.json; raises if any check fails."""
     run = run.resolve()
     names = gro_table(run / structure)[1]
     report, failures = {"structure": structure}, []
+    data = Path(data) if data else DEFAULT_DATA
     for key, (part, fails) in (("topology", check_topology(run, names)), ("grompp", check_grompp(run, gmx, structure)),
                                ("energy", check_energy(run, gmx)), ("geometry", check_structure(run, structure, settings)),
                                ("ring_piercing", check_ring_piercing(run, structure)),
-                               ("dihedral_restraints", check_dihedral_restraints(run, structure))):
+                               ("dihedral_restraints", check_dihedral_restraints(run, structure)),
+                               ("gm3_stereochemistry", check_gm3_stereo(run / structure, data))):
         report[key] = part
         failures += fails
     report["checks"] = ["atom names and count match topol.top", "net charge is zero", "no stray toppar files",
@@ -501,7 +507,8 @@ def audit_run(run: Path, gmx: str, structure: str = "em.gro", settings: Settings
                         "index groups partition the system", "protein CA RMSD across EM", "lipid-solute contacts",
                         "two flat phosphate leaflets", "no water in the bilayer core", "membrane XY cell preserved",
                         "no covalent bond threads a 5- or 6-membered ring",
-                        "lipid stereocentres and double bonds satisfy their CHARMM-GUI dihedral restraints"]
+                        "lipid stereocentres and double bonds satisfy their CHARMM-GUI dihedral restraints",
+                        "every GM3 has its 16 sugar stereocentres and 2 ceramide trans bonds in the configuration of map.dat"]
     report["failures"] = failures
     report["result"] = "FAIL" if failures else "PASS"
     (run / "audit.json").write_text(json.dumps(report, indent=2) + "\n")

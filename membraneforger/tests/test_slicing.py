@@ -279,8 +279,9 @@ class RealFrames(unittest.TestCase):
     def test_18_nm_gpcr_frames_are_cut_to_a_fraction_of_their_area(self):
         for frame in (KOR_FRAME, GPR139_FRAME):
             raw, box = mf.read_cg(frame)
-            raw, alignment = mf.align_frame_to_box(raw, box)                 # the bundled frames are rotated about z relative to their box
-            self.assertGreater(abs(alignment["rotation_about_z_deg"]), 1.0)
+            raw, alignment = mf.align_frame_to_box(raw, box)                 # the bundled frames are periodic in their box as shipped
+            self.assertEqual(alignment["rotation_about_z_deg"], 0.0)
+            self.assertEqual(alignment["overlapping_pairs_as_read"], 0)
             cg = mf.classify_cg(raw, MAPPING)
             slab = mf.make_membrane_whole(cg["membrane"], box)
             midplane = mf.bilayer_midplane(cg["membrane"], slab)[0]

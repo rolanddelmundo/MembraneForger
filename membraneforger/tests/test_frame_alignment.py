@@ -7,6 +7,7 @@ import numpy as np
 from .common import CG_GRO, REPO, failure, mf
 
 KOR1 = REPO / "examples" / "preeq_cg_cellmem" / "KOR1_cg_cellmem.gro"
+GPR3 = REPO / "examples" / "preeq_cg_cellmem" / "GPR3_cg_cellmem.gro"
 
 
 def liquid_frame(box=18.0, spacing=0.42, rotate_deg=0.0, seed=0):
@@ -58,14 +59,26 @@ class FrameAlignment(unittest.TestCase):
         squeezed = [dict(a, x=a["x"] * 1.3) for a in atoms]              # content wider than the box
         self.assertIn("not periodic in its", failure(mf.align_frame_to_box, squeezed, box))
 
-    def test_the_6whc_frame_is_periodic_and_a_bundled_frame_is_rotated(self):
-        atoms, box = mf.read_cg(CG_GRO)
-        _, report = mf.align_frame_to_box(atoms, box)
-        self.assertEqual(report["rotation_about_z_deg"], 0.0)
+    def test_the_shipped_frames_are_periodic_in_their_boxes(self):
+        # the 18 KOR/GPR139 frames were rotated back onto their boxes with examples/align_frames.py; none may regress
+        for frame in (CG_GRO, KOR1, GPR3):
+            atoms, box = mf.read_cg(frame)
+            fixed, report = mf.align_frame_to_box(atoms, box)
+            with self.subTest(frame=frame.name):
+                self.assertEqual(report["rotation_about_z_deg"], 0.0)
+                self.assertEqual(report["overlapping_pairs_as_read"], 0)
+                self.assertIs(fixed, atoms)
+
+    def test_a_rotated_copy_of_a_shipped_frame_is_recovered(self):
         atoms, box = mf.read_cg(KOR1)
-        fixed, report = mf.align_frame_to_box(atoms, box)
-        self.assertGreater(abs(report["rotation_about_z_deg"]), 1.0)
-        self.assertLess(report["overlapping_pairs_after"], 0.02 * report["overlapping_pairs_as_read"])
+        c, s = math.cos(math.radians(48.0)), math.sin(math.radians(48.0))
+        cx, cy = 0.5 * box[0], 0.5 * box[1]
+        turned = [dict(a, x=cx + (a["x"] - cx) * c - (a["y"] - cy) * s, y=cy + (a["x"] - cx) * s + (a["y"] - cy) * c) for a in atoms]
+        fixed, report = mf.align_frame_to_box(turned, box)
+        self.assertGreater(report["overlapping_pairs_as_read"], 1000)
+        self.assertEqual(report["overlapping_pairs_after"], 0)
+        angle = abs(report["rotation_about_z_deg"]) % 90.0
+        self.assertLess(min(abs(angle - 48.0), abs(angle - 42.0)), 0.05)  # 48 degrees back, or 42 forward: the same square
         self.assertEqual(len(fixed), len(atoms))
 
 
