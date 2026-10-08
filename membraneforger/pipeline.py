@@ -24,6 +24,7 @@ from .reporting import write_run_manifest
 from .runtools import LOG_NAME, gromacs_version, log, sha256
 from .slicing import slice_membrane_cg
 from .solvation import add_ions, make_index, rebox_system, solvate_system
+from .stereo import check_gm3_stereo
 from .structio import xyz_nm
 from .topology import build_topology, lipid_clashes, prepare_structure, repair_structure, resolve_lipid_clashes
 from .validation import align_frame_to_box, check_inputs_unchanged, clear_stale_outputs, protect_inputs, read_all_atom, read_cg
@@ -259,6 +260,18 @@ def backmap_and_assemble(session: Session, prepared: dict, seed: int) -> Path:
     natoms = run_stage(session, "assemble", assemble_membrane_pdb, prepared["placed"], lipids, prepared["box"], out / "membrane.pdb")
     log(out, f"membrane.pdb (seed {seed}): {len(prepared['placed'])} protein/ligand atoms placed, {len(lipids)} membrane "
              f"molecules backmapped ({natoms} atoms); inventory matches the coarse-grained input", "PASS")
+    # GM3's sugar stereocentres are not covered by its DIHRES rows, so they are tested geometrically here, before any
+    # minimization, and a wrong one counts as a wrong configuration: the verdict then tries another seed.
+    gm3, _ = run_stage(session, "backmap", check_gm3_stereo, out / "membrane.pdb", session.data)
+    isomers["gm3_sugar_centres_or_cis_bonds"] = sum(gm3["wrong_by_centre"].values()) + sum(gm3["cis_by_bond"].values())
+    isomers["gm3_stereochemistry"] = {k: gm3[k] for k in ("molecules", "wrong_by_centre", "cis_by_bond", "affected_molecules")}
+    if isomers["gm3_sugar_centres_or_cis_bonds"]:
+        log(out, f"GM3 stereochemistry of membrane.pdb: {len(gm3['affected_molecules'])} of {gm3['molecules']} molecules have an inverted "
+                 f"sugar centre or a cis ceramide bond ({isomers['gm3_sugar_centres_or_cis_bonds']} in all); counted as wrong configurations",
+            "WARN")
+    elif gm3["molecules"]:
+        log(out, f"GM3 stereochemistry of membrane.pdb: all 16 sugar stereocentres and both ceramide trans bonds correct in every one "
+                 f"of the {gm3['molecules']} molecules", "PASS")
     if session.analysis is not None:
         summary = run_stage(session, "membrane_check", session.analysis.add, stage_from_membrane_pdb(out / "membrane.pdb"))
         log(out, "backmapped membrane: " + leaflet_apl_summary(summary) + " (cross-resolution anchors P/O3/NF; reported, not graded)")
@@ -387,7 +400,7 @@ def backmap_verdict(staged: dict, review: dict, settings: Settings, last: bool) 
     # Only defects that involve the membrane count: re-backmapping cannot change the all-atom input itself.
     pierced = membrane_piercings(staged["rings"]["pierced"], staged["solute_atoms"])
     heavy = heavy_atom_piercings({"pierced": pierced})
-    wrong = review.get("chiral_well_formed", 0) + review.get("cistrans", 0)
+    wrong = review.get("chiral_well_formed", 0) + review.get("cistrans", 0) + review.get("gm3_sugar_centres_or_cis_bonds", 0)
     contact = staged["contact"]
     counts = {"heavy_atom_ring_threadings": len(heavy), "hydrogen_ring_threadings": len(pierced) - len(heavy),
               "solute_internal_ring_threadings": len(staged["rings"]["pierced"]) - len(pierced),
