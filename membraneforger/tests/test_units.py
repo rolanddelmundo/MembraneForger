@@ -290,6 +290,50 @@ class AuditTopology(unittest.TestCase):
         self.assertEqual(len(mf.itp_bonds([FORCEFIELD / "toppar/POPC.itp"])["POPC"]), 133)
 
 
+class AuditDihedralRestraints(unittest.TestCase):
+    """CHARMM-GUI dihedral restraints: configurations and double bonds fail the audit, rings out of their chair are reported."""
+
+    def test_glpa_restraints_are_parsed(self):
+        rows = mf.itp_dihedral_restraints([FORCEFIELD / "toppar/GLPA.itp"])["GLPA"]
+        targets = [t for _, t in rows]
+        self.assertEqual(len(rows), 23)
+        self.assertEqual(sum(abs(abs(t) - 120) < 1 for t in targets), 4)  # ceramide C2S, C3S; Neu5Ac C7, C8
+        self.assertEqual(sum(abs(abs(t) - 60) < 1 for t in targets), 18)  # three pyranose chairs
+        self.assertEqual(sum(abs(t) == 180 for t in targets), 1)  # sphingosine C4=C5 trans
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "toppar").mkdir()
+            (Path(tmp) / "toppar/POPC.itp").write_text((FORCEFIELD / "toppar/POPC.itp").read_text())
+            self.assertTrue(mf.has_dihedral_restraints(Path(tmp)))
+            (Path(tmp) / "toppar/POPC.itp").write_text("[ moleculetype ]\nX 1\n")
+            self.assertFalse(mf.has_dihedral_restraints(Path(tmp)))
+
+    def test_dihedrals_use_the_minimum_image(self):
+        quad = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 1.0, 1.0]]) + 2.0
+        cell = np.array([4.0, 4.0, 4.0])
+        wrapped = quad.copy()
+        wrapped[3] -= cell * np.array([0, 1, 0])  # written in another periodic image
+        for xyz in (quad, wrapped):
+            self.assertAlmostEqual(float(mf.dihedrals_pbc(xyz, cell, np.array([[0, 1, 2, 3]]))[0]), -90.0, places=6)
+
+    def test_wrong_configuration_fails_and_ring_is_reported(self):
+        itp = ("[ moleculetype ]\nX 1\n[ atoms ]\n" + "".join(f"{i} C 1 X C{i} {i} 0.0 12.0\n" for i in range(1, 5))
+               + "[ dihedral_restraints ]\n1 2 3 4 1 -120.0 2.5 1000\n1 2 3 4 1 60.0 2.5 1000\n")
+        good = [[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 1.0, 1.0]]  # -90: the side of the -120 target
+        bad = [[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 1.0, -1.0]]  # +90: the mirror image
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp)
+            (run / "x.itp").write_text(itp)
+            (run / "topol.top").write_text('#include "x.itp"\n[ system ]\nt\n[ molecules ]\nX 2\n')
+            lines = [f"{1 + k // 4:5d}X    {'C' + str(k % 4 + 1):>5s}{k + 1:5d}{x + 1:8.3f}{y + 1:8.3f}{z + 2 + 3 * (k // 4):8.3f}"
+                     for k, (x, y, z) in enumerate(good + bad)]
+            (run / "em.gro").write_text("t\n8\n" + "\n".join(lines) + "\n  10.0 10.0 10.0\n")
+            report, fails = mf.check_dihedral_restraints(run, "em.gro")
+        self.assertEqual(report["X"]["wrong_configurations"], 1)  # -120 row: only the mirror image is wrong
+        self.assertEqual(len(fails), 1)
+        self.assertIn("X: 1 configuration restraint(s) on the wrong side", fails[0])
+        self.assertEqual((report["X"]["rings"], report["X"]["rings_out_of_chair"]), (2, 1))  # +60 row: reported only
+
+
 class StageRunner(unittest.TestCase):
     def setUp(self):
         self.out = Path(tempfile.mkdtemp())

@@ -10,7 +10,8 @@ __all__ = ['ORIENTATION', 'ORIENT_CHAINS', 'ORIENT_RESIDUES', 'NTERM_SIDE', 'PDB
            'DEFAULT_LIGANDS', 'NSTEPS', 'DISULFIDE_MAX_A', 'DISULFIDE_OK_A', 'SLAB_Z_PAD_NM', 'MIN_Z_PAD_TOTAL_NM',
            'SALT_M', 'ION_RMIN_NM', 'GENION_ATTEMPTS', 'WATER_CLASH_NM', 'WATER_PROTECT_NM', 'LIPID_SCAN_A',
            'LIPID_DELETE_A', 'GENERATED', 'INDEX_GROUPS', 'FMAX_TARGET', 'H_BOND_RANGE', 'GLPA_MAX_BOND_A',
-           'LYS_BACKBONE', 'ONE_LETTER', 'GM3_XML_TO_GLPA', 'LIPIDATED', 'CYSG_HDB', 'EM_MDP', 'Settings']
+           'LYS_BACKBONE', 'ONE_LETTER', 'GM3_XML_TO_GLPA', 'LIPIDATED', 'CYSG_HDB', 'DIHRES_EM_FC', 'EM_MDP',
+           'Settings']
 
 # ============================================================
 # MEMBRANE ORIENTATION
@@ -72,7 +73,8 @@ GENERATED = ("oriented.pdb", "orientation_report.json", "membrane.pdb", "aa_cg_m
              "topol.top", "topol.pre_genion.top", "boxed.gro",
              "solv_raw.gro", "solv.gro", "solv_ions.gro", "index_ini.ndx", "genion.ndx", "ions.mdp", "ions.tpr",
              "ions_mdout.mdp", "em.mdp", "mdout.mdp", "em.tpr", "em.log", "em.edr", "em.trr", "em.gro",
-             "em.unverified.gro", "toppar", "audit.json", "run_manifest.json", "ring_piercing.json", "work")
+             "em.unverified.gro", "emres.mdp", "emres.tpr", "emres.log", "emres.edr", "emres.trr", "emres.gro", "toppar",
+             "audit.json", "run_manifest.json", "ring_piercing.json", "work")
 
 
 INDEX_GROUPS = ("System", "Protein_LIG", "MEMB", "SOL_ION")
@@ -194,7 +196,14 @@ CYSG_HDB = """CYSG		37
 """
 
 
-EM_MDP = """integrator      = steep
+# Restrained pre-minimization: the CHARMM-GUI lipid topologies carry dihedral restraints (#ifdef DIHRES) for their
+# sugar and inositol ring chairs, stereocentres and cis/trans double bonds. Backmapping fixes configurations but
+# leaves some pyranose rings in skew or inverted chairs, which MD corrects only slowly, so EM first runs with these
+# restraints on (force constant in kJ/mol/rad^2, the strongest CHARMM-GUI equilibration value) and the unrestrained
+# EM that is validated and published starts from its result.
+DIHRES_EM_FC = 1000.0
+
+EM_MDP = """{define}integrator      = steep
 emtol           = {emtol}
 emstep          = 0.005
 nsteps          = {nsteps}
