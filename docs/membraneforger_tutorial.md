@@ -53,8 +53,11 @@ pairs becoming 0; on GPR3 8.4 degrees). All numbers in this document come from c
 
 ## 2. Placement and embedding
 
-With a bundled membrane (or `--embed`) the oriented complex is placed where the frame's own receptor was, its
-bilayer centre on the midplane found between the two PO4 planes, and room is made for it (`embed_complex`). With
+With a bundled membrane (or `--embed`) the oriented complex is placed where the frame's own receptor was (or, with
+`--embed-site free`, on the unbroken bilayer away from it; see below), its
+bilayer centre on the midplane found between the two PO4 planes (an oriented complex has it at z = 0; with
+`--orientation none` it is `--bilayer-z`, else the midpoint of the CA z range of the segment `--orient-residues`
+names, else the hydrophobic-belt search), and room is made for it (`embed_complex`). With
 your own frame of the same complex the all-atom structure is fitted onto the frame's coarse-grained protein instead
 and nothing is removed.
 
@@ -83,6 +86,20 @@ larger than 1.0 nm^3, less than the volume of one phospholipid, stops the build 
 the position. On the 18 bundled frames with the 6WHC complex: uncut frames 0.00-0.20 nm^3, this embedding
 0.02-0.76 nm^3, the earlier rule 1.2-6.8 nm^3. If the gate stops a build, the frame's cavity cannot be adapted to the
 complex by moving lipids; use a coarse-grained frame of the complex itself (`--cg FILE`) or another frame.
+
+**Embedding site (`--embed-site`).** A bundled frame was equilibrated around a receptor, and where the receptor was
+it has a hole of the receptor's shape: about 5-6 nm^3 of empty acyl volume per leaflet once the receptor is taken
+out. The default site, `hole`, puts the complex there, which suits another receptor of similar size. A much smaller
+complex cannot fill it: a single-pass protein (one transmembrane helix) left a 3.5 nm^3 pocket in the GPR1 frame and
+2.8 nm^3 in KOR1 even after the push, and the empty-pocket gate stops the build with a message naming the other site.
+In the free site the same protein cost 6-7 lipids and left at most 0.12 nm^3. With `--embed-site free` the
+complex goes on the point of the membrane plane farthest from the frame's receptor (`embedding.free_site`, periodic
+in x and y; about 10.7 nm from its nearest bead in the 18.3 nm frames), where the frame is an unbroken bilayer, and
+the push makes room for it. The receptor still holds its place there: its beads count as solid in the pocket search,
+and after slicing the build checks that the cut window holds none of them (`frame_protein_in_slice`; otherwise it
+stops and suggests a smaller `--xy-buffer` or `--box`). A single helix with the default 1 nm buffer gives a cell of
+about 4 nm, where the cut edges alone move the APL past the slice gate (+6 % in the GPR3 frame); give it a larger
+buffer (`--xy-buffer 3`).
 
 The membrane that exists after this step is the **embedded membrane**. It is the reference every later stage is
 compared with: it is the membrane the slice is actually cut from. The uncut frame is also measured ("CG frame"

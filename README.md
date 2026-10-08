@@ -38,12 +38,13 @@ python -m membraneforger --aa complex.pdb --orient-chain R --out output_director
 |---|---|
 | `--aa PDB` | your all-atom structure (required) |
 | `--orient-chain C` | the chain that spans or associates with the membrane (optional when the input has one protein chain); `--orient-chains A,B` for several |
-| `--orient-residues FIRST-LAST` | orient on these residues of the anchor chain only (e.g. a transmembrane helix, `343-363`); PPM sees them alone and the whole complex follows |
+| `--orient-residues FIRST-LAST` | orient on these residues of the anchor chain only (e.g. a transmembrane helix, `343-363`); PPM sees them alone and the whole complex follows. With `--orientation none` (input already along z) it names the membrane-embedded segment instead: nothing is rotated, and the bilayer centre goes at the midpoint of that segment's CA z range |
 | `--nterm-side in\|out` | side of the membrane the N terminus of that chain lies on; required by PPM unless an OPM entry gives it |
 | `--orientation auto\|ppm\|opm\|none` | orientation source (default `auto`); `none` uses your coordinates as given |
 | `--pdb-id ID` | exact PDB ID, to use its OPM orientation (default: the `HEADER` record of the input, never the file name) |
 | `--ppm-exe PATH` | the compiled PPM 3.0 program (`immers`), or set `MEMBRANEFORGER_PPM` |
 | `--cg 1` / `--cg 2` / `--cg FILE` | the membrane: `1` = one of the bundled GPR139 frames at random (default), `2` = one of the bundled kappa opioid receptor frames at random, or `custom=FILE`, a Martini 3 frame of your own complex (add `--embed` to use only its membrane) |
+| `--embed-site hole\|free` | where the protein goes in a bundled (or `--embed`) frame: `hole` (default) = where the frame's receptor was; `free` = the unbroken bilayer farthest from that receptor, for a protein much smaller than it, such as a single transmembrane helix (the slice must then stay clear of the receptor, and a single helix wants a larger `--xy-buffer`, e.g. 3) |
 | `--box X Y Z` | opt-in box edges in Å. Default (`BOX = auto`): the membrane is cut to the complex plus `--xy-buffer` (1.0 nm) in x and y, z from the protein height. A smaller x and y cuts the membrane around the complex; x and y may not exceed the membrane patch |
 | `--xy-buffer NM` | membrane kept around the complex on each side in x and y when the box is auto (default 1.0) |
 | `--apl-validate yes\|no`, `--apl-tolerance PERCENT` | the slice gate: stop before backmapping when a leaflet's area per lipid changes by more than the tolerance (default 5 %, warning above 3 %) against the membrane it was cut from |
@@ -84,6 +85,13 @@ normal along +z, bilayer midplane at z = 0, cytoplasmic side negative z):
   selection whose CA lies in the hydrophobic slab (`validation.frame.outside_segment_residues_inside_slab`, a `WARN`
   in the log), which for a single-pass protein should be at most the residues flanking the helix:
   `python -m membraneforger --aa rage.pdb --orientation ppm --orient-residues 343-363 --nterm-side out --out rage_out`.
+- With `--orientation none` the input is used as given, and the bilayer centre is found by a hydrophobic-belt search
+  over the whole protein, which a domain with a hydrophobic surface can pull off the helix. `--orient-residues` then
+  names the embedded segment instead (no PPM, no `--nterm-side`): the bilayer centre is the midpoint of that
+  segment's CA z range, and protein CA outside it within 15 A of that centre are listed (`WARN`). `--nterm-side`,
+  when given, is checked on the anchor chain's own N terminus relative to that centre; the wrong side stops the build. For a single-pass
+  protein in a bundled frame, add `--embed-site free`:
+  `python -m membraneforger --aa sp.pdb --orientation none --orient-residues 152-177 --nterm-side out --embed-site free --out sp_out`.
 - PPM 3.0 is not bundled. Compile its Fortran source (distributed by the OPM team, `ppm3_code/`) with `make` and pass the
   `immers` executable; `res.lib` must sit next to it. Advanced: `--ppm-membrane CODE`, `--ppm-heteroatoms`,
   `--opm-file FILE`, `--opm-cache DIR`.
