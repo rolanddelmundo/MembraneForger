@@ -153,8 +153,9 @@ def window_rdf_distribution(stage: dict, size_nm, cropped: list[bool], r_max_nm:
 
     Every window is a crop the slicer could have taken (anchor rule, half-open interval), measured in the uncut cell
     with the lipid density of the window itself, so the spread of these deviations is the finite-window variability
-    of the lateral order at this crop size. A slice's deviation from the whole cell is graded against it (central
-    95 % PASS, 95-99 % WARNING, beyond FAIL): "within the parent-window distribution".
+    of the lateral order at this crop size. A slice's deviation from the whole cell is graded against it one-sided
+    (qc.classify_percentile: PASS below the 95th percentile, WARNING below the 99th, FAIL above; a deviation smaller
+    than the windows' is never a defect): "within the parent-window distribution".
     """
     cell = np.array(stage["box_nm"][:2], dtype=float)
     size = np.array(size_nm, dtype=float)
