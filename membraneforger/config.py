@@ -327,8 +327,8 @@ class Settings:
     slice_offset_step_nm: float = 0.1
     # Slice validation against the membrane that was cut (the embedded membrane). The construction check compares the
     # leaflet APL of the slice with the Voronoi areas of the SAME lipids in the uncut membrane: only the new seam can
-    # change it. Measured over the 18 bundled frames cut around the 6WHC complex (36 leaflets): median 1.6 %, 95th
-    # percentile 3.8 %, largest 5.7 % (docs/membraneforger_tutorial.md 5.3), while the earlier all-beads-inside rule
+    # change it. Measured over the 18 bundled frames cut around the 6WHC complex (36 leaflets): median 0.9 %, 95th
+    # percentile 2.7 %, largest 4.0 % (docs/membraneforger_tutorial.md 5.3), while the earlier all-beads-inside rule
     # gave +12 to +32 %. So: PASS up to apl_slice_warning_percent, WARNING up to apl_slice_tolerance_percent, beyond
     # that FAIL and (apl_validate) the build stops before backmapping. The RDF check compares the all-anchor headgroup
     # g(r) of each leaflet with the reference's: first-shell position shift PASS within rdf_peak_warning_a, WARNING
