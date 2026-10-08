@@ -55,7 +55,9 @@ pairs becoming 0; on GPR3 8.4 degrees). All numbers in this document come from c
 
 With a bundled membrane (or `--embed`) the oriented complex is placed where the frame's own receptor was (or, with
 `--embed-site free`, on the unbroken bilayer away from it; see below), its
-bilayer centre on the midplane found between the two PO4 planes, and room is made for it (`embed_complex`). With
+bilayer centre on the midplane found between the two PO4 planes (an oriented complex has it at z = 0; with
+`--orientation none` it is `--bilayer-z`, else the midpoint of the CA z range of the segment `--orient-residues`
+names, else the hydrophobic-belt search), and room is made for it (`embed_complex`). With
 your own frame of the same complex the all-atom structure is fitted onto the frame's coarse-grained protein instead
 and nothing is removed.
 

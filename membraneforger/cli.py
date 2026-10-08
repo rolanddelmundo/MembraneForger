@@ -134,7 +134,9 @@ def make_parser() -> argparse.ArgumentParser:
     orient.add_argument("--orient-residues", metavar="FIRST-LAST", default=None,
                         help="orient on these residues of the anchor chain(s) only, e.g. the transmembrane helix 343-363 "
                              "(several: 343-363,370-380; numbers as in the input). PPM is run on them alone and the whole "
-                             "complex follows rigidly; needs --nterm-side for the first selected residue")
+                             "complex follows rigidly; needs --nterm-side for the first selected residue. With --orientation "
+                             "none it names the membrane-embedded segment of an input already along z: nothing is rotated and "
+                             "the bilayer centre goes at the midpoint of that segment's CA z range")
     orient.add_argument("--nterm-side", choices=NTERM_SIDES, default=None,
                         help=f"side of the membrane the N terminus of the first anchor chain lies on; needed by PPM when no "
                              f"exact OPM entry gives it (default: {NTERM_SIDE})")
@@ -229,6 +231,12 @@ def main(argv: list | None = None) -> int:
         box = tuple(args.box) if args.box else (None if args.membrane else parse_box(BOX))
     except SystemExit as exc:
         parser.error(str(exc))
+    if orientation.mode == "none" and orientation.residues and not args.membrane:
+        if args.bilayer_z is not None:
+            parser.error("--orient-residues with --orientation none sets the bilayer centre from that segment; give it or --bilayer-z, not both")
+        if not embed:
+            parser.error("--orient-residues with --orientation none places an embedded protein (a bundled membrane or --embed); "
+                         "a fitted frame takes the coarse-grained protein's own pose")
     if orientation.mode != "none" and args.bilayer_z is not None and not args.membrane:
         parser.error("--bilayer-z applies with --orientation none; an oriented complex has its bilayer centre at z = 0")
     if args.membrane and (orientation.mode != "none" and (orientation.chains or orientation.residues or args.orientation or args.pdb_id)):
