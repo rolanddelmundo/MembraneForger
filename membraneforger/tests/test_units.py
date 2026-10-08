@@ -364,6 +364,36 @@ class DisulfideAudit(unittest.TestCase):
         self.assertIn("outside 1.8-2.2 A after EM", fails[0])
 
 
+class EnergyMinimizationFailure(unittest.TestCase):
+    """A finite Fmax above the target names the atom it sits on and the residues packed around it."""
+
+    def setUp(self):
+        self.out = Path(tempfile.mkdtemp())
+        atom = lambda resid, resname, name, x, y, z: {"resid": resid, "resname": resname, "atom": name, "x": x, "y": y, "z": z}
+        self.atoms = [atom(1, "LEU", "CA", 1.00, 1.00, 1.00), atom(1, "LEU", "CB", 1.10, 1.00, 1.00),
+                      atom(2, "POPC", "C22", 1.15, 1.05, 1.00), atom(3, "POPC", "C31", 1.30, 1.00, 1.00),
+                      atom(4, "TIP3", "OH2", 2.50, 2.50, 2.50)]
+        for name in ("em.unverified.gro", "solv_ions.gro"):
+            mf.write_gro(self.atoms, [3.0, 3.0, 3.0], self.out / name, "test")
+
+    def test_the_culprit_and_its_neighbours_are_named(self):
+        text = mf.minimization.force_culprit(self.out, 2)
+        self.assertIn("largest force on atom 2 LEU1:CB", text)
+        self.assertIn("POPC2:C22 0.71 A", text)
+        self.assertIn("POPC3:C31 2.00 A", text)
+        self.assertNotIn("TIP3", text)
+        self.assertIn("is not in", mf.minimization.force_culprit(self.out, 99))
+
+    def test_validate_em_reports_the_culprit_of_a_finite_fmax(self):
+        (self.out / "em.log").write_text("   Energies (kJ/mol)\nPotential Energy  = -1.0e+06\n"
+                                         "Maximum force     =  1.59323e+04 on atom 2\nNorm of force     =  1.0e+02\n")
+        message = failure(mf.validate_em, {"out": self.out, "inputs": {}}, {"names": [a["atom"] for a in self.atoms]}, {})
+        self.assertIn("EM final Fmax 15932.3 >= 500 kJ/mol/nm", message)
+        self.assertIn("largest force on atom 2 LEU1:CB", message)
+        self.assertIn("POPC2:C22", message)
+        self.assertIn("before EM: atom 2 LEU1:CB starts", message)
+
+
 class StageRunner(unittest.TestCase):
     def setUp(self):
         self.out = Path(tempfile.mkdtemp())
