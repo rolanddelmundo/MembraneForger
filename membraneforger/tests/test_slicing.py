@@ -317,6 +317,15 @@ class RealFrames(unittest.TestCase):
         self.assertTrue(all(len(m["beads"]) == beads[m["cg"]] for m in cut["membrane"]))
 
 
+class OffsetSlack(unittest.TestCase):
+    def test_slack_is_the_search_range_clamped_to_the_minimum_margin(self):
+        self.assertAlmostEqual(mf.offset_slack(mf.Settings()), 0.5)                              # 1.0 buffer, 0.5 margin
+        self.assertAlmostEqual(mf.offset_slack(mf.Settings(box_xy_buffer_nm=0.7)), 0.2)
+        self.assertEqual(mf.offset_slack(mf.Settings(box_xy_buffer_nm=0.5)), 0.0)                # cannot shift at all
+        self.assertEqual(mf.offset_slack(mf.Settings(box_xy_buffer_nm=0.3)), 0.0)
+        self.assertEqual(mf.offset_slack(mf.Settings(slice_optimize_offset=False)), 0.0)
+
+
 class Integration(unittest.TestCase):
     """prepare_inputs end to end up to (not including) backmapping: orientation, registration, slicing, box."""
 

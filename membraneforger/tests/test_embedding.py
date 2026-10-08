@@ -277,6 +277,20 @@ class FreeSiteHelpers(unittest.TestCase):
                       failure(mf.refuse_frame_protein_in_slice, protein, self.slab, self.box, placed, cut((3.0, 3.0), (2.5, 2.5))))
         self.assertEqual(mf.refuse_frame_protein_in_slice(protein, self.slab, self.box, placed, cut((3.0, 3.0), (1.5, 1.5))), 0)
 
+    def test_clearance_is_euclidean_at_a_corner_as_in_the_placement_check(self):
+        corner = self.protein((5.8, 5.8, 6.0))  # 0.8 nm past both edges of the window's corner: 1.13 nm away
+        edge = self.protein((5.8, 4.0, 6.0))    # 0.8 nm past one edge: 0.8 nm away
+        placed = [{"x": 50.0, "y": 50.0}]
+        cut = {"box": [2.0, 2.0, 12.0], "placed": [{"x": 50.0 - 30.0, "y": 50.0 - 30.0}]}  # window [3, 5) x [3, 5)
+        self.assertEqual(mf.frame_protein_in_slice(corner, self.slab, self.box, placed, cut), 0)
+        self.assertEqual(mf.frame_protein_in_slice(edge, self.slab, self.box, placed, cut), 1)
+        distance = mf.rectangle_distance(np.array([[5.8, 5.8], [5.8, 4.0]]), np.array([3.0, 3.0]), np.array([2.0, 2.0]),
+                                         np.array(self.box[:2]))[0]
+        self.assertTrue(np.allclose(distance, [np.hypot(0.8, 0.8), 0.8]))
+        # the placement check measures the same distance: one candidate point (5, 5) with the window [3, 5) x [3, 5) there
+        self.assertAlmostEqual(mf.free_site(corner, self.slab, self.box, window=((-2.0, -2.0), (0.0, 0.0)), grid_nm=10.0)[1],
+                               float(np.hypot(0.8, 0.8)), places=9)
+
     def test_protein_beads_are_imaged_onto_the_bilayer_in_z(self):
         # a bilayer made whole across the z boundary (slab 9-13 nm in a 12 nm cell) and a protein bead left at z = 0.5
         beads = mf.frame_protein_beads(self.protein((2.0, 2.0, 0.5), (2.0, 2.0, 6.0)), (9.0, 13.0), self.box)

@@ -17,7 +17,8 @@ from .structio import element, wrap, xyz_nm
 __all__ = ['LIPID_NAMES', 'LIPID_ALIASES', 'CONVERTIBLE', 'BELT_NM', 'OVERLAP_NM', 'HYDROPHOBIC', 'CHARGED',
            'EXPOSURE_RADIUS_NM', 'BURIED_ABOVE', 'HARD_CORE_NM', 'MAX_VOID_NM3', 'lipid_name', 'hydrophobic_belt',
            'periodic_mean', 'phosphate_planes', 'membrane_voids', 'EMBED_SITES', 'FRAME_PROTEIN_CLEARANCE_NM',
-           'image_onto_slab', 'frame_protein_beads', 'free_site', 'slice_window', 'frame_protein_in_slice',
+           'image_onto_slab', 'frame_protein_beads', 'free_site', 'rectangle_distance', 'slice_window',
+           'frame_protein_in_slice',
            'embed_complex', 'trim_membrane', 'edit_lipids', 'check_box_z']
 
 # User-facing Martini 3 lipid names (INSANE spelling) and how they are spelled inside the classifier.
@@ -232,17 +233,27 @@ def free_site(cg_protein: list[list[dict]], slab: tuple[float, float], box: list
     X, Y = np.meshgrid((np.arange(nx) + 0.5) * cell[0] / nx, (np.arange(ny) + 0.5) * cell[1] / ny, indexing="ij")
     points = np.column_stack([X.ravel(), Y.ravel()])
     lower, upper = (np.zeros(2), np.zeros(2)) if window is None else (np.asarray(window[0], float), np.asarray(window[1], float))
-    gaps = []
-    for axis in range(2):
-        width = float(upper[axis] - lower[axis])
-        if width >= cell[axis]:
-            gaps.append(np.zeros((len(points), len(beads))))
-            continue
-        relative = np.mod(beads[None, :, axis] - (points[:, axis] + lower[axis])[:, None], cell[axis])
-        gaps.append(np.where(relative <= width, 0.0, np.minimum(relative - width, cell[axis] - relative)))
-    clearance = np.hypot(gaps[0], gaps[1]).min(axis=1)
+    clearance = rectangle_distance(beads[:, :2], points + lower, upper - lower, cell).min(axis=1)
     best = int(np.argmax(clearance))
     return points[best], float(clearance[best])
+
+
+def rectangle_distance(points_xy: np.ndarray, lowers: np.ndarray, size: np.ndarray, cell: np.ndarray) -> np.ndarray:
+    """Periodic Euclidean distance (nm) from each point to each axis-aligned rectangle [lower, lower + size); 0 inside.
+
+    lowers holds one lower corner per rectangle (shape (R, 2)); the result has shape (R, number of points). An axis
+    the rectangle spans entirely contributes no gap. free_site and frame_protein_in_slice share it, so the placement
+    check and the check of the cut that follows measure the same distance.
+    """
+    lowers, size, cell = np.atleast_2d(lowers).astype(float), np.asarray(size, float), np.asarray(cell, float)
+    gaps = []
+    for axis in range(2):
+        if size[axis] >= cell[axis]:
+            gaps.append(np.zeros((len(lowers), len(points_xy))))
+            continue
+        relative = np.mod(points_xy[None, :, axis] - lowers[:, axis, None], cell[axis])
+        gaps.append(np.where(relative <= size[axis], 0.0, np.minimum(relative - size[axis], cell[axis] - relative)))
+    return np.hypot(gaps[0], gaps[1])
 
 
 def slice_window(xyz_nm: np.ndarray, anchor_xy: np.ndarray, cell: np.ndarray, buffer_nm: float, slack_nm: float,
@@ -273,12 +284,10 @@ def frame_protein_in_slice(cg_protein: list[list[dict]], slab: tuple[float, floa
     if not len(beads):
         return 0
     cell, size = np.asarray(box[:2], float), np.asarray(cut["box"][:2], float)
+    size = np.where(size < cell - 1e-9, size, cell)  # an uncut axis keeps the whole cell
     lower = np.array([placed[0]["x"] - cut["placed"][0]["x"], placed[0]["y"] - cut["placed"][0]["y"]]) / 10.0
-    cut_axis = size < cell - 1e-9
-    margin = np.where(cut_axis, clearance_nm, 0.0)
-    relative = np.mod(beads[:, :2] - lower + margin, cell)
-    near = np.where(cut_axis, relative < size + 2.0 * margin - 1e-9, True)
-    return int(np.all(near, axis=1).sum())
+    distance = rectangle_distance(beads[:, :2], lower, size, cell)[0]
+    return int(((distance < clearance_nm) | (distance == 0.0)).sum())
 
 
 def embed_complex(aa_atoms: list[dict], cg_protein: list[list[dict]], membrane: list[dict], box: list[float],
