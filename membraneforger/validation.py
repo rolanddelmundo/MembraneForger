@@ -9,12 +9,15 @@ from collections import Counter
 from pathlib import Path
 
 import numpy as np
+from scipy.spatial import cKDTree
 
 from .config import AMINO, GENERATED, SOLVENT
+from .martini import MARTINI3_PROTEIN, MARTINI3_PROTEIN_ALIASES
 from .runtools import LOG_NAME, sha256
 from .structio import read_pdb, xyz_nm
 
-__all__ = ['read_cg', 'read_all_atom', 'protect_inputs', 'clear_stale_outputs', 'check_inputs_unchanged']
+__all__ = ['read_cg', 'read_all_atom', 'protect_inputs', 'clear_stale_outputs', 'check_inputs_unchanged', 'frame_overlaps',
+           'align_frame_to_box']
 
 def read_cg(path: Path) -> tuple[list[dict], list[float]]:
     """Read a coarse-grained .gro or .pdb into beads (nm) and an orthorhombic box (nm)."""
@@ -125,3 +128,72 @@ def check_inputs_unchanged(hashes: dict) -> None:
     for path, digest in hashes.items():
         if sha256(path) != digest:
             raise SystemExit(f"{path.name} changed during the build")
+
+
+# A frame whose coordinates were rotated about z after the simulation (a rotational fit written without its box) is
+# no longer periodic in the box it declares: wrapping it folds the corners of the rotated square onto its edges, so
+# beads of different molecules land on top of each other there and the opposite corners stay empty. Every periodic
+# operation downstream (slicing images, the seam, Voronoi cells, RDFs) would then be wrong near the edges. The test
+# below counts bead pairs of DIFFERENT lipid residues closer than FRAME_OVERLAP_NM after wrapping (protein beads are
+# left out: bonded side chains of neighbouring residues sit closer than that); an equilibrated Martini membrane has
+# none (its closest inter-molecule pair is about 0.34 nm), a rotated one has thousands.
+FRAME_OVERLAP_NM = 0.30
+FRAME_SOLVENT = {"W", "SW", "TW", "ION", "NA", "CL", "CA", "K", "MG"}
+
+
+def frame_overlaps(xyz: np.ndarray, owner: np.ndarray, box: np.ndarray, radius: float = FRAME_OVERLAP_NM) -> int:
+    """Number of bead pairs of different residues closer than radius (3D) once the coordinates are wrapped into the box."""
+    pairs = cKDTree(np.mod(xyz, box), boxsize=box).query_pairs(radius, output_type="ndarray")
+    return int((owner[pairs[:, 0]] != owner[pairs[:, 1]]).sum()) if len(pairs) else 0
+
+
+def align_frame_to_box(atoms: list[dict], box: list[float]) -> tuple[list[dict], dict]:
+    """Detect a frame rotated about z relative to its (square) box and rotate it back so that it is periodic again.
+
+    The rotation angle is the one at which wrapping creates the fewest inter-residue bead overlaps (coarse 1-degree
+    scan over the 90 degrees a square box allows, refined to 0.01 degree). All atoms, water and ions included, are
+    rotated about the box centre. A frame that no rotation makes periodic is refused. Returns the atoms and a report.
+    """
+    cell, cell3 = np.array(box[:2], dtype=float), np.array(box[:3], dtype=float)
+    kept = [i for i, a in enumerate(atoms) if a["resname"] not in FRAME_SOLVENT and a["atom"] not in FRAME_SOLVENT
+            and MARTINI3_PROTEIN_ALIASES.get(a["resname"], a["resname"]) not in MARTINI3_PROTEIN]
+    xyz = np.array([[atoms[i]["x"], atoms[i]["y"], atoms[i]["z"]] for i in kept])
+    xy = xyz[:, :2]
+    keys, owner, last = {}, np.zeros(len(kept), int), None
+    for n, i in enumerate(kept):  # a residue is a run of equal (resid, resname), as in martini.cg_residues
+        key = (atoms[i]["resid"], atoms[i]["resname"])
+        if key != last:
+            keys[key] = len(keys)
+            last = key
+        owner[n] = len(keys) - 1
+    centre = 0.5 * cell
+    rotated = lambda deg: (xy - centre) @ np.array([[math.cos(math.radians(deg)), math.sin(math.radians(deg))],
+                                                   [-math.sin(math.radians(deg)), math.cos(math.radians(deg))]]) + centre
+    score = lambda deg: frame_overlaps(np.column_stack([rotated(deg), xyz[:, 2]]), owner, cell3)
+    as_read = score(0.0)
+    square = bool(abs(cell[0] - cell[1]) < 0.01)
+    best = (0.0, as_read)
+    if square:
+        for step, span in ((1.0, 90.0), (0.1, 1.0), (0.01, 0.1)):
+            start = best[0] if span < 90.0 else 0.0
+            for deg in np.arange(start - (span if span < 90.0 else 0.0), start + span, step):
+                n = score(float(deg))
+                if n < best[1]:
+                    best = (round(float(deg), 2), n)
+    angle, remaining = best
+    tolerated = max(5, len(kept) // 2000)  # a handful of inherent near-contacts is data, thousands are the rotation
+    if remaining > tolerated and remaining > 0.1 * as_read:
+        raise SystemExit(f"the coarse-grained frame is not periodic in its {cell[0]:.3f} x {cell[1]:.3f} nm box: {as_read} bead pairs of "
+                         f"different molecules overlap (< {FRAME_OVERLAP_NM} nm) once wrapped, and no rotation about z removes them "
+                         f"({remaining} remain at {angle} degrees); its coordinates do not belong to the box line")
+    if as_read <= tolerated or abs(angle) < 0.05 or remaining >= 0.5 * as_read:
+        return atoms, {"rotation_about_z_deg": 0.0, "overlapping_pairs_as_read": as_read, "overlapping_pairs_after": as_read,
+                       "beads_tested": len(kept), "square_box": square}
+    c, s_ = math.cos(math.radians(angle)), math.sin(math.radians(angle))
+    fixed = [dict(a, x=float(centre[0] + (a["x"] - centre[0]) * c - (a["y"] - centre[1]) * s_),   # the same rotation the scan scored
+                  y=float(centre[1] + (a["x"] - centre[0]) * s_ + (a["y"] - centre[1]) * c)) for a in atoms]
+    after = frame_overlaps(np.array([[fixed[i]["x"], fixed[i]["y"], fixed[i]["z"]] for i in kept]), owner, cell3)
+    if after != remaining:
+        raise SystemExit(f"frame alignment is inconsistent: {remaining} overlaps expected after rotating {angle} degrees, {after} found")
+    return fixed, {"rotation_about_z_deg": angle, "overlapping_pairs_as_read": as_read, "overlapping_pairs_after": after,
+                   "beads_tested": len(kept), "square_box": square}

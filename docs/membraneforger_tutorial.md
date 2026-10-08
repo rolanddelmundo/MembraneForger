@@ -29,6 +29,25 @@ limitations; section 8 the settings.
 - `--orient-chain R` names the chain that spans the membrane; `--nterm-side in|out` is needed by PPM when no OPM
   entry exists. The complete complex moves as one rigid body.
 
+### 1.1 A frame must be periodic in its box
+
+Everything after this point (slicing images, the seam, Voronoi cells, RDFs, equal-size windows) uses the periodic
+cell on the frame's box line. A frame whose coordinates were rotated about z after the simulation (the usual cause is
+a rotational fit, `gmx trjconv -fit rotxy+transxy` or similar, written without transforming the box) is no longer
+periodic in that box: wrapping folds the corners of the rotated square onto its edges, beads of different molecules
+land on top of each other there, the opposite corners stay empty, and the "diamond" one sees when rendering the file
+is real data, not drift. The 18 bundled KOR and GPR139 frames are affected, each by its own angle (3 to 83 degrees);
+the 6WHC example frame is not.
+
+MembraneForger detects this when it reads a frame (`validation.align_frame_to_box`): it counts bead pairs of
+different lipids closer than 0.30 nm after wrapping (an equilibrated Martini membrane has none; a rotated frame has
+hundreds to thousands), scans the 90 degrees a square box allows for the rotation that removes them, refines it to
+0.01 degree, and rotates the whole frame, water and ions included, back about the box centre. The angle and the
+overlap counts before and after are logged (`WARN`) and recorded in `run_manifest.json` (`coarse_grain.frame_alignment`).
+A frame that no rotation makes periodic (a non-square box, or coordinates that simply do not belong to the box line)
+stops the build with a message saying so. On KOR1 the correction is 48.0 degrees (2610 overlapping pairs become 0),
+on GPR3 8.4 degrees (543 become 0). All numbers in this document come from corrected frames.
+
 ## 2. Placement and embedding
 
 With a bundled membrane (or `--embed`) the oriented complex is placed where the frame's own receptor was, its
@@ -65,9 +84,9 @@ the cell is not cut. The cut is made lipid by lipid:
    that crosses the new cell edge stays where it is (mstool runs with `pbc=True`, GROMACS wraps);
 5. the window may be shifted on a cropped axis by up to 0.5 nm (never past the 0.5 nm minimum margin) in steps of
    0.1 nm; the offset whose lipid counts best match the reference leaflet density and composition is used
-   (`--no-slice-offset` keeps the centred window). On the bundled frames the gain is small: the within-leaflet
-   scatter against the whole cell changed from 5.9 / 4.2 % (lower / upper, standard deviation over 18 frames) to
-   5.5 / 3.8 %;
+   (`--no-slice-offset` keeps the centred window). On the bundled frames the gain is small: the spread of the
+   whole-cell deviation over 18 frames changed from 3.7 / 3.4 % (lower / upper, standard deviation) to 2.8 / 2.9 %,
+   and the worst case from 11.3 to 9.0 %;
 6. the new periodic seam is relaxed in place at the coarse-grained level: a short steepest descent pushes apart
    beads of different lipids that only the cut brought within 0.30 nm of each other, with the complex as a fixed
    repulsive wall, every bead held near its position and every lipid held in shape by intramolecular distance
@@ -158,22 +177,22 @@ count the all-beads-inside rule keeps in the same window, with the APL that coun
 | Stage / algorithm | Upper lipids | Lower lipids | Upper APL (A^2) | Lower APL (A^2) | dAPL upper vs embed | dAPL lower vs embed | Verdict |
 |---|---:|---:|---:|---:|---:|---:|---|
 | CG frame (frame's own receptor) | 684 | 618 | 47.0 | 52.0 | | | |
-| Embedded CG membrane (reference) | 656 | 560 | 48.0 | 52.6 | reference | reference | |
-| Old all-beads-inside slice | 211 | 158 | 54.9 | 60.5 | +14.4 % | +15.0 % | FAIL |
-| New anchor slice, centred window | 249 | 199 | 46.0 | 47.7 | -4.2 % | -9.3 % | (whole cell) |
-| New anchor slice, offset + relaxed seam | 249 | 193 | 46.5 | 49.6 | -3.0 % | -5.8 % | PASS |
-| same lipids in the uncut membrane | 249 | 193 | 47.5 | 50.8 | construction: -2.0 % | -2.4 % | PASS |
+| Embedded CG membrane (reference) | 661 | 558 | 47.7 | 52.7 | reference | reference | |
+| Old all-beads-inside slice | 211 | 145 | 55.0 | 65.5 | +15.4 % | +24.2 % | FAIL |
+| New anchor slice, offset + relaxed seam | 243 | 184 | 47.8 | 51.6 | +0.2 % | -2.1 % | PASS |
+| same lipids in the uncut membrane | 243 | 184 | 48.1 | 50.5 | construction: -0.7 % | +2.0 % | PASS |
 
-The old rule deleted 73 lipids whose anchor was inside the window (35 lower, 38 upper) because one tail bead
-crossed the edge. The new slice keeps them; the seam relaxation removed none. The same build on the 11.2 nm `6WHC`
-frame (fit, not embedded; one axis cut): old rule +11.5 / +13.6 %, new slice +1.8 / -0.7 % against the whole cell
-and -0.1 / +2.5 % against the same lipids uncut.
+The old rule deleted 71 lipids whose anchor was inside the window (39 lower, 32 upper) because one tail bead
+crossed the edge. The new slice keeps them; the seam relaxation moved 165 lipids by 0.015 nm on average (0.22 nm at
+most) and removed none. The same build on the 11.2 nm `6WHC` frame (fit, not embedded; one axis cut): old rule
++11.5 / +13.6 %, new slice +1.8 / -0.7 % against the whole cell and -0.1 / +2.5 % against the same lipids uncut.
 
-Over all 18 bundled frames (36 leaflets) the construction deviation of the new slice has a median of 1.6 %, a 95th
-percentile of 3.8 % and a largest value of 5.7 %, which is where the 3 / 5 % ceilings come from; the old rule gave
-+12 to +32 % on the same frames. The whole-cell deviation of a correct crop scatters more (standard deviation 4-6 %,
-lower leaflet systematically 3-4 % denser near the protein than the cell mean), which is why it is reported as
-representativeness and not used to stop the build. A 50 -> 56 and 51 -> 59 A^2 change (the GIPR `gipsi_v3` build
+Over all 18 bundled frames (36 leaflets, frames aligned to their boxes first, section 1.1) the construction
+deviation of the new slice has a median of 0.9 %, a 95th percentile of 2.7 % and a largest value of 4.0 %, so the
+3 / 5 % ceilings pass every correct crop tested and fail the old rule (+12 to +32 % on the same frames) by a wide
+margin. The whole-cell deviation of a correct crop scatters more (standard deviation about 3 %, up to 9 %; the upper
+leaflet next to the protein is 3-4 % denser than the cell mean), which is why it is reported as representativeness
+and not used to stop the build. A 50 -> 56 and 51 -> 59 A^2 change (the GIPR `gipsi_v3` build
 that exposed the defect) is +12 and +16 %: FAIL on both leaflets under either comparison.
 
 The repaired slice therefore preserves the embedded membrane's packing to within 2-3 % per leaflet on the
@@ -207,7 +226,8 @@ Thickness is the distance between the median anchor z of the two leaflets (non-s
 map whose spread is reported. Protein orientation is the tilt of the principal axis of the complex's heavy atoms
 within 1.5 nm of the midplane, its insertion depth (mean z of those atoms relative to the midplane) and an inversion
 flag. Across slicing (gate 1) thickness may change by 3 / 5 % (PASS / WARNING), tilt by 1 / 3 degrees and depth by
-0.5 / 1.5 A; in the examples all three change by 0.0-1.4 % and 0.0 degrees, as expected from a rigid translation.
+0.5 / 1.5 A; in the examples thickness changes by 0.2 % (KOR1: 42.9 to 42.8 A) and tilt and depth by 0.0, as expected
+from a rigid translation.
 
 ### 5.7 Integrity
 
@@ -282,13 +302,18 @@ the coordination number up to the minimum.
 The decisive comparison is **sliced CG against the same lipids in the uncut embedded membrane**: same
 representation, same force field, same molecules, so the curves must agree within counting noise. The first-shell
 peak may move by 0.5 A (PASS) or 1.0 A (WARNING); the RMS difference of the curves between 3 and 20 A may be at most
-three times their combined Poisson noise. The slice's deviation from the whole-cell curve is in addition graded
+three times their combined Poisson noise. In these ten-species membranes the all-anchor first shell is weak (its
+height is within 5 % of the uniform value, because cholesterol ROH, PO4 and the GM3 sugar centroid sit at different
+distances from each other), so its position is not graded and the curve difference decides; the species curves
+carry the structure (POPC-POPC first peak 7.5 A, DOPC-DOPC 9.5 A, CHOL-CHOL 11.5 A in the KOR1 frame). The slice's
+deviation from the whole-cell curve is in addition graded
 against the empirical distribution of the same deviation over equal-size windows cut everywhere in the embedded
-membrane (central 95 % PASS, 95-99 % WARNING, beyond FAIL): the slice must look like one of the parent's own windows. In the `KOR1` build the peak (7.5 A in both leaflets, the CHOL ROH-PO4
-contact dominating the first shell; the POPC-POPC curve peaks near 8-9 A) does not move and the RMS difference is
-1.5 noise units in both leaflets; in the `6WHC` build 0.7 / 0.8. The slice therefore keeps the lateral organization
-of the membrane it was cut from. The whole-cell curve is reported alongside; it differs more (up to 3 noise units
-on `KOR1`) because a cell with a larger protein fraction has a different accessible geometry, not because of the cut.
+membrane (central 95 % PASS, 95-99 % WARNING, beyond FAIL): the slice must look like one of the parent's own windows. In the `KOR1` build the RMS difference against the same lipids uncut is 1.6
+(upper) and 1.4 (lower) noise units, in the `6WHC` build 0.7 / 0.8, and the POPC-POPC and DOPC-DOPC first peaks of
+the slice lie within one 1 A bin of the reference's. The slice therefore keeps the lateral organization of the
+membrane it was cut from. Against the whole embedded cell the `KOR1` upper leaflet sits at the 98.6th percentile of
+the 144 equal-size windows (WARNING, the lower at the 86th): a window around the protein is not a typical window,
+which is representativeness, not a construction error.
 
 Across resolutions the anchors change from Martini beads to atoms, and the atomistic force field has its own
 excluded-volume distances. Backmapping preserves the lateral topology inherited from the equilibrated Martini
@@ -341,7 +366,10 @@ and lipid-solute clashes (gate 2, the build's own checks). Where the thresholds 
   profiles) and on files, not yet on a production trajectory of a MembraneForger build; `MDAnalysis` is optional
   and only needed to read xtc/trr directly (write frames with `gmx trjconv -sep` otherwise).
 - No GIPR build or trajectory is part of this repository; the before/after numbers above are from the bundled
-  frames and the 6WHC example, which show the same defect (+12 to +32 % with the old rule) and the same repair.
+  frames and the 6WHC example, which show the same defect with the old rule and the same repair.
+- The bundled frame files are shipped as they were produced, rotated about z; they are corrected in memory at read
+  time, not rewritten on disk. A user frame with the same artefact is corrected the same way; one whose coordinates
+  do not fit its box at all is refused rather than guessed at.
 
 ## 8. Settings
 

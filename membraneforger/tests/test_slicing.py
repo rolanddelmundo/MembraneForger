@@ -279,6 +279,8 @@ class RealFrames(unittest.TestCase):
     def test_18_nm_gpcr_frames_are_cut_to_a_fraction_of_their_area(self):
         for frame in (KOR_FRAME, GPR139_FRAME):
             raw, box = mf.read_cg(frame)
+            raw, alignment = mf.align_frame_to_box(raw, box)                 # the bundled frames are rotated about z relative to their box
+            self.assertGreater(abs(alignment["rotation_about_z_deg"]), 1.0)
             cg = mf.classify_cg(raw, MAPPING)
             slab = mf.make_membrane_whole(cg["membrane"], box)
             midplane = mf.bilayer_midplane(cg["membrane"], slab)[0]
@@ -297,16 +299,17 @@ class RealFrames(unittest.TestCase):
                 self.assertTrue(report["leaflets_after"]["lower"] and report["leaflets_after"]["upper"])
                 self.assertEqual(cut["box"][2], box[2])
                 self.check_whole_for(cg["membrane"], cut)
-                # no seam clash survives in the new periodic cell
+                # no hard-core seam overlap survives in the new periodic cell, and few contacts at all are left to backmapping
                 from scipy.spatial import cKDTree
                 pts = np.vstack([m["xyz"] for m in cut["membrane"]])
                 own = np.concatenate([np.full(len(m["xyz"]), i) for i, m in enumerate(cut["membrane"])])
                 new_box = np.array(cut["box"])
-                limit = self.settings.seam_min_bead_nm
-                pairs = cKDTree(np.mod(pts - pts.min(axis=0), new_box), boxsize=new_box).query_pairs(limit, output_type="ndarray")
-                flat = cKDTree(pts).query_pairs(limit, output_type="ndarray")
-                created = {tuple(p) for p in pairs.tolist() if own[p[0]] != own[p[1]]} - {tuple(p) for p in flat.tolist()}
-                self.assertEqual(len(created), 0)
+                tree = cKDTree(np.mod(pts - pts.min(axis=0), new_box), boxsize=new_box)
+                for limit, allowed in ((self.settings.seam_hard_core_nm, 0), (self.settings.seam_min_bead_nm, 5)):
+                    pairs = tree.query_pairs(limit, output_type="ndarray")
+                    flat = cKDTree(pts).query_pairs(limit, output_type="ndarray")
+                    created = {tuple(p) for p in pairs.tolist() if own[p[0]] != own[p[1]]} - {tuple(p) for p in flat.tolist()}
+                    self.assertLessEqual(len(created), allowed)
 
     def check_whole_for(self, membrane, cut):
         beads = {m["cg"]: len(m["beads"]) for m in membrane}

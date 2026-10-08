@@ -27,3 +27,9 @@ in the same membrane model, 11.2 × 11.2 nm) used by the tests:
 python -m membraneforger --aa examples/preeq_cg_cellmem/6WHC_MTZP_prot-lig.pdb \
     --cg examples/preeq_cg_cellmem/6WHC_MTZP_cg_cellmem.gro --out example_out
 ```
+
+Known limitation of the 18 KOR/GPR frames: their coordinates are rotated about z relative to the box line (by 3 to
+83 degrees, a different angle per frame), so they are not periodic in their box as written and render as a "diamond"
+inside it. MembraneForger corrects this automatically when it reads a frame (`align_frame_to_box`, logged as a
+warning with the angle); any other tool must rotate the coordinates back about the box centre before applying
+periodic boundaries. `6WHC_MTZP_cg_cellmem.gro` is not affected.
