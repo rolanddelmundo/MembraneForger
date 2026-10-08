@@ -11,7 +11,7 @@ __all__ = ['ORIENTATION', 'ORIENT_CHAINS', 'ORIENT_RESIDUES', 'NTERM_SIDE', 'PDB
            'SALT_M', 'ION_RMIN_NM', 'GENION_ATTEMPTS', 'WATER_CLASH_NM', 'WATER_PROTECT_NM', 'LIPID_SCAN_A',
            'LIPID_DELETE_A', 'GENERATED', 'INDEX_GROUPS', 'FMAX_TARGET', 'H_BOND_RANGE', 'GLPA_MAX_BOND_A',
            'LYS_BACKBONE', 'ONE_LETTER', 'GM3_XML_TO_GLPA', 'LIPIDATED', 'CYSG_HDB', 'DIHRES_EM_FC', 'EM_MDP',
-           'Settings']
+           'APL_VALIDATE', 'APL_SLICE_WARNING_PERCENT', 'APL_SLICE_TOLERANCE_PERCENT', 'RDF_VALIDATE', 'Settings']
 
 # ============================================================
 # MEMBRANE ORIENTATION
@@ -35,6 +35,18 @@ PPM_MEMBRANE = ""          # advanced: PPM 3.0 membrane code, "" = undefined fla
 # midplane with SLAB_Z_PAD_NM of water above and below. A user box is opt-in: "x,y,z" in nm, with x and y no larger
 # than the coarse-grained cell (the membrane is cut to that size around the complex) and z at least the automatic minimum.
 BOX = "auto"               # auto | "x,y,z" (nm)
+
+# ============================================================
+# SLICE VALIDATION
+# ============================================================
+# The sliced coarse-grained membrane is compared with the membrane it was cut from (the embedded membrane, after
+# embed_complex and any lipid edits) before anything is backmapped: global leaflet APL from a periodic Voronoi
+# tessellation, composition, and the lateral headgroup RDF. APL_VALIDATE = yes stops the build when either leaflet's
+# APL changes by more than APL_SLICE_TOLERANCE_PERCENT; "no" only logs the result. See Settings below for the values.
+APL_VALIDATE = "yes"       # yes | no
+APL_SLICE_WARNING_PERCENT = 3.0      # a leaflet APL change up to this is PASS, up to the tolerance WARNING, beyond FAIL
+APL_SLICE_TOLERANCE_PERCENT = 5.0
+RDF_VALIDATE = "yes"       # yes | no   (the RDF comparison is part of the slice gate's verdict)
 
 AMINO = {"ALA", "ARG", "ASN", "ASP", "CYS", "CYSG", "CYSP", "GLN", "GLU", "GLY", "HIS", "HSD", "HSE", "HSP", "ILE",
          "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL", "AIB", "LEM", "KTZ", "KRT", "KSM"}
@@ -74,7 +86,9 @@ GENERATED = ("oriented.pdb", "orientation_report.json", "membrane.pdb", "aa_cg_m
              "solv_raw.gro", "solv.gro", "solv_ions.gro", "index_ini.ndx", "genion.ndx", "ions.mdp", "ions.tpr",
              "ions_mdout.mdp", "em.mdp", "mdout.mdp", "em.tpr", "em.log", "em.edr", "em.trr", "em.gro",
              "em.unverified.gro", "emres.mdp", "emres.tpr", "emres.log", "emres.edr", "emres.trr", "emres.gro", "toppar",
-             "audit.json", "run_manifest.json", "ring_piercing.json", "work")
+             "audit.json", "run_manifest.json", "ring_piercing.json", "membrane_validation.json", "membrane_validation.md",
+             "membrane_validation_lipids.tsv", "membrane_validation_apl.png", "membrane_validation_species.png",
+             "membrane_validation_rdf.png", "membrane_validation_composition.png", "work")
 
 
 INDEX_GROUPS = ("System", "Protein_LIG", "MEMB", "SOL_ION")
@@ -297,9 +311,39 @@ class Settings:
     box_xy_buffer_nm: float = 1.0
     # A user box must leave at least this much membrane on each side of the complex.
     box_xy_min_buffer_nm: float = 0.5
-    # Seam clash threshold between beads of different lipids that only the new periodicity brings together. The
+    # Seam contact threshold between beads of different lipids that only the new periodicity brings together. The
     # closest inter-molecule bead pair in the equilibrated 6WHC frame is 0.342 nm (Martini sigma is 0.47 nm), so
-    # 0.30 nm separates real near-contacts from overlap; such lipids are removed rather than left to minimization.
+    # 0.30 nm separates real near-contacts from overlap. Such pairs are relaxed in place (slicing.relax_seam, at most
+    # seam_relax_steps steepest-descent steps); a lipid is removed only if a pair closer than seam_hard_core_nm
+    # survives the relaxation (beads that close would put atoms of two lipids on top of each other).
     seam_min_bead_nm: float = 0.30
+    seam_hard_core_nm: float = 0.15
+    seam_relax_steps: int = 400
+    # Crop position: the window may be shifted on a cropped axis by up to slice_offset_search_nm (never past the
+    # minimum margin) in steps of slice_offset_step_nm; the offset whose lipid counts best reproduce the reference
+    # leaflet density and composition is used (slicing.choose_offset). Off: the window is centred on the complex.
+    slice_optimize_offset: bool = True
+    slice_offset_search_nm: float = 0.5
+    slice_offset_step_nm: float = 0.1
+    # Slice validation against the membrane that was cut (the embedded membrane). The construction check compares the
+    # leaflet APL of the slice with the Voronoi areas of the SAME lipids in the uncut membrane: only the new seam can
+    # change it. Measured over the 18 bundled frames cut around the 6WHC complex (36 leaflets): median 1.6 %, 95th
+    # percentile 3.8 %, largest 5.7 % (docs/membraneforger_tutorial.md 5.3), while the earlier all-beads-inside rule
+    # gave +12 to +32 %. So: PASS up to apl_slice_warning_percent, WARNING up to apl_slice_tolerance_percent, beyond
+    # that FAIL and (apl_validate) the build stops before backmapping. The RDF check compares the all-anchor headgroup
+    # g(r) of each leaflet with the reference's: first-shell position shift PASS within rdf_peak_warning_a, WARNING
+    # within rdf_max_peak_shift_a (two 0.5 A bins), FAIL beyond; the RMS difference of the curves may be at most
+    # rdf_max_noise_units times their combined counting noise. Composition and representativeness (slice against the
+    # whole embedded cell) are graded against the empirical distribution of equal-size windows of the embedded
+    # membrane (central 95 % PASS, 95-99 % WARNING, beyond FAIL).
+    apl_validate: bool = APL_VALIDATE.lower() == "yes"
+    apl_slice_warning_percent: float = APL_SLICE_WARNING_PERCENT
+    apl_slice_tolerance_percent: float = APL_SLICE_TOLERANCE_PERCENT
+    rdf_validate: bool = RDF_VALIDATE.lower() == "yes"
+    rdf_peak_warning_a: float = 0.5
+    rdf_max_peak_shift_a: float = 1.0
+    rdf_max_noise_units: float = 3.0
+    # Equivalent windows sampled from the embedded membrane for the empirical finite-crop distributions (per axis).
+    slice_window_samples: int = 12
     # A sliced membrane must keep at least this many lipids, and at least this many phospholipids, in two leaflets.
     slice_min_lipids: int = 30
