@@ -88,9 +88,10 @@ normal along +z, bilayer midplane at z = 0, cytoplasmic side negative z):
 - With `--orientation none` the input is used as given, and the bilayer centre is found by a hydrophobic-belt search
   over the whole protein, which a domain with a hydrophobic surface can pull off the helix. `--orient-residues` then
   names the embedded segment instead (no PPM, no `--nterm-side`): the bilayer centre is the midpoint of that
-  segment's CA z range, and protein CA outside it within 15 A of that centre are listed (`WARN`). For a single-pass
+  segment's CA z range, and protein CA outside it within 15 A of that centre are listed (`WARN`). `--nterm-side`,
+  when given, is checked on the anchor chain's own N terminus relative to that centre; the wrong side stops the build. For a single-pass
   protein in a bundled frame, add `--embed-site free`:
-  `python -m membraneforger --aa sp.pdb --orientation none --orient-residues 152-177 --embed-site free --out sp_out`.
+  `python -m membraneforger --aa sp.pdb --orientation none --orient-residues 152-177 --nterm-side out --embed-site free --out sp_out`.
 - PPM 3.0 is not bundled. Compile its Fortran source (distributed by the OPM team, `ppm3_code/`) with `make` and pass the
   `immers` executable; `res.lib` must sit next to it. Advanced: `--ppm-membrane CODE`, `--ppm-heteroatoms`,
   `--opm-file FILE`, `--opm-cache DIR`.

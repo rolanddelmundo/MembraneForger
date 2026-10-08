@@ -184,6 +184,16 @@ class EmbeddedSegmentWithoutOrientation(unittest.TestCase):
         self.assertTrue(np.allclose(result["R"], np.eye(3)) and not result["t"].any())
         self.assertIn("embedded segment 349-376 of chain(s) R", (out / mf.LOG_NAME).read_text())
 
+    def test_nterm_side_is_checked_on_the_chain_n_terminus(self):
+        # the example receptor's N terminus (Ser25, in the extracellular domain) is out
+        report = self.run_none(chains=("R",), residues=((349, 376),), nterm_side="out")[0]["report"]
+        self.assertEqual(report["nterm_check"]["status"], "PASS")
+        self.assertEqual(report["nterm_check"]["first_residue"], "SER25")
+        self.assertEqual(self.run_none(chains=("R",), residues=((349, 376),))[0]["report"]["nterm_check"]["status"], "not requested")
+        with self.assertRaises(mf.OrientationFailure) as caught:
+            self.run_none(chains=("R",), residues=((349, 376),), nterm_side="in")
+        self.assertIn("N terminus out", str(caught.exception))
+
     def test_without_residues_nothing_changes(self):
         report = self.run_none()[0]["report"]
         self.assertNotIn("segment_bilayer_centre_A", report)

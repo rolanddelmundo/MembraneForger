@@ -575,7 +575,11 @@ def embedded_segment(aa_atoms: list[dict], request: OrientationRequest, ranges: 
     shifted = [dict(a, z=a["z"] - centre) for a in aa_atoms]
     segment = segment_metrics(shifted, anchors, half_thickness_a, ranges)
     segment.update({"segment_ca_z_range_A": [round(min(z), 3), round(max(z), 3)], "half_thickness_A": half_thickness_a})
-    return {"anchor_chains": anchors, "anchor_selection": how, "segment_bilayer_centre_A": round(centre, 3), "segment": segment}
+    # --nterm-side, when given, is checked on the first anchor chain's own N terminus (the whole chain is in the input,
+    # unlike a PPM run on the selection alone), relative to this centre; the wrong side stops the build
+    nterm = nterm_check(shifted, anchors[0], request.nterm_side, half_thickness_a)
+    return {"anchor_chains": anchors, "anchor_selection": how, "segment_bilayer_centre_A": round(centre, 3), "segment": segment,
+            "nterm_check": nterm}
 
 
 def segment_metrics(oriented: list[dict], anchors: list[str], half_thickness_a: float, ranges: tuple) -> dict:
@@ -648,6 +652,10 @@ def orient_complex(aa_atoms: list[dict], aa_path: Path, request: OrientationRequ
                      f"+-{frame['half_thickness_A']:.0f} A of that centre"
                      + (f" ({', '.join(buried[:12])}{', ...' if len(buried) > 12 else ''})" if buried else ""),
                 "WARN" if buried else "INFO")
+            nterm = report["nterm_check"]
+            if nterm["status"] != "not requested":
+                log(out, f"N terminus {nterm['first_residue']} at z {nterm['first_ca_z_A']:+.1f} A from that centre: {nterm['status']} "
+                         f"(--nterm-side {nterm['requested']})", "PASS" if nterm["status"] == "PASS" else "WARN")
         return {"oriented": aa_atoms, "report": report, "R": np.eye(3), "t": np.zeros(3)}
     chains = protein_chains(aa_atoms)
     pdb_id, id_source = resolve_pdb_id(request.pdb_id, aa_path)
