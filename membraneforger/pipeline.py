@@ -26,7 +26,7 @@ from .slicing import slice_membrane_cg
 from .solvation import add_ions, make_index, rebox_system, solvate_system
 from .structio import xyz_nm
 from .topology import build_topology, lipid_clashes, prepare_structure, repair_structure, resolve_lipid_clashes
-from .validation import check_inputs_unchanged, clear_stale_outputs, protect_inputs, read_all_atom, read_cg
+from .validation import align_frame_to_box, check_inputs_unchanged, clear_stale_outputs, protect_inputs, read_all_atom, read_cg
 
 __all__ = ['Session', 'StageFailure', 'run_stage', 'prepare_inputs', 'backmap_and_assemble', 'heavy_atom_piercings', 'membrane_piercings',
            'backmap_verdict',
@@ -124,6 +124,11 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
     write_orientation_report(out, oriented["report"])
     aa_atoms = oriented["oriented"]  # from here on the PPM/OPM frame is authoritative: nothing may tilt the complex
     cg_atoms, box = run_stage(session, "inputs", read_cg, coarse_grain)
+    cg_atoms, frame_fix = run_stage(session, "inputs", align_frame_to_box, cg_atoms, box)
+    if frame_fix["rotation_about_z_deg"]:
+        log(out, f"{coarse_grain.name}: the frame's coordinates are rotated {frame_fix['rotation_about_z_deg']} degrees about z relative to its "
+                 f"box ({frame_fix['overlapping_pairs_as_read']} overlapping bead pairs once wrapped, a rotational fit written without the box); "
+                 f"rotated back about the box centre ({frame_fix['overlapping_pairs_after']} overlaps remain)", "WARN")
     described = run_stage(session, "mstool", read_mapping, out, work, session.python, session.data)
     mapping = described["residues"]
     record["mstool"] = {k: described[k] for k in ("mstool_version", "mstool_path", "mapping_files")}
@@ -139,7 +144,7 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
                  "bonded to the centre; stereochemistry there is neither restrained nor reviewed during backmapping", "WARN")
     for name, dropped in sorted(cg["dropped"].items()):
         log(out, f"{name}: bead(s) {', '.join(dropped)} carry no atoms in the all-atom mapping and are not used", "WARN")
-    record["coarse_grain"] = {"beads": len(cg_atoms), "box_nm": box, "classes": dict(cg["counts"]),
+    record["coarse_grain"] = {"beads": len(cg_atoms), "box_nm": box, "classes": dict(cg["counts"]), "frame_alignment": frame_fix,
                               "membrane_composition": dict(cg["composition"]), "unused_beads": cg["dropped"],
                               "discarded": "CG solvent and ions are not backmapped; atomistic water and 0.15 M NaCl "
                                            "are rebuilt after the box is resized"}
