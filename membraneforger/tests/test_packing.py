@@ -157,6 +157,11 @@ class QC(unittest.TestCase):
         self.assertEqual(mf.classify_percentile(0.97, control)[0], "WARNING")
         self.assertEqual(mf.classify_percentile(5.0, control)[0], "FAIL")
         self.assertEqual(mf.classify_percentile(0.0, control[:5])[0], "INSUFFICIENT SAMPLING")
+        # one-sided (a deviation): the low tail is never a defect, the upper tail grades as before
+        self.assertEqual(mf.classify_percentile(control.min() - 1.0, control, one_sided=True), ("PASS", 0.0))
+        self.assertEqual(mf.classify_percentile(0.97, control, one_sided=True)[0], "WARNING")
+        self.assertEqual(mf.classify_percentile(5.0, control, one_sided=True), ("FAIL", 1.0))
+        self.assertEqual(mf.classify_percentile(0.0, control[:5], one_sided=True)[0], "INSUFFICIENT SAMPLING")
 
     def test_overall_status(self):
         rec = lambda status: mf.metric("m", "s", 1.0, "u", status=status)
