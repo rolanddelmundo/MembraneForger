@@ -161,6 +161,45 @@ class AnchorSelection(unittest.TestCase):
         self.assertEqual(mf.parse_chains(None, ""), ())
 
 
+class EmbeddedSegmentWithoutOrientation(unittest.TestCase):
+    """--orientation none with --orient-residues: the input is used as given and the named segment sets the bilayer centre."""
+
+    def run_none(self, **request):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        out, work = Fixtures.session_dirs(tmp)
+        return mf.orient_complex(Fixtures.complex(), AA_PDB, mf.OrientationRequest(mode="none", **request), mf.Settings(), out, work), out
+
+    def test_bilayer_centre_is_the_midpoint_of_the_segment_and_nothing_moves(self):
+        result, out = self.run_none(chains=("R",), residues=((349, 376),))  # TM6 of the example receptor; no --nterm-side
+        z = [a["z"] for a in Fixtures.complex() if a["chain"] == "R" and 349 <= a["resid"] <= 376 and a["atom"] == "CA"]
+        report = result["report"]
+        self.assertFalse(report["enabled"])
+        self.assertAlmostEqual(report["segment_bilayer_centre_A"], 0.5 * (min(z) + max(z)), places=3)
+        self.assertEqual(report["anchor_chains"], ["R"])
+        self.assertEqual(report["segment"]["segment_ca_atoms"], 28)
+        centre = report["segment_bilayer_centre_A"]
+        self.assertEqual(report["segment"]["segment_ca_inside_slab"], sum(abs(v - centre) <= 15.0 for v in z))  # 33 A long: ends stick out
+        self.assertIs(result["oriented"], Fixtures.complex())  # used as given: no rotation, no translation
+        self.assertTrue(np.allclose(result["R"], np.eye(3)) and not result["t"].any())
+        self.assertIn("embedded segment 349-376 of chain(s) R", (out / mf.LOG_NAME).read_text())
+
+    def test_without_residues_nothing_changes(self):
+        report = self.run_none()[0]["report"]
+        self.assertNotIn("segment_bilayer_centre_A", report)
+        self.assertEqual(report["anchor_chains"], [])
+
+    def test_several_chains_need_the_anchor_named(self):
+        with self.assertRaises(mf.OrientationFailure) as caught:
+            self.run_none(residues=((349, 376),))
+        self.assertIn("Multiple protein chains were detected", str(caught.exception))
+
+    def test_a_segment_shorter_than_a_helix_is_refused(self):
+        with self.assertRaises(mf.OrientationFailure) as caught:
+            self.run_none(chains=("R",), residues=((349, 355),))
+        self.assertIn("selects too few residues", str(caught.exception))
+
+
 class OPMReferenceMode(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -654,6 +693,12 @@ class CommandLine(unittest.TestCase):
         self.assertIn("--bilayer-z applies with --orientation none",
                       self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--orient-chain", "R", "--bilayer-z", "5")[1])
         self.assertIn("do not apply", self.run_cli("--membrane", AA_PDB, "--orient-chain", "R")[1])
+        self.assertIn("give it or --bilayer-z, not both",
+                      self.run_cli("--all-atom", AA_PDB, "--orientation", "none", "--orient-chain", "R", "--orient-residues", "349-376",
+                                   "--bilayer-z", "0")[1])
+        self.assertIn("places an embedded protein",
+                      self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--orientation", "none", "--orient-chain", "R",
+                                   "--orient-residues", "349-376")[1])
 
     def test_multiple_chains_fail_early_with_instructions(self):
         if not shutil.which(self.gmx):
