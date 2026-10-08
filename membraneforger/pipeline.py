@@ -22,7 +22,7 @@ from .minimization import run_em, validate_em
 from .orientation import OrientationRequest, check_orientation_preserved, orient_complex
 from .reporting import write_run_manifest
 from .runtools import LOG_NAME, gromacs_version, log, sha256
-from .slicing import slice_membrane_cg
+from .slicing import offset_slack, slice_membrane_cg
 from .solvation import add_ions, make_index, rebox_system, solvate_system
 from .stereo import check_gm3_stereo
 from .structio import xyz_nm
@@ -175,7 +175,7 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
         settings = session.settings
         fit = run_stage(session, "mapping", embed_complex, aa_atoms, cg["protein"], membrane, box, slab,
                         centre_a, midplane if enabled else None, site=session.embed_site, window_buffer_nm=settings.box_xy_buffer_nm,
-                        window_slack_nm=settings.slice_offset_search_nm if settings.slice_optimize_offset else 0.0,
+                        window_slack_nm=offset_slack(settings),
                         requested_xy_nm=(session.box_a[0] / 10.0, session.box_a[1] / 10.0) if session.box_a else None)
         membrane = fit["membrane"]
         for note in fit["notes"]:
