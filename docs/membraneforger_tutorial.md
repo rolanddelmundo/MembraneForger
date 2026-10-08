@@ -8,7 +8,7 @@ that every build writes next to `em.gro`.
 ```
 equilibrated Martini membrane (frame)
     -> orientation of the complex (OPM / PPM) and placement into the frame            (orient, mapping / embed)
-    -> embedded membrane: the lipids overlapping the complex are removed              (the REFERENCE for slicing)
+    -> embedded membrane: lipids pushed aside, only those it occupies removed, no pocket (the REFERENCE for slicing)
     -> PBC-aware, whole-lipid, anchor-based crop to the complex + buffer               (slice)
     -> gate 1: APL, composition, lateral RDF, thickness, protein orientation, integrity (slice_check)
     -> mstool backmapping around the rigid complex                                    (backmap, assemble)
@@ -54,14 +54,42 @@ pairs becoming 0; on GPR3 8.4 degrees). All numbers in this document come from c
 ## 2. Placement and embedding
 
 With a bundled membrane (or `--embed`) the oriented complex is placed where the frame's own receptor was, its
-bilayer centre on the midplane found between the two PO4 planes, and every lipid with a bead within 0.40 nm of a
-heavy atom of the complex is removed (`embed_complex`). With your own frame of the same complex the all-atom
-structure is fitted onto the frame's coarse-grained protein instead and nothing is removed.
+bilayer centre on the midplane found between the two PO4 planes, and room is made for it (`embed_complex`). With
+your own frame of the same complex the all-atom structure is fitted onto the frame's coarse-grained protein instead
+and nothing is removed.
+
+Room is made by moving lipids, not by deleting every lipid the complex touches. Every lipid with a bead within
+0.40 nm of a heavy atom of the complex is pushed away at the coarse-grained level with the same restrained
+steepest descent that relaxes the slice seam (`slicing.relax_seam`): a soft repulsion from the heavy atoms (range
+0.45 nm), weak position restraints, restraints that keep each lipid's shape, and repulsion between lipid beads
+that the push brings together (contact 0.30 nm), for 1200 steps. Only a lipid that still has a bead closer than
+0.30 nm to a heavy atom afterwards is removed: the complex occupies its place. The log and `run_manifest.json`
+(`embedding`) give how many lipids touched the complex, how many were removed (by species and leaflet), how far the
+kept lipids moved and how much their shape changed, and the closest remaining bead.
+
+Why: the earlier rule removed every lipid with any bead within 0.40 nm. A G protein's lipid anchors (the Ggamma
+geranylgeranyl chain, the Galpha N-terminus) reach into the inner leaflet, and with the 6WHC receptor-Gs complex
+that rule deleted 88-110 lipids per bundled frame, 32-43 of them only for touching those anchors. Each deleted lipid
+took its whole tail with it, leaving an empty column in the inner leaflet that solvation does not fill (water is
+removed between the phosphate planes) and that the area-per-lipid gate cannot see (the Voronoi cells of the anchor
+atoms absorb it). The current rule removes 24-41 lipids on the same 18 frames. Removing only lipids whose headgroup
+anchor the complex occupies was also tried and rejected: next to a thin anchor it still deletes lipids whose volume
+nothing replaces (a 3 nm^3 pocket on GPR1).
+
+**Empty-pocket gate.** After embedding, the acyl region of each leaflet (0.3 nm off the midplane to 0.3 nm inside
+its PO4 plane) is sampled on a 0.1 nm grid; a point farther than 0.60 nm from every lipid bead and every heavy atom
+of the complex is empty, and touching empty points form a pocket (`membrane_voids`, periodic in x and y). A pocket
+larger than 1.0 nm^3, less than the volume of one phospholipid, stops the build before slicing, naming the leaflet and
+the position. On the 18 bundled frames with the 6WHC complex: uncut frames 0.00-0.20 nm^3, this embedding
+0.02-0.76 nm^3, the earlier rule 1.2-6.8 nm^3. If the gate stops a build, the frame's cavity cannot be adapted to the
+complex by moving lipids; use a coarse-grained frame of the complex itself (`--cg FILE`) or another frame.
 
 The membrane that exists after this step is the **embedded membrane**. It is the reference every later stage is
 compared with: it is the membrane the slice is actually cut from. The uncut frame is also measured ("CG frame"
-row) so that the effect of embedding itself is visible: it raises the leaflet APL by about 1-2 A^2 (the cavity the
-removed lipids leave is assigned to their neighbours), which is reported and not graded.
+row) so that the effect of embedding itself is visible; this comparison is reported and not graded. It is not a
+measure of packing: the frame's footprint is tessellated with the coarse-grained protein beads and the embedded
+membrane's with the complex's heavy atoms, which are far denser generators. On the matched 6WHC frame the same lipids
+give a lower-leaflet APL of 57.3 A^2 with the CG protein and 48.3 A^2 with the fitted all-atom complex.
 
 ## 3. Slicing (BOX = auto)
 
