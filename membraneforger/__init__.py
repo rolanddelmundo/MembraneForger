@@ -23,6 +23,7 @@ from .backmapping import *
 from .topology import *
 from .solvation import *
 from .minimization import *
+from .stereo import *
 from .audit import *
 from .reporting import *
 from .pipeline import *
