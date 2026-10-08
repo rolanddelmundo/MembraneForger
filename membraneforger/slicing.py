@@ -60,7 +60,7 @@ from .lipids import anchor_bead, anchor_xyz, leaflet_of
 from .structio import element, xyz_nm
 
 __all__ = ['solute_extent', 'crop_windows', 'image_molecule', 'make_whole', 'lipid_anchor', 'anchor_image_shift',
-           'all_beads_inside', 'select_lipids', 'seam_clashes', 'created_pairs', 'relax_seam', 'remove_hard_core_overlaps',
+           'all_beads_inside', 'select_lipids', 'seam_clashes', 'created_pairs', 'pair_keys', 'relax_seam', 'remove_hard_core_overlaps',
            'composition_distance', 'score_offset', 'choose_offset', 'leaflet_counts', 'selection_diagnostics',
            'slice_membrane_cg']
 
@@ -177,12 +177,22 @@ def created_pairs(points: np.ndarray, owner: np.ndarray, box: np.ndarray, radius
     if not len(pairs):
         return np.zeros((0, 2), int)
     a, b = np.minimum(pairs[:, 0], pairs[:, 1]), np.maximum(pairs[:, 0], pairs[:, 1])
-    keep = (owner[a] != owner[b]) & np.array([(int(i), int(j)) not in inherent for i, j in zip(a, b)])
+    if isinstance(inherent, np.ndarray):  # sorted pair keys a * n + b (pair_keys): vectorized, for large systems
+        known = np.isin(a * len(points) + b, inherent, assume_unique=False)
+    else:
+        known = np.array([(int(i), int(j)) in inherent for i, j in zip(a, b)], dtype=bool)
+    keep = (owner[a] != owner[b]) & ~known
     return np.column_stack([a[keep], b[keep]])
 
 
+def pair_keys(pairs: set, n: int) -> np.ndarray:
+    """A set of bead index pairs (i < j) as sorted integer keys i * n + j, the form created_pairs looks up fastest."""
+    return np.sort(np.array([i * n + j for i, j in pairs], dtype=np.int64))
+
+
 def relax_seam(xyz: list[np.ndarray], size: np.ndarray, cell_z: float, cropped: list[bool], protein_nm: np.ndarray,
-               contact_nm: float, steps: int = 400, repulsion_nm: float = 0.40, max_step_nm: float = 0.02) -> dict:
+               contact_nm: float, steps: int = 400, repulsion_nm: float = 0.40, max_step_nm: float = 0.02,
+               protein_repulsion_nm: float | None = None, protein_clearance_nm: float | None = None) -> dict:
     """Relax the new periodic seam in place: push apart beads of different lipids that only the cut brought together.
 
     Steepest descent on: a soft repulsion k (r0 - r)^2 for inter-lipid bead pairs closer than repulsion_nm that were
@@ -190,25 +200,34 @@ def relax_seam(xyz: list[np.ndarray], size: np.ndarray, cell_z: float, cropped: 
     weak position restraints holding every bead near where it was, and distance restraints between all beads of one
     lipid that keep its shape. It stops when no such pair is closer than contact_nm (the seam contact threshold) or
     after `steps` steps. Returns the moved coordinates and what moved.
+
+    The same relaxation makes room for a complex placed into an uncut membrane (embedding.embed_complex): with
+    cropped = [False, False] no inter-lipid pair is "created" at the start, the complex repels beads within
+    protein_repulsion_nm (default repulsion_nm), and with protein_clearance_nm set the relaxation also continues
+    until no bead is closer than that to a heavy atom of the complex.
     """
     owner = np.concatenate([np.full(len(x), k) for k, x in enumerate(xyz)])
     start = np.vstack(xyz).astype(float)
     new_box = np.array([size[0], size[1], cell_z])
-    inherent = inherent_pairs(start, owner, size, cell_z, cropped, repulsion_nm)
+    inherent = pair_keys(inherent_pairs(start, owner, size, cell_z, cropped, repulsion_nm), len(start))
     offsets = np.concatenate([[0], np.cumsum([len(x) for x in xyz])])
     intra = np.array([(offsets[k] + i, offsets[k] + j) for k, x in enumerate(xyz) for i in range(len(x)) for j in range(i + 1, len(x))])
     d0 = np.linalg.norm(start[intra[:, 1]] - start[intra[:, 0]], axis=1)
     protein = cKDTree(np.mod(protein_nm, new_box), boxsize=new_box) if len(protein_nm) else None
+    protein_range = repulsion_nm if protein_repulsion_nm is None else protein_repulsion_nm
     k_rep, k_intra, k_pos = 1.0, 1.0, 0.05
     minimum_image = lambda d: d - new_box * np.round(d / new_box)
-    points, remaining, step = start.copy(), np.zeros((0, 2), int), 0
+    points, remaining, step, crowded = start.copy(), np.zeros((0, 2), int), 0, False
     while step < steps:
         step += 1
         pairs = created_pairs(points, owner, new_box, repulsion_nm, inherent)
         delta = minimum_image(points[pairs[:, 1]] - points[pairs[:, 0]]) if len(pairs) else np.zeros((0, 3))
         dist = np.linalg.norm(delta, axis=1)
         remaining = pairs[dist < contact_nm]
-        if not len(remaining):
+        near, index = (protein.query(np.mod(points, new_box), distance_upper_bound=protein_range)
+                       if protein is not None else (np.full(len(points), np.inf), None))
+        crowded = protein_clearance_nm is not None and bool((near < protein_clearance_nm).any())
+        if not len(remaining) and not crowded:
             break
         force = np.zeros_like(points)
         unit = delta / np.maximum(dist, 1e-9)[:, None]
@@ -216,10 +235,9 @@ def relax_seam(xyz: list[np.ndarray], size: np.ndarray, cell_z: float, cropped: 
         np.add.at(force, pairs[:, 0], -push)
         np.add.at(force, pairs[:, 1], push)
         if protein is not None:
-            near, index = protein.query(np.mod(points, new_box), distance_upper_bound=repulsion_nm)
             hit = np.isfinite(near)
             away = minimum_image(np.mod(points[hit], new_box) - protein.data[index[hit]])
-            force[hit] += (k_rep * (repulsion_nm - near[hit]))[:, None] * away / np.maximum(near[hit], 1e-9)[:, None]
+            force[hit] += (k_rep * (protein_range - near[hit]))[:, None] * away / np.maximum(near[hit], 1e-9)[:, None]
         bond = points[intra[:, 1]] - points[intra[:, 0]]
         length = np.linalg.norm(bond, axis=1)
         pull = (k_intra * (length - d0))[:, None] * bond / np.maximum(length, 1e-9)[:, None]
@@ -233,14 +251,15 @@ def relax_seam(xyz: list[np.ndarray], size: np.ndarray, cell_z: float, cropped: 
     pairs = created_pairs(points, owner, new_box, contact_nm, inherent)
     gaps = np.linalg.norm(minimum_image(points[pairs[:, 1]] - points[pairs[:, 0]]), axis=1) if len(pairs) else np.zeros(0)
     shape = np.abs(np.linalg.norm(points[intra[:, 1]] - points[intra[:, 0]], axis=1) - d0)
+    clearance = float(protein.query(np.mod(points, new_box))[0].min()) if protein is not None else None
     return {"xyz": [points[offsets[k]:offsets[k + 1]] for k in range(len(xyz))], "steps": step,
-            "converged": bool(len(remaining) == 0), "pairs_created_by_new_periodicity": int(len(pairs)),
+            "converged": bool(len(remaining) == 0 and not crowded), "pairs_created_by_new_periodicity": int(len(pairs)),
             "closest_created_pair_nm": round(float(gaps.min()), 4) if len(gaps) else None,
             "lipids_moved": int((per_lipid > 1e-6).sum()), "max_bead_displacement_nm": round(float(moved.max()), 4),
             "mean_bead_displacement_nm": round(float(moved.mean()), 4), "bead_displacements_nm": moved,
             "max_intramolecular_distance_change_nm": round(float(shape.max()), 4) if len(shape) else 0.0,
             "pairs_already_close_in_source_frame": len(inherent), "remaining_pairs": pairs, "remaining_pair_distances_nm": gaps,
-            "owner": owner}
+            "owner": owner, "closest_bead_to_complex_nm": round(clearance, 4) if clearance is not None else None}
 
 
 def remove_hard_core_overlaps(kept: list, relaxed: dict, hard_core_nm: float) -> tuple[list, Counter]:
