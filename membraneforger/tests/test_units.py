@@ -140,7 +140,7 @@ class MstoolCompatibility(unittest.TestCase):
         chirals = [line.split() for line in block.splitlines() if line.strip() and not line.startswith("[")]
         gm3 = next(r for r in ET.parse(DATA / "GM3.xml").getroot().iter("Residue") if r.get("name") == "GM3")
         bonds = [(b.get("atomName1"), b.get("atomName2")) for b in gm3.iter("Bond")]
-        self.assertEqual(len(chirals), 18)
+        self.assertEqual(len(chirals), 19)
         self.assertEqual(malformed_chirals(chirals, bonds), [])
         reference = json.loads((Path(__file__).parent / "data/gm3_sugar_reference.json").read_text())["sugars"]
         checked = 0
@@ -151,7 +151,7 @@ class MstoolCompatibility(unittest.TestCase):
             t, x, p, q, r = (np.array(sugar[n]) for n in (target, centre, c, d, e))
             self.assertGreater((t - x) @ np.cross(q - p, r - q), 0, f"GM3 {centre} reads flipped on the reference")
             checked += 1
-        self.assertEqual(checked, 15)  # 5 glucose, 5 galactose, 5 sialic acid centres
+        self.assertEqual(checked, 16)  # 5 glucose, 5 galactose, 6 sialic acid centres
 
     def test_worker_declares_tested_versions(self):
         self.assertIn("0.3.9", mf.backmapping.TESTED_MSTOOL)
