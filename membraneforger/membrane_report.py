@@ -707,7 +707,7 @@ def render_figures(out: Path, record: dict, stages: dict) -> list[Path]:
             medians = np.array([rows[sp]["apl_median_A2"] if sp in rows else np.nan for sp in species])
             half = np.array([0.5 * rows[sp]["apl_iqr_A2"] if sp in rows else 0.0 for sp in species])   # the interquartile range
             ax.bar(x, medians, width * 0.92, yerr=half, color=colours[i], edgecolor="white", linewidth=0.5, error_kw={"elinewidth": 0.8},
-                   label=summaries[name]["label"] if leaflet == "upper" else None)
+                   label=summaries[name]["label"])
             for xi, sp in zip(x, species):
                 if sp in rows:
                     ax.text(xi, medians[list(species).index(sp)] + half[list(species).index(sp)] + 1.0, f"N={rows[sp]['n']}", ha="center",
