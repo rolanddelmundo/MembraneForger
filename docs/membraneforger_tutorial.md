@@ -113,8 +113,21 @@ wrong. The Voronoi measurement below replaces them.)
 mstool backmaps the sliced membrane around the complex held as a rigid obstacle, the structure is checked for ring
 threading, stereochemistry and clashes (another seed is tried when needed), the topology is built, the box is set in
 z, water and 0.15 M NaCl are added, the system is minimized with and then without the lipid dihedral restraints,
-and an independent audit must pass before `em.gro` appears. Nothing in this part changed; the measurements of
-gate 2 were added around it.
+and an independent audit must pass before `em.gro` appears. The measurements of gate 2 were added around this part;
+the build itself did not change.
+
+### 4.1 Disulfides
+
+Disulfides are read from the all-atom input's geometry at the topology stage, which is the first stage with
+anything to bond (orientation, placement, slicing and backmapping move the complex as one rigid body, so detecting
+them earlier would give the same answer): two cysteine SG atoms closer than 3.0 A are bonded, a pair whose SG-SG
+distance lies outside 1.8-2.2 A is rebuilt at 2.03 A before pdb2gmx, the topology is read back and must contain
+exactly the detected pairs, and the pairs are listed in the log and in `run_manifest.json` (`disulfides`). The
+audit measures every SG-SG bond of the topology on the minimized structure and fails the build if one is outside
+1.8-2.2 A. Limitations: SSBOND records are not read and detection is by distance alone, so a reduced pair modelled
+within 3.0 A becomes a bond and a pair stretched beyond 3.0 A in a model is missed (check the `disulfides` list in
+the manifest against what you expect); a disulfide between two chains is refused, because each chain gets its own
+topology; a cysteine within 3.0 A of two others is refused as ambiguous.
 
 ## 5. Validation
 

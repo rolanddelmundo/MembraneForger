@@ -15,13 +15,13 @@ import networkx as nx
 import numpy as np
 from scipy.spatial import cKDTree
 
-from .config import Settings
+from .config import DISULFIDE_OK_A, Settings
 from .stereo import check_gm3_stereo
 
 __all__ = ['gro_table', 'topology_includes', 'topology_molecules', 'itp_atoms', 'gromacs', 'check_topology',
            'check_grompp', 'check_energy', 'same_image', 'superposed_rmsd', 'check_structure', 'closest_contact_between', 'itp_bonds',
            'itp_dihedral_restraints', 'dihedrals_pbc', 'check_dihedral_restraints', 'molecule_rings',
-           'ring_piercings', 'check_ring_piercing', 'audit_run']
+           'ring_piercings', 'check_ring_piercing', 'check_disulfide_geometry', 'audit_run']
 
 PROTEIN = {"ALA", "ARG", "ASN", "ASP", "CYS", "CYS2", "CYSG", "CYSP", "GLN", "GLU", "GLY", "HIS", "HSD", "HSE", "HSP",
            "ILE", "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL", "AIB", "LEM", "KTZ", "KRT", "KSM"}
@@ -485,6 +485,38 @@ def check_ring_piercing(run: Path, structure: str) -> tuple[dict, list]:
     return report, fails
 
 
+def check_disulfide_geometry(run: Path, structure: str) -> tuple[dict, list]:
+    """Measure every SG-SG bond of the topology on the structure: a disulfide outside DISULFIDE_OK_A after EM has come apart."""
+    # The topology guarantees the bond exists; this closes the loop on the coordinates minimization left behind
+    # (CHARMM36 S-S equilibrium 2.03 A; the same window the builder accepts in the input).
+    resn, names, xyz, box = gro_table(run / structure)
+    top = run / "topol.top"
+    files = topology_includes(top, set())
+    bonds_of, atoms_of = itp_bonds(files), itp_atoms(files)
+    cell = box[:3]
+    measured, offset = [], 0
+    for mol, count in topology_molecules(top):
+        n = len(atoms_of[mol])
+        sg = {i for i, (name, _) in enumerate(atoms_of[mol]) if name == "SG"}
+        pairs = [(a, b) for a, b in bonds_of.get(mol, []) if a in sg and b in sg]
+        for k in range(count if pairs else 0):
+            start = offset + n * k
+            for a, b in pairs:
+                i, j = start + a, start + b
+                delta = xyz[j] - xyz[i]
+                delta -= cell * np.round(delta / cell)
+                label = lambda q: f"{resn[q]}:{names[q]}(atom {q + 1})"
+                measured.append({"molecule": mol, "copy": k + 1, "atoms": [label(i), label(j)],
+                                 "sg_sg_A": round(10.0 * float(np.linalg.norm(delta)), 3)})
+        offset += n * count
+    low, high = DISULFIDE_OK_A
+    broken = [m for m in measured if not low <= m["sg_sg_A"] <= high]
+    report = {"disulfides": len(measured), "accepted_sg_sg_A": list(DISULFIDE_OK_A), "bonds": measured, "outside_window": len(broken)}
+    fails = [f"{len(broken)} disulfide(s) outside {low}-{high} A after EM, e.g. {broken[0]['atoms'][0]}-{broken[0]['atoms'][1]} "
+             f"= {broken[0]['sg_sg_A']} A"] if broken else []
+    return report, fails
+
+
 DEFAULT_DATA = Path(__file__).resolve().parents[1] / "backmap_data"  # map.dat: the GM3 chirality definitions the stereo check uses
 
 
@@ -498,7 +530,8 @@ def audit_run(run: Path, gmx: str, structure: str = "em.gro", settings: Settings
                                ("energy", check_energy(run, gmx)), ("geometry", check_structure(run, structure, settings)),
                                ("ring_piercing", check_ring_piercing(run, structure)),
                                ("dihedral_restraints", check_dihedral_restraints(run, structure)),
-                               ("gm3_stereochemistry", check_gm3_stereo(run / structure, data))):
+                               ("gm3_stereochemistry", check_gm3_stereo(run / structure, data)),
+                               ("disulfides", check_disulfide_geometry(run, structure))):
         report[key] = part
         failures += fails
     report["checks"] = ["atom names and count match topol.top", "net charge is zero", "no stray toppar files",
@@ -508,7 +541,8 @@ def audit_run(run: Path, gmx: str, structure: str = "em.gro", settings: Settings
                         "two flat phosphate leaflets", "no water in the bilayer core", "membrane XY cell preserved",
                         "no covalent bond threads a 5- or 6-membered ring",
                         "lipid stereocentres and double bonds satisfy their CHARMM-GUI dihedral restraints",
-                        "every GM3 has its 16 sugar stereocentres and 2 ceramide trans bonds in the configuration of map.dat"]
+                        "every GM3 has its 16 sugar stereocentres and 2 ceramide trans bonds in the configuration of map.dat",
+                        "every disulfide of the topology measures 1.8-2.2 A after EM"]
     report["failures"] = failures
     report["result"] = "FAIL" if failures else "PASS"
     (run / "audit.json").write_text(json.dumps(report, indent=2) + "\n")

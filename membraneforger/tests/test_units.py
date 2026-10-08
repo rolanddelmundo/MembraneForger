@@ -343,6 +343,27 @@ class AuditDihedralRestraints(unittest.TestCase):
         self.assertEqual((report["X"]["rings"], report["X"]["rings_out_of_chair"]), (2, 1))  # +60 row: reported only
 
 
+class DisulfideAudit(unittest.TestCase):
+    def test_sg_sg_distances_are_measured_under_pbc_and_a_stretched_bond_fails(self):
+        itp = ("[ moleculetype ]\nP 1\n[ atoms ]\n1 S 1 CYS SG 1 0.0 32.0\n2 S 2 CYS SG 2 0.0 32.0\n3 C 3 ALA CA 3 0.0 12.0\n"
+               "[ bonds ]\n1 2\n2 3\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp)
+            (run / "p.itp").write_text(itp)
+            (run / "topol.top").write_text('#include "p.itp"\n[ system ]\nt\n[ molecules ]\nP 2\n')
+            rows = [(1, "CYS", "SG", 0.05, 1.0, 1.0), (2, "CYS", "SG", 3.95, 1.0, 1.0), (3, "ALA", "CA", 3.8, 1.0, 1.0),  # across the edge
+                    (4, "CYS", "SG", 2.0, 2.0, 2.0), (5, "CYS", "SG", 2.3, 2.0, 2.0), (6, "ALA", "CA", 2.4, 2.0, 2.0)]  # 3.0 A: broken
+            lines = [f"{r:5d}{n:<5s}{a:>5s}{k + 1:5d}{x:8.3f}{y:8.3f}{z:8.3f}" for k, (r, n, a, x, y, z) in enumerate(rows)]
+            (run / "em.gro").write_text("t\n6\n" + "\n".join(lines) + "\n   4.0 4.0 4.0\n")
+            report, fails = mf.check_disulfide_geometry(run, "em.gro")
+        self.assertEqual(report["disulfides"], 2)
+        self.assertAlmostEqual(report["bonds"][0]["sg_sg_A"], 1.0, places=3)      # 0.1 nm through the periodic boundary, not 3.9 nm
+        self.assertAlmostEqual(report["bonds"][1]["sg_sg_A"], 3.0, places=3)
+        self.assertEqual(report["outside_window"], 2)                              # 1.0 A is too short, 3.0 A too long
+        self.assertEqual(len(fails), 1)
+        self.assertIn("outside 1.8-2.2 A after EM", fails[0])
+
+
 class StageRunner(unittest.TestCase):
     def setUp(self):
         self.out = Path(tempfile.mkdtemp())
