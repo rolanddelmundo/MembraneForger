@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 #//=============================================================
 #// MembraneForger - (c) 2026 Roland Del Mundo
-#// Check the sugar stereocentres of every GM3 (GLPA) in a built system.
+#// Check the sugar stereocentres and ceramide trans bonds of every GM3 (GLPA) in a built system.
 #//=============================================================
-"""Report GM3 ganglioside sugar stereocentres that have the wrong configuration in a .gro or .pdb.
+"""Report GM3 ganglioside sugar stereocentres and ceramide trans bonds with the wrong configuration in a .gro or .pdb.
 
     python examples/check_gm3_stereo.py em.gro            # or any frame of a trajectory, e.g. from gmx trjconv
     python examples/check_gm3_stereo.py membrane.pdb
 
 Reads GLPA residues (the CHARMM36 topology name) by atom order, and GM3 residues (the backmapping name) by atom
 name. Each centre is tested with the corrected definitions in backmap_data/map.dat (all 16 sugar stereocentres:
-glucose C1-C5, galactose C1-C5, sialic acid C2 and C4-C8). A stereocentre cannot invert in a classical MD run,
-so the result for the first frame holds for the whole trajectory.
+glucose C1-C5, galactose C1-C5, sialic acid C2 and C4-C8), and the ceramide C4=C5 double bond and amide with its
+[ trans ] definitions. Neither a stereocentre nor a C=C bond can invert in a classical MD run, so the result for
+the first frame holds for the whole trajectory (a cis amide can isomerize, but only on very long time scales).
 """
 import sys
 from collections import Counter
@@ -30,11 +31,26 @@ POSITION = {"C1": "Glc C1", "C2": "Glc C2", "C3": "Glc C3", "C4": "Glc C4", "C5"
             "C21": "Neu5Ac C8"}
 
 
+TRANS = {("C3S", "C4S", "C5S", "C6S"): "ceramide C4=C5", ("C2S", "NF", "C1F", "C2F"): "ceramide amide"}
+
+
+def section(name: str) -> list:
+    """The rows of one [ name ] section of the GM3 block of backmap_data/map.dat."""
+    block = (REPO / "backmap_data/map.dat").read_text().split("RESI GM3")[1].split("RESI ")[0]
+    body = block.split(f"[ {name} ]")[1].split("[")[0] if f"[ {name} ]" in block else ""
+    return [line.split() for line in body.splitlines() if line.strip()]
+
+
 def definitions() -> list:
     """The GM3 sugar chirality definitions [target, centre, C, D, E] of backmap_data/map.dat."""
-    block = (REPO / "backmap_data/map.dat").read_text().split("RESI GM3")[1].split("RESI ")[0].split("[ chiral ]")[1]
-    rows = [line.split() for line in block.splitlines() if line.strip() and not line.startswith("[")]
-    return [d for d in rows if d[1] in POSITION]
+    return [d for d in section("chiral") if d[1] in POSITION]
+
+
+def dihedral(p0, p1, p2, p3) -> float:
+    b0, b1, b2 = p0 - p1, p2 - p1, p3 - p2
+    b1 = b1 / np.linalg.norm(b1)
+    v, w = b0 - b0 @ b1 * b1, b2 - b2 @ b1 * b1
+    return float(np.degrees(np.arctan2(np.cross(b1, v) @ w, v @ w)))
 
 
 # A GLPA molecule (CHARMM-GUI GM3) is written as four consecutive residues: ceramide, Glc, Gal, Neu5Ac.
@@ -103,12 +119,18 @@ def main() -> int:
             if (t - o) @ np.cross(q - p, r - q) < 0:
                 flipped[centre] += 1
                 per_residue[key] += 1
+        for d in map(tuple, section("trans")):
+            if abs(dihedral(*(x[a] for a in d))) < 90:
+                flipped[d] += 1
+                per_residue[key] += 1
     n = len(residues)
-    print(f"{path}: {n} GM3 molecules, 16 sugar stereocentres each")
+    print(f"{path}: {n} GM3 molecules, 16 sugar stereocentres and {len(section('trans'))} ceramide trans bonds each")
     for centre, position in POSITION.items():
         print(f"  {position:10s} ({centre:3s}): {flipped[centre]:3d} wrong ({100 * flipped[centre] / n:5.1f}%)")
+    for d in map(tuple, section("trans")):
+        print(f"  {TRANS.get(d, '-'.join(d)):16s}: {flipped[d]:3d} cis   ({100 * flipped[d] / n:5.1f}%)")
     affected = len(per_residue)
-    print(f"molecules with at least one wrong centre: {affected}/{n}"
+    print(f"molecules with at least one wrong centre or bond: {affected}/{n}"
           + ("" if not affected else " -> molecule(s) " + ", ".join(f"{k[0]} (residue {k[1]})" for k in sorted(per_residue))))
     return 1 if affected else 0
 
