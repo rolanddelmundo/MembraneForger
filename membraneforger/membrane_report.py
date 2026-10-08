@@ -281,7 +281,7 @@ class MembraneValidation:
             if repr_status == "INSUFFICIENT SAMPLING":
                 repr_status = "NOT RUN"  # too few equal-size windows (an uncut axis): representativeness is reported, not graded
             comp = summary["vs_reference"]["composition"][leaflet]
-            comp_status, comp_percentile = classify_percentile(comp["distance"], windows[leaflet]["window_composition_distance"])
+            comp_status, comp_percentile = classify_percentile(comp["distance"], windows[leaflet]["window_composition_distance"], one_sided=True)
             comp_status = "PASS" if comp_status == "PASS" or comp["within_finite_crop_variability"] and comp_status != "FAIL" else comp_status
             n = cur["measure"][leaflet]["lipids"]
             leaflets[leaflet] = {"lipids": n, "region_lipids_in_reference": region[leaflet]["lipids"],
@@ -324,7 +324,7 @@ class MembraneValidation:
                                       f"counting noise" + (f"; {rdf_all['note']}" if rdf_all.get("note") else "")))
             whole_all = rdf["whole_cell"]["leaflets"][leaflet].get("all")
             if whole_all and rdf_windows[leaflet]["windows"]:
-                status, percentile = classify_percentile(whole_all["rms_difference"], rdf_windows[leaflet]["rms"])
+                status, percentile = classify_percentile(whole_all["rms_difference"], rdf_windows[leaflet]["rms"], one_sided=True)
                 status = {"INSUFFICIENT SAMPLING": "NOT RUN"}.get(status, status)
                 rdf["whole_cell"]["leaflets"][leaflet]["all"]["window_percentile"] = percentile
                 rdf["whole_cell"]["leaflets"][leaflet]["all"]["window_status"] = status
@@ -332,7 +332,8 @@ class MembraneValidation:
                                       round(float(np.median(rdf_windows[leaflet]["rms"])), 4), None, rdf_windows[leaflet]["windows"], percentile,
                                       status if settings.rdf_validate else "NOT RUN",
                                       f"RMS deviation of the slice from the whole-cell g(r) at percentile {percentile} of "
-                                      f"{rdf_windows[leaflet]['windows']} equal-size windows (central 95 % PASS)"))
+                                      f"{rdf_windows[leaflet]['windows']} equal-size windows (one-sided: PASS below the 95th percentile, "
+                                      "WARNING below the 99th, FAIL above; a smaller deviation than the windows' is never graded down)"))
         integrity = check_integrity(cut, membrane, placed, box)
         records.append(metric("slice integrity", "slice", int(integrity["pass"]), "bool", None, 1, None, len(cut["membrane"]), None,
                               "PASS" if integrity["pass"] else "FAIL",

@@ -13,7 +13,8 @@ Statuses: PASS, WARNING, FAIL, INSUFFICIENT SAMPLING (the data cannot decide), R
 to judge against: the value is reported, never graded), NOT RUN. Poor sampling is never turned into a PASS or a FAIL.
 
 classify() grades an absolute deviation against a (pass, warning) ceiling pair; classify_percentile() grades a value
-against the empirical distribution of a matched control (central 95 % PASS, 95-99 % WARNING, beyond FAIL).
+against the empirical distribution of a matched control (central 95 % PASS, 95-99 % WARNING, beyond FAIL; one-sided
+for a deviation, where only the upper tail warns or fails).
 overall_status() reduces a list of records to one of PASS, PASS WITH WARNINGS, FAIL or INSUFFICIENT SAMPLING.
 """
 import numpy as np
@@ -43,14 +44,22 @@ def classify(deviation, pass_max: float, warning_max: float, absolute: bool = Tr
     return "PASS" if d <= pass_max else "WARNING" if d <= warning_max else "FAIL"
 
 
-def classify_percentile(value: float, control: np.ndarray, minimum: int = 20) -> tuple[str, float | None]:
-    """Grade a value against a control distribution: inside its central 95 % PASS, 95-99 % WARNING, beyond FAIL."""
-    # Returns the status and the two-sided empirical percentile of the value (0.5 = median, 0 or 1 = extreme).
+def classify_percentile(value: float, control: np.ndarray, minimum: int = 20, one_sided: bool = False) -> tuple[str, float | None]:
+    """Grade a value against a control distribution: inside its central 95 % PASS, 95-99 % WARNING, beyond FAIL.
+
+    one_sided: the value is a deviation (an RMS difference, a composition distance), where only the upper tail is a
+    defect: PASS below the 95th percentile of the control, WARNING below the 99th, FAIL above. A deviation smaller
+    than the control's is then never graded down.
+    """
+    # Returns the status and the empirical percentile of the value: two-sided (0.5 = median, 0 or 1 = extreme) or,
+    # one-sided, the fraction of the control below the value.
     control = np.asarray(control, dtype=float)
     control = control[np.isfinite(control)]
     if len(control) < minimum or value is None or not np.isfinite(value):
         return "INSUFFICIENT SAMPLING", None
     below = float((control < value).mean())
+    if one_sided:
+        return ("PASS" if below <= 0.95 else "WARNING" if below <= 0.99 else "FAIL"), round(below, 4)
     two_sided = 2.0 * min(below, 1.0 - below)  # 1 at the median, 0 beyond the extremes
     return ("PASS" if two_sided > 0.05 else "WARNING" if two_sided > 0.01 else "FAIL"), round(1.0 - two_sided, 4)
 
