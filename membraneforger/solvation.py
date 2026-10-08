@@ -135,7 +135,7 @@ def add_ions(system: dict, topology: dict, gmx: str, box: list[float]) -> None:
         raise SystemExit(f"non-integer system charge {topology['charge']:.4f}")
     pairs = int(math.floor(SALT_M * box[0] * box[1] * box[2] * 0.602214076 + 0.5))
     n_pos, n_neg = pairs + max(0, -charge), pairs + max(0, charge)
-    (out / "ions.mdp").write_text(EM_MDP.format(emtol=FMAX_TARGET, nsteps=0, coulombtype="Cut-off"))
+    (out / "ions.mdp").write_text(EM_MDP.format(emtol=FMAX_TARGET, nsteps=0, coulombtype="Cut-off", define=""))
     run_command(out, gmx.split() + ["grompp", "-f", "ions.mdp", "-c", "solv.gro", "-p", "topol.top",
                                 "-o", "ions.tpr", "-po", "ions_mdout.mdp", "-maxwarn", "0"], produces=("ions.tpr",))
     nsolute = len(topology["names"]) - 3 * topology["molecules"][-1][1]
