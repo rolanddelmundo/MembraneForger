@@ -256,7 +256,9 @@ ring chairs and sialic acid C7/C8; a sugar carbon with an inverted configuration
 them. The audit therefore also tests, geometrically, all 16 sugar stereocentres (glucose C1-C5, galactose C1-C5,
 sialic acid C2 and C4-C8) and the two ceramide trans bonds of every GM3 with the chirality definitions of
 `backmap_data/map.dat` (`membraneforger/stereo.py`, the same test as `examples/check_gm3_stereo.py`), and fails the
-build on any inverted centre or cis bond: a configuration never corrects itself in MD. The GIPR data that motivated this work
+build on any inverted centre or cis bond: a configuration never corrects itself in MD. The same test runs on
+`membrane.pdb` right after backmapping, where a wrong GM3 counts as a wrong configuration in the backmap verdict and
+another seed is tried, so a build only reaches the audit with a GM3 that was wrong on every attempt. The GIPR data that motivated this work
 (backmap 57 / 59, minimized 57 / 59 against a slice at 56 / 59 A^2) are consistent with what the report measures:
 backmapping and minimization keep the lipid count and the cell, hence the leaflet mean; what they change is local.
 
