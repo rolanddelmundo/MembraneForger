@@ -11,7 +11,7 @@ must already have its membrane normal along z (as from OPM or CHARMM-GUI).
 **Installing Requirements**
 
 Following Python packages are required: numpy, scipy, networkx, pandas (below 3, for mstool), openmm, mstool (0.3.9
-or 0.3.10).
+or 0.3.10); matplotlib is optional (it draws the validation figures).
 We recommend using pip to install them on your local machine:
 
 ```
@@ -21,6 +21,7 @@ pip install networkx
 pip install "pandas<3"
 pip install openmm
 pip install mstool==0.3.9
+pip install matplotlib
 ```
 
 GROMACS is also required (tested with 2023.3 and 2025.3). If it is not on your path as `gmx`, pass it with `--gmx`.
@@ -45,6 +46,8 @@ python -m membraneforger --aa complex.pdb --orient-chain R --out output_director
 | `--cg 1` / `--cg 2` / `--cg FILE` | the membrane: `1` = one of the bundled GPR139 frames at random (default), `2` = one of the bundled kappa opioid receptor frames at random, or `custom=FILE`, a Martini 3 frame of your own complex (add `--embed` to use only its membrane) |
 | `--box X Y Z` | opt-in box edges in Å. Default (`BOX = auto`): the membrane is cut to the complex plus `--xy-buffer` (1.0 nm) in x and y, z from the protein height. A smaller x and y cuts the membrane around the complex; x and y may not exceed the membrane patch |
 | `--xy-buffer NM` | membrane kept around the complex on each side in x and y when the box is auto (default 1.0) |
+| `--apl-validate yes\|no`, `--apl-tolerance PERCENT` | the slice gate: stop before backmapping when a leaflet's area per lipid changes by more than the tolerance (default 5 %, warning above 3 %) against the membrane it was cut from |
+| `--rdf-validate yes\|no`, `--no-slice-offset` | compare the lateral headgroup RDF of the slice with its source (default yes); keep the slice window centred instead of choosing the offset that best preserves lipid density |
 | `--dellipid LIPID` | remove a lipid species (repeatable): CHOL, POPC, DOPC, POPE, DOPE, POPS, DOPS, PSM, DPG3, SAP6 |
 | `--addlipid LIPID` | turn the removed lipids into this one instead (POPC, DOPC, POPE, DOPE, POPS, DOPS, PSM) |
 | `--bilayer-z Z` | z of the bilayer centre in your structure, in Å, with `--orientation none` (default: found from the hydrophobic belt; an oriented complex has it at 0) |
@@ -89,12 +92,24 @@ frame of your own complex (`--cg FILE`) is a patch around that protein: it fits 
 
 **Box**
 
-`BOX = auto` cuts the membrane before backmapping, so a large frame costs no more than the complex needs (the slicing
-of the earlier workflow): the window is the complex's extent plus 1.0 nm in x and y; a lipid is kept only if all its
-beads lie inside; an axis as wide as the cell is not cut; overlaps created only by the new periodic seam are removed.
-The default keeps about 75 to 90 of about 1,300 lipids of a bundled frame, which leaves the protein 2 nm of lipid from
-its own periodic image: use `--xy-buffer 1.5` or `2.0` for production systems (`--xy-buffer 2.0` keeps about 170 to 190
-lipids in an 8 x 8 nm cell). Lipid counts and the seam report are in `run_manifest.json` (`slice`).
+`BOX = auto` cuts the membrane before backmapping, so a large frame costs no more than the complex needs: the window
+is the complex's extent plus 1.0 nm in x and y; an axis as wide as the cell is not cut. The cut is made lipid by
+lipid under periodic boundaries: each lipid is made whole, one headgroup anchor represents it (PO4, cholesterol ROH,
+the GM3 sugar centroid; `membraneforger/lipids.py`), and the complete lipid is kept when the periodic image of its
+anchor falls in the half-open window, whether or not a tail bead crosses the edge. The window may shift by up to
+0.5 nm to the position that best preserves the source's lipid density and composition, and the new periodic seam is
+relaxed in place at the coarse-grained level instead of deleting lipids. (The earlier rule kept a lipid only when all
+its beads were inside, which deleted a band of edge lipids and left the cut membrane 12 to 30 % short of lipids per
+area; see `docs/membraneforger_tutorial.md` 5.3.)
+
+Before anything is backmapped the slice is validated against the membrane it was cut from (the embedded membrane):
+per leaflet, the area per lipid from a periodic Voronoi tessellation of the headgroup anchors with the protein
+footprint discarded, the composition, the lateral headgroup RDF, the bilayer thickness and the protein orientation,
+plus molecular integrity. A leaflet whose area per lipid changes by more than 5 % stops the build (`--apl-validate`,
+`--apl-tolerance`). The backmapped membrane and the minimized system are measured the same way. Everything is
+written to `membrane_validation.md` / `.json`, `membrane_validation_lipids.tsv` (one row per lipid with its Voronoi
+area) and four figures; `python -m membraneforger.equilibration` adds the convergence and equilibrium-property gates
+once a trajectory exists. The tutorial describes every measurement and threshold.
 
 **Bundled membranes**
 
@@ -111,7 +126,9 @@ Eighteen frames (30 µs, Martini 3) of a GPCR in an asymmetric ten-species cell-
 **On a Slurm cluster**: `bash slurm/setup.sh` installs everything above (no Anaconda or modules needed) and
 `slurm/run_membraneforger.sbatch` builds one structure per array task; see `slurm/README.md`, which also covers PPM 3.0.
 
-Tests: `python -m unittest discover -s membraneforger/tests -t .`
+Tests: `python -m unittest discover -s membraneforger/tests -t .` (the command-line tests need GROMACS on the path).
+
+Documentation: `docs/membraneforger_tutorial.md` (build stages, validation, thresholds, limitations).
 
 The force field under `forcefield/` and the mapping data under `backmap_data/` come from CHARMM36 / CHARMM-GUI,
 CGenFF and mstool; cite those projects, Martini 3 and GROMACS when you publish results obtained with this package.
