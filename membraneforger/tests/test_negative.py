@@ -225,6 +225,10 @@ class CommandLineRefusals(unittest.TestCase):
         self.assertIn("unknown lipid", self.run_cli("--aa", AA_PDB, "--addlipid", "DPPC")[1])
         self.assertIn("three positive edge lengths", self.run_cli("--aa", AA_PDB, "--box", "80", "80", "0")[1])
         self.assertIn("need --aa and --cg", self.run_cli("--membrane", AA_PDB, "--box", "80", "80", "100")[1])
+        self.assertIn("--embed-site applies when the protein is embedded",
+                      self.run_cli("--aa", AA_PDB, "--cg", CG_GRO, "--embed-site", "free")[1])
+        self.assertIn("invalid choice", self.run_cli("--aa", AA_PDB, "--embed-site", "middle")[1])
+        self.assertIn("need --aa and --cg", self.run_cli("--membrane", AA_PDB, "--embed-site", "free")[1])
 
     def test_wrong_executable(self):
         code, output = self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--out", self.tmp / "o", "--gmx", "/no/gmx")
