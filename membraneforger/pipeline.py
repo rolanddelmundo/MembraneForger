@@ -371,7 +371,7 @@ def finish_system(session: Session, staged: dict) -> str:
         log(out, "minimized membrane: " + leaflet_apl_summary(summary))
         record["membrane_validation"] = session.analysis.record(session.analysis.cut)
         session.analysis.write(session.analysis.cut)
-    record["audit"] = run_stage(session, "audit", audit_run, out, gmx, "em.unverified.gro", session.settings)
+    record["audit"] = run_stage(session, "audit", audit_run, out, gmx, "em.unverified.gro", session.settings, session.data)
     log(out, f"independent audit: {len(record['audit']['checks'])} checks passed", "PASS")
     chairs = {mol: (e["rings_out_of_chair"], e["rings"]) for mol, e in record["audit"]["dihedral_restraints"].items() if "rings" in e}
     if chairs:

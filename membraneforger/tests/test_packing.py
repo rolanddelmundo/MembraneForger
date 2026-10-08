@@ -14,6 +14,9 @@ from .common import CG_GRO, MAPPING, REPO, mf
 
 CELL = [8.0, 8.0, 12.0]
 MIDPLANE = 6.0
+SETTINGS = mf.Settings()
+# the configured RDF criteria: first-shell shift PASS within 0.5 A, WARNING within 1.0 A, FAIL beyond or above 3 x counting noise
+RDF_CRITERIA = (SETTINGS.rdf_max_peak_shift_a, SETTINGS.rdf_max_noise_units, SETTINGS.rdf_peak_warning_a)
 
 
 def lattice(nx, ny, spacing, z, name="POPC", jitter=0.0, seed=0, spread=0.2):
@@ -129,8 +132,8 @@ class LateralRDF(unittest.TestCase):
     def test_an_unchanged_periodic_arrangement_passes_the_comparison(self):
         stage = mf.cg_stage("a", bilayer(jitter=0.08), [], CELL, MIDPLANE)
         same = mf.cg_stage("b", bilayer(jitter=0.08), [], CELL, MIDPLANE)
-        comparison = mf.rdf_comparison(mf.leaflet_rdfs(stage), mf.leaflet_rdfs(same), 1.0, 3.0)
-        self.assertTrue(comparison["pass"])
+        comparison = mf.rdf_comparison(mf.leaflet_rdfs(stage), mf.leaflet_rdfs(same), *RDF_CRITERIA)
+        self.assertEqual(comparison["status"], "PASS")
         for leaflet in ("upper", "lower"):
             self.assertEqual(comparison["leaflets"][leaflet]["all"]["first_peak_shift_A"], 0.0)
             self.assertAlmostEqual(comparison["leaflets"][leaflet]["all"]["rms_difference"], 0.0)
@@ -138,8 +141,8 @@ class LateralRDF(unittest.TestCase):
     def test_a_dilated_arrangement_fails_the_comparison(self):
         stage = mf.cg_stage("a", bilayer(jitter=0.05), [], CELL, MIDPLANE)
         wide = mf.cg_stage("b", bilayer(nx=8, ny=8, spacing=1.0, jitter=0.05), [], CELL, MIDPLANE)   # the same cell, 1.0 nm lattice
-        comparison = mf.rdf_comparison(mf.leaflet_rdfs(stage), mf.leaflet_rdfs(wide), 1.0, 3.0)
-        self.assertFalse(comparison["pass"])
+        comparison = mf.rdf_comparison(mf.leaflet_rdfs(stage), mf.leaflet_rdfs(wide), *RDF_CRITERIA)
+        self.assertEqual(comparison["status"], "FAIL")
         self.assertGreater(abs(comparison["leaflets"]["upper"]["all"]["first_peak_shift_A"]), 1.0)
 
 
@@ -190,8 +193,8 @@ class SliceGate(unittest.TestCase):
         self.assertEqual(len(cut["kept_indices"]), len(set(cut["kept_indices"])))                        # no duplicates
         region = mf.region_reference(embed, cut["kept_indices"])
         self.assertEqual(region["upper"]["lipids"], 100)
-        rdf = mf.rdf_comparison(mf.leaflet_rdfs(embed), mf.leaflet_rdfs(stage), 1.0, 3.0)
-        self.assertTrue(rdf["pass"])
+        rdf = mf.rdf_comparison(mf.leaflet_rdfs(embed), mf.leaflet_rdfs(stage), *RDF_CRITERIA)
+        self.assertEqual(rdf["status"], "PASS")
 
     def test_window_distribution_of_a_lattice_is_narrow(self):
         membrane = bilayer(nx=20, ny=20, spacing=0.8, jitter=0.03)
@@ -225,9 +228,16 @@ class RealFrameGate(unittest.TestCase):
             cut = mf.slice_membrane_cg(cg["membrane"], placed, box, midplane, settings, None, analysis.slice_reference())
             analysis.add_cg("slice", cut["membrane"], cut["placed"], cut["box"], midplane)
             check = analysis.validate_slice(cut, cg["membrane"], placed, box)
-            self.assertTrue(check["verdict"]["integrity"] and check["verdict"]["upper_apl"] and check["verdict"]["lower_apl"])
+            self.assertEqual(check["status"], "PASS")                                         # the configured gate as a whole
+            self.assertTrue(all(check["verdict"].values()))
             for leaflet in ("upper", "lower"):
-                self.assertLess(abs(check["leaflets"][leaflet]["construction_delta_percent"]), settings.apl_slice_tolerance_percent)
+                v = check["leaflets"][leaflet]
+                self.assertEqual(v["construction_status"], "PASS")                         # <= apl_slice_warning_percent (3 %)
+                self.assertLessEqual(abs(v["construction_delta_percent"]), settings.apl_slice_warning_percent)
+                self.assertIn(v["composition_status"], ("PASS",))
+            records = {(r["metric"], r["leaflet"]): r for r in check["records"]}
+            self.assertEqual(records[("slice integrity", None)]["status"], "PASS")
+            self.assertTrue(all(records[("headgroup RDF first-shell peak shift", l)]["status"] == "PASS" for l in ("upper", "lower")))
             files = analysis.write(cut)
             names = {f.name for f in files}
             self.assertTrue({"membrane_validation.json", "membrane_validation.md", "membrane_validation_lipids.tsv"} <= names)
