@@ -5,7 +5,7 @@
 """Constants shared by every stage, and the Settings that carry the tunable acceptance criteria."""
 from dataclasses import dataclass
 
-__all__ = ['ORIENTATION', 'ORIENT_CHAINS', 'NTERM_SIDE', 'PDB_ID', 'PPM_MEMBRANE', 'BOX',
+__all__ = ['ORIENTATION', 'ORIENT_CHAINS', 'ORIENT_RESIDUES', 'NTERM_SIDE', 'PDB_ID', 'PPM_MEMBRANE', 'BOX',
            'AMINO', 'SOLVENT', 'N_CAP', 'C_CAP', 'RENAME_RESIDUE', 'RENAME_ATOM', 'RENAME_MOLECULE', 'TERMINUS_MENU',
            'DEFAULT_LIGANDS', 'NSTEPS', 'DISULFIDE_MAX_A', 'DISULFIDE_OK_A', 'SLAB_Z_PAD_NM', 'MIN_Z_PAD_TOTAL_NM',
            'SALT_M', 'ION_RMIN_NM', 'GENION_ATTEMPTS', 'WATER_CLASH_NM', 'WATER_PROTECT_NM', 'LIPID_SCAN_A',
@@ -18,9 +18,10 @@ __all__ = ['ORIENTATION', 'ORIENT_CHAINS', 'NTERM_SIDE', 'PDB_ID', 'PPM_MEMBRANE
 # Select the chain that actually spans or associates with the membrane. MembraneForger determines its membrane
 # orientation (from the exact OPM entry of the structure when a PDB ID is known and matches, otherwise with a local
 # PPM 3.0 run on the anchor's own coordinates) and moves the complete complex as ONE rigid object. Command-line
-# options (--orientation, --orient-chain(s), --nterm-side, --pdb-id, --ppm-membrane) override these defaults.
+# options (--orientation, --orient-chain(s), --orient-residues, --nterm-side, --pdb-id, --ppm-membrane) override these defaults.
 ORIENTATION = "auto"       # auto | ppm | opm | none      (none: use the input coordinates as given)
 ORIENT_CHAINS = ""         # e.g. "R", "A", or "A,B"      (empty: the only protein chain, else fail and ask)
+ORIENT_RESIDUES = ""       # e.g. "343-363": PPM orients on these residues only (empty: the whole anchor chain)
 NTERM_SIDE = "auto"        # auto | in | out              (side of the N terminus of the first anchor chain)
 PDB_ID = ""                # optional exact PDB ID         (else the HEADER record of the input, else none)
 PPM_MEMBRANE = ""          # advanced: PPM 3.0 membrane code, "" = undefined flat bilayer (e.g. "PMm", "GnI")
