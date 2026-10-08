@@ -136,8 +136,9 @@ class MstoolCompatibility(unittest.TestCase):
         import xml.etree.ElementTree as ET
 
         from membraneforger.mstool_worker import malformed_chirals
-        block = (DATA / "map.dat").read_text().split("RESI GM3")[1].split("RESI ")[0].split("[ chiral ]")[1]
-        chirals = [line.split() for line in block.splitlines() if line.strip() and not line.startswith("[")]
+        gm3_block = (DATA / "map.dat").read_text().split("RESI GM3")[1].split("RESI ")[0]
+        block = gm3_block.split("[ chiral ]")[1].split("[")[0]
+        chirals = [line.split() for line in block.splitlines() if line.strip()]
         gm3 = next(r for r in ET.parse(DATA / "GM3.xml").getroot().iter("Residue") if r.get("name") == "GM3")
         bonds = [(b.get("atomName1"), b.get("atomName2")) for b in gm3.iter("Bond")]
         self.assertEqual(len(chirals), 19)
@@ -152,6 +153,12 @@ class MstoolCompatibility(unittest.TestCase):
             self.assertGreater((t - x) @ np.cross(q - p, r - q), 0, f"GM3 {centre} reads flipped on the reference")
             checked += 1
         self.assertEqual(checked, 16)  # 5 glucose, 5 galactose, 6 sialic acid centres
+        # GM3 carries the same ceramide as PSM: its C4=C5 double bond and amide need the same trans definitions
+        trans = lambda blk: sorted(tuple(l.split()) for l in blk.partition("[ trans ]")[2].split("[")[0].splitlines() if l.strip())
+        psm_block = (DATA / "map.dat").read_text().split("RESI PSM")[1].split("RESI ")[0]
+        self.assertEqual(trans(gm3_block), trans(psm_block))
+        for a, b, c, d in trans(gm3_block):
+            self.assertTrue({frozenset((a, b)), frozenset((b, c)), frozenset((c, d))} <= {frozenset(x) for x in bonds})
 
     def test_gm3_linkage_beads_hold_the_linked_atoms(self):
         """The Martini 3 DPG3 bonds between residues must join map.dat beads that contain the glycosidic bond."""
