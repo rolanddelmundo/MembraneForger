@@ -323,6 +323,10 @@ def finish_system(session: Session, staged: dict) -> str:
     log(out, f"EM validated: {record['em']['summary']}", "PASS")
     record["audit"] = run_stage(session, "audit", audit_run, out, gmx, "em.unverified.gro", session.settings)
     log(out, f"independent audit: {len(record['audit']['checks'])} checks passed", "PASS")
+    chairs = {mol: (e["rings_out_of_chair"], e["rings"]) for mol, e in record["audit"]["dihedral_restraints"].items() if "rings" in e}
+    if chairs:
+        log(out, "sugar/inositol rings outside the chair their topology restrains (MD can repair a ring, slowly): " + ", ".join(
+            f"{mol} {bad}/{total}" for mol, (bad, total) in chairs.items()), "WARN" if any(b for b, _ in chairs.values()) else "PASS")
     run_stage(session, "publish", check_inputs_unchanged, system["inputs"])
     os.replace(out / "em.unverified.gro", out / "em.gro")
     return record["em"]["summary"]
