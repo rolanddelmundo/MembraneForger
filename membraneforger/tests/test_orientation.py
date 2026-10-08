@@ -379,6 +379,55 @@ class LocalPPMProvider(unittest.TestCase):
         self.assertEqual(report["ppm"]["input"].splitlines()[7], "A,B")
         self.assertEqual(len(report["ppm"]["chain_matches"]), 2)
 
+    def test_residue_selection_is_parsed(self):
+        self.assertEqual(mf.parse_residue_ranges("343-363"), ((343, 363),))
+        self.assertEqual(mf.parse_residue_ranges("343-363, 370-380,400"), ((343, 363), (370, 380), (400, 400)))
+        self.assertEqual(mf.parse_residue_ranges(""), ())
+        self.assertIn("ends before it starts", failure(mf.parse_residue_ranges, "363-343"))
+        self.assertIn("not a residue number", failure(mf.parse_residue_ranges, "TM1"))
+
+    def test_only_the_selected_residues_are_submitted_and_the_whole_complex_follows(self):
+        request = mf.OrientationRequest(mode="ppm", chains=("R",), ppm_exe=str(self.exe), nterm_side="out",
+                                        residues=((40, 70), (100, 110)))
+        result = mf.orient_complex(self.aa, AA_PDB, request, mf.Settings(), self.out, self.work)
+        report = result["report"]
+        submitted, _ = mf.read_pdb(Path(report["ppm"]["workdir"]) / "anchor.pdb")
+        self.assertEqual({a["resid"] for a in submitted}, set(range(40, 71)) | set(range(100, 111)))
+        self.assertEqual(report["ppm"]["residues_submitted"], 42)
+        self.assertEqual(report["anchor_segment"]["residues"], {"R": 42})
+        self.assertEqual(report["ppm"]["residue_ranges_submitted"], [[40, 70], [100, 110]])
+        self.assertTrue(np.allclose(result["R"], rotation([0.3, -0.5, 0.81], 33.0), atol=1e-4))  # the same rigid transform
+        self.assertEqual(len(result["oriented"]), len(self.aa))  # every atom moved, not only the segment
+        frame = report["validation"]["frame"]
+        self.assertEqual(frame["segment_ca_atoms"], 42)
+        self.assertEqual(frame["outside_segment_ca_inside_slab"], len(frame["outside_segment_residues_inside_slab"]))
+        self.assertEqual(report["validation"]["nterm"]["first_residue"][-2:], "40")
+
+    def test_residue_selection_without_reference_or_side_fails_before_ppm(self):
+        base = dict(chains=("R",), ppm_exe=str(self.exe), residues=((40, 70),))
+        message = failure(mf.orient_complex, self.aa, AA_PDB, mf.OrientationRequest(mode="ppm", **base),
+                          mf.Settings(), self.out, self.work)
+        self.assertIn("--orient-residues needs --nterm-side", message)
+        message = failure(mf.orient_complex, self.aa, AA_PDB, mf.OrientationRequest(mode="opm", nterm_side="out", **base),
+                          mf.Settings(), self.out, self.work)
+        self.assertIn("does not apply to --orientation opm", message)
+        short = dict(base, residues=((1, 30),))  # chain R starts at residue 25
+        message = failure(mf.orient_complex, self.aa, AA_PDB, mf.OrientationRequest(mode="ppm", nterm_side="out", **short),
+                          mf.Settings(), self.out, self.work)
+        self.assertIn("selects too few residues of anchor chain(s) R (6; residues 25-425 are present)", message)
+        self.assertFalse((self.work / "ppm").exists())  # nothing expensive ran
+
+    def test_residue_selection_ignores_a_pdb_id(self):
+        request = mf.OrientationRequest(mode="auto", chains=("R",), ppm_exe=str(self.exe), pdb_id="6WHC",
+                                        opm_cache=self.tmp / "no-download", nterm_side="out", residues=((40, 70),))
+        report = mf.orient_complex(self.aa, AA_PDB, request, mf.Settings(), self.out, self.work)["report"]
+        self.assertEqual((report["provider"], report["nterm_side_source"]), ("ppm", "command line"))
+        self.assertNotIn("reference", report)
+        self.assertFalse((self.tmp / "no-download").exists())  # the OPM entry was never fetched
+        request = mf.OrientationRequest(mode="auto", chains=("R",), ppm_exe=str(self.exe), opm_file=OPM_6WHC,
+                                        nterm_side="out", residues=((40, 70),))
+        self.assertIn("or --opm-file", failure(mf.orient_complex, self.aa, AA_PDB, request, mf.Settings(), self.out, self.work))
+
 
 class RigidTransformOfTheWholeComplex(unittest.TestCase):
     """The whole input receives one identical proper rigid transform; nothing is independently moved or rebuilt."""
