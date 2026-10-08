@@ -92,12 +92,17 @@ it has a hole of the receptor's shape: about 5-6 nm^3 of empty acyl volume per l
 out. The default site, `hole`, puts the complex there, which suits another receptor of similar size. A much smaller
 complex cannot fill it: a single-pass protein (one transmembrane helix) left a 3.5 nm^3 pocket in the GPR1 frame and
 2.8 nm^3 in KOR1 even after the push, and the empty-pocket gate stops the build with a message naming the other site.
-In the free site the same protein cost 6-7 lipids and left at most 0.12 nm^3. With `--embed-site free` the
-complex goes on the point of the membrane plane farthest from the frame's receptor (`embedding.free_site`, periodic
-in x and y; about 10.7 nm from its nearest bead in the 18.3 nm frames), where the frame is an unbroken bilayer, and
-the push makes room for it. The receptor still holds its place there: its beads count as solid in the pocket search,
-and after slicing the build checks that the cut window holds none of them (`frame_protein_in_slice`; otherwise it
-stops and suggests a smaller `--xy-buffer` or `--box`). A single helix with the default 1 nm buffer gives a cell of
+With `--embed-site free` the complex goes on unbroken membrane instead, and the push makes room for it. The site is
+chosen for the membrane that will be cut around the complex, not for its helix alone: the slice window (the
+complex's x/y extent plus `--xy-buffer`, or `--box`, plus the 0.5 nm crop offset the slicer may take;
+`embedding.slice_window`) is tried at every point of the cell, and the point where it stays farthest from the
+frame's receptor is used (`embedding.free_site`, periodic in x and y). The window must keep 1.0 nm from every
+receptor bead (`FRAME_PROTEIN_CLEARANCE_NM`: in the bundled frames no lipid bead comes closer than 0.35-0.37 nm to
+a receptor bead, so the hole reaches that far past the bead centres); if no point does, the build stops before the
+push. The receptor's beads count as solid in the pocket search, and after slicing the build checks the actual window
+again (`frame_protein_in_slice`). A single-pass protein with a large extracellular domain and an extended tail
+(a 15.8 x 9.6 nm cut) kept its cut 1.3 nm (GPR1) and 2.0 nm (KOR1) from the receptor, cost 8-10 lipids and left at
+most 0.14 nm^3; placing it by its helix alone had put the cut edge within 1 nm of the receptor in both frames. A single helix with the default 1 nm buffer gives a cell of
 about 4 nm, where the cut edges alone move the APL past the slice gate (+6 % in the GPR3 frame); give it a larger
 buffer (`--xy-buffer 3`).
 
