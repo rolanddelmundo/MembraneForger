@@ -48,7 +48,7 @@ from .packing import (
     window_distribution,
 )
 from .qc import classify, classify_percentile, metric, overall_status, records_table
-from .rdf import leaflet_rdfs, rdf_comparison, region_rdfs
+from .rdf import leaflet_rdfs, rdf_comparison, region_rdfs, window_rdf_distribution
 from .runtools import log
 from .structio import element, read_gro, read_pdb, residues_in_order, xyz_nm
 from .structure_metrics import (
@@ -312,6 +312,8 @@ class MembraneValidation:
         rdf = rdf_comparison(region_curves, cur["rdfs"], settings.rdf_max_peak_shift_a, settings.rdf_max_noise_units, settings.rdf_peak_warning_a)
         rdf["reference"] = "the same lipids in the uncut embedded membrane (construction reference)"
         rdf["whole_cell"] = summary["vs_reference"]["rdf"]
+        r_max = min(0.5 * min(cut["box"][:2]) - 1e-6, 2.5)
+        rdf_windows = window_rdf_distribution(ref["stage"], cut["box"][:2], cropped, r_max, settings.slice_window_samples)
         for leaflet in LEAFLETS:
             rdf_all = rdf["leaflets"][leaflet].get("all")
             if rdf_all:
@@ -320,6 +322,17 @@ class MembraneValidation:
                                       rdf_all["first_peak_shift_A"], rdf_all["status"] if settings.rdf_validate else "NOT RUN",
                                       f"vs the same lipids uncut: RMS difference {rdf_all['rms_difference']} = {rdf_all['rms_in_noise_units']} x "
                                       f"counting noise" + (f"; {rdf_all['note']}" if rdf_all.get("note") else "")))
+            whole_all = rdf["whole_cell"]["leaflets"][leaflet].get("all")
+            if whole_all and rdf_windows[leaflet]["windows"]:
+                status, percentile = classify_percentile(whole_all["rms_difference"], rdf_windows[leaflet]["rms"])
+                status = {"INSUFFICIENT SAMPLING": "NOT RUN"}.get(status, status)
+                rdf["whole_cell"]["leaflets"][leaflet]["all"]["window_percentile"] = percentile
+                rdf["whole_cell"]["leaflets"][leaflet]["all"]["window_status"] = status
+                records.append(metric("headgroup RDF deviation vs parent windows", "slice", whole_all["rms_difference"], "g(r) RMS", leaflet,
+                                      round(float(np.median(rdf_windows[leaflet]["rms"])), 4), None, rdf_windows[leaflet]["windows"], percentile,
+                                      status if settings.rdf_validate else "NOT RUN",
+                                      f"RMS deviation of the slice from the whole-cell g(r) at percentile {percentile} of "
+                                      f"{rdf_windows[leaflet]['windows']} equal-size windows (central 95 % PASS)"))
         integrity = check_integrity(cut, membrane, placed, box)
         records.append(metric("slice integrity", "slice", int(integrity["pass"]), "bool", None, 1, None, len(cut["membrane"]), None,
                               "PASS" if integrity["pass"] else "FAIL",
@@ -334,7 +347,9 @@ class MembraneValidation:
         verdict = {"integrity": integrity["pass"], "upper_apl": leaflets["upper"]["construction_pass"],
                    "lower_apl": leaflets["lower"]["construction_pass"],
                    "composition": all(leaflets[l]["composition_status"] != "FAIL" for l in LEAFLETS),
-                   "rdf": rdf["pass"] or not settings.rdf_validate, "no_new_protein_lipid_clash": integrity["no_new_protein_lipid_clash"]}
+                   "rdf": (rdf["pass"] and all(rdf["whole_cell"]["leaflets"][l].get("all", {}).get("window_status", "PASS") != "FAIL"
+                                               for l in LEAFLETS)) or not settings.rdf_validate,
+                   "no_new_protein_lipid_clash": integrity["no_new_protein_lipid_clash"]}
         overall = overall_status(records)
         self.slice_check = {"reference": "embedded CG membrane (after embed_complex and lipid edits), the lipids that were cut",
                             "warning_percent": warning, "tolerance_percent": tolerance, "leaflets": leaflets, "integrity": integrity,

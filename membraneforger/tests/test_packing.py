@@ -240,3 +240,17 @@ class RealFrameGate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ParentWindowRDF(unittest.TestCase):
+    def test_window_rdf_distribution_of_a_lattice_is_narrow_and_a_window_of_it_passes(self):
+        membrane = bilayer(nx=20, ny=20, spacing=0.8, jitter=0.04)
+        embed = mf.cg_stage("embed", membrane, [], [16.0, 16.0, 12.0], MIDPLANE)
+        windows = mf.window_rdf_distribution(embed, np.array([8.0, 8.0]), [True, True], 2.5, samples=6)
+        self.assertEqual(windows["upper"]["windows"], 36)
+        self.assertLess(float(windows["upper"]["rms"].max()), 0.6)
+        whole = mf.leaflet_rdfs(embed)["upper"]["all"]
+        inside = [r for r in embed["lipids"] if r["leaflet"] == "upper" and r["x_nm"] < 8.0 and r["y_nm"] < 8.0]
+        one = mf.lateral_rdf(np.array([[r["x_nm"], r["y_nm"]] for r in inside]), np.array([16.0, 16.0]), r_max=2.5, area=64.0)
+        rms = float(np.sqrt(np.mean((one["g"][3:20] - whole["g"][3:20]) ** 2)))
+        self.assertNotEqual(mf.classify_percentile(rms, windows["upper"]["rms"])[0], "FAIL")   # a parent window is within its own distribution

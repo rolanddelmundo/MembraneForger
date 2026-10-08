@@ -271,5 +271,26 @@ class Asymmetry(unittest.TestCase):
         self.assertAlmostEqual(out["species"]["CHOL"]["x_lower"], 0.2, places=9)
 
 
+
+class LayeredOrder(unittest.TestCase):
+    def profiles(self, head_z, tail_z, water_z):
+        """Groups of points at given |z| offsets on both sides of a midplane at z = 5 in a 10 nm box."""
+        rng = np.random.default_rng(0)
+        make = lambda offsets: np.array([[rng.uniform(0, 6), rng.uniform(0, 6), 5.0 + sign * o]
+                                         for o in offsets for sign in (-1, 1) for _ in range(50)])
+        groups = {"headgroups": make([head_z]), "tails": make([tail_z]), "water": make([water_z]), "cholesterol": make([0.5 * (head_z + tail_z)])}
+        return mf.z_density_profiles(groups, [6.0, 6.0, 10.0])
+
+    def test_a_bilayer_architecture_passes_and_an_inverted_one_fails(self):
+        self.assertEqual(mf.layered_order(self.profiles(2.0, 0.7, 3.5), 5.0)["status"], "PASS")
+        self.assertEqual(mf.layered_order(self.profiles(0.7, 2.0, 3.5), 5.0)["status"], "FAIL")       # heads inside the tails
+
+    def test_misplaced_cholesterol_warns(self):
+        rng = np.random.default_rng(1)
+        make = lambda o: np.array([[rng.uniform(0, 6), rng.uniform(0, 6), 5.0 + sign * o] for sign in (-1, 1) for _ in range(50)])
+        groups = {"headgroups": make(2.0), "tails": make(0.7), "water": make(3.5), "cholesterol": make(3.2)}
+        self.assertEqual(mf.layered_order(mf.z_density_profiles(groups, [6.0, 6.0, 10.0]), 5.0)["status"], "WARNING")
+
+
 if __name__ == "__main__":
     unittest.main()
