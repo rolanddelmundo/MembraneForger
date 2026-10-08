@@ -2,7 +2,10 @@
 #// MembraneForger - (c) 2026 Roland Del Mundo
 #// Energy minimization and its validation.
 #//=============================================================
-"""Run steepest-descent minimization into em.unverified.gro and validate the result before it may be published."""
+"""Run steepest-descent minimization into em.unverified.gro and validate the result before it may be published.
+
+When the lipid topologies carry CHARMM-GUI dihedral restraints, a restrained minimization (emres) runs first and the
+validated, unrestrained EM starts from its result."""
 import math
 import re
 from pathlib import Path
@@ -10,25 +13,49 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial import cKDTree
 
-from .config import EM_MDP, FMAX_TARGET
+from .config import DIHRES_EM_FC, EM_MDP, FMAX_TARGET
 from .runtools import run_command
 from .structio import read_gro, wrap, xyz_nm
 from .validation import check_inputs_unchanged
 
-__all__ = ['run_em', 'closest_contact', 'validate_em']
+__all__ = ['has_dihedral_restraints', 'run_em', 'closest_contact', 'validate_em']
+
+def has_dihedral_restraints(out: Path) -> bool:
+    """Whether any molecule topology in toppar/ carries [ dihedral_restraints ] rows."""
+    for itp in (out / "toppar").glob("*.itp"):
+        section = ""
+        for raw in itp.read_text(errors="replace").splitlines():
+            s = raw.split(";", 1)[0].strip()
+            if s.startswith("["):
+                section = s.strip("[] ").lower()
+            elif section == "dihedral_restraints" and s and s[0].isdigit():
+                return True
+    return False
+
 
 def run_em(out: Path, topology: dict, gmx: str, ntomp: int, nsteps: int) -> None:
-    """Run steepest-descent minimization (PME when neutral)."""
+    """Run steepest-descent minimization (PME when neutral), first with the lipid dihedral restraints when present."""
     coulomb = "PME" if abs(topology["charge"]) < 1e-3 else "Cut-off"
-    (out / "em.mdp").write_text(EM_MDP.format(emtol=FMAX_TARGET, nsteps=nsteps, coulombtype=coulomb))
-    for stale in ("em.gro", "em.unverified.gro", "em.log", "em.edr", "em.trr"):
+    start = "solv_ions.gro"
+    if has_dihedral_restraints(out):
+        _minimize(out, gmx, "emres", start, coulomb, ntomp, nsteps, f"-DDIHRES -DDIHRES_FC={DIHRES_EM_FC:g}")
+        start = "emres.gro"
+    _minimize(out, gmx, "em", start, coulomb, ntomp, nsteps)
+
+
+def _minimize(out: Path, gmx: str, name: str, structure: str, coulomb: str, ntomp: int, nsteps: int, define: str = "") -> None:
+    """grompp + mdrun one steepest-descent minimization from structure; em writes em.unverified.gro, others {name}.gro."""
+    result = "em.unverified.gro" if name == "em" else f"{name}.gro"
+    (out / f"{name}.mdp").write_text(EM_MDP.format(emtol=FMAX_TARGET, nsteps=nsteps, coulombtype=coulomb,
+                                                   define=f"define          = {define}\n" if define else ""))
+    for stale in (f"{name}.gro", result, f"{name}.log", f"{name}.edr", f"{name}.trr"):
         (out / stale).unlink(missing_ok=True)
-    run_command(out, gmx.split() + ["grompp", "-f", "em.mdp", "-c", "solv_ions.gro", "-p", "topol.top",
-                                "-n", "index_ini.ndx", "-o", "em.tpr", "-po", "mdout.mdp", "-maxwarn", "0"],
-            produces=("em.tpr",))
+    run_command(out, gmx.split() + ["grompp", "-f", f"{name}.mdp", "-c", structure, "-p", "topol.top",
+                                    "-n", "index_ini.ndx", "-o", f"{name}.tpr", "-po", "mdout.mdp", "-maxwarn", "0"],
+                produces=(f"{name}.tpr",))
     (out / "mdout.mdp").unlink(missing_ok=True)
-    run_command(out, gmx.split() + ["mdrun", "-deffnm", "em", "-c", "em.unverified.gro", "-ntmpi", "1", "-ntomp", str(ntomp)],
-            produces=("em.unverified.gro", "em.log"))
+    run_command(out, gmx.split() + ["mdrun", "-deffnm", name, "-c", result, "-ntmpi", "1", "-ntomp", str(ntomp)],
+                produces=(result, f"{name}.log"))
 
 
 def closest_contact(out: Path, number: int) -> str:
