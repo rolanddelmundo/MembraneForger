@@ -57,7 +57,9 @@ Run `python -m membraneforger --help` for the rest. The protein is oriented, mov
 the frame's own receptor occupied, lipids overlapping it are removed, the membrane is cut around it and backmapped;
 the build then adds water and 0.15 M NaCl, minimizes, and audits the result (`grompp -maxwarn 0`, `gmx check`,
 energies, geometry, lipid stereochemistry including every GM3 sugar centre). `em.gro` is written only when every check passes, with `topol.top`, `toppar/`,
-`index_ini.ndx` and `run_manifest.json`; the last line of `membranebuilder.log` says `PASS` or `FAIL`.
+`index_ini.ndx` and `run_manifest.json`; the last line of `membranebuilder.log` says `PASS` or `FAIL`. Disulfides are
+taken from the input geometry (two cysteine SG atoms within 3.0 A, within one chain; SSBOND records are not read),
+listed in the manifest and re-measured after minimization (`docs/membraneforger_tutorial.md` 4.1).
 Backmapping dominates the run time (about 45 minutes on 8 cores). Equilibrate the system before production.
 
 **Membrane orientation**
