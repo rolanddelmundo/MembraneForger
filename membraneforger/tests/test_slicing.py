@@ -406,6 +406,12 @@ class Integration(unittest.TestCase):
         self.assertTrue(session.record["slice_check"]["pass"])
         self.assertEqual(sum(prepared["composition"].values()), report["lipids_after"])
         self.assertGreater(min(prepared["box"][:2]), 7.0)
+        # the segment named with --orientation none sets the bilayer centre the embedding uses
+        z = [a["z"] for a in aa if a["chain"] == "R" and 349 <= a["resid"] <= 376 and a["atom"] == "CA"]
+        session, _ = self.prepare(cg=GPR139_FRAME, aa=helix, embed=True, embed_site="free", settings=settings,
+                                  orientation=mf.OrientationRequest(mode="none", residues=((349, 376),)))
+        self.assertAlmostEqual(session.record["embedding"]["bilayer_centre_input_A"], round(0.5 * (min(z) + max(z)), 3), places=3)
+        self.assertTrue(session.record["embedding"]["hydrophobic_belt"]["given"])
         with self.assertRaises(mf.StageFailure) as caught:  # the same helix in the receptor's hole leaves a pocket
             self.prepare(cg=GPR139_FRAME, aa=helix, embed=True, settings=settings)
         self.assertEqual(caught.exception.stage, "mapping")

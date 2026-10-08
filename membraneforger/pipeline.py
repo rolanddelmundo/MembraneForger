@@ -168,8 +168,12 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
     enabled, anchors = oriented["report"]["enabled"], tuple(oriented["report"]["anchor_chains"])
     if session.embed:
         # An oriented complex has its bilayer centre at z = 0 and goes straight in; the midplane is the CG bilayer's own.
+        # bilayer centre of the input: 0 for an oriented complex; otherwise --bilayer-z, else the midpoint of the segment
+        # --orient-residues names (orientation.embedded_segment), else the hydrophobic-belt search (None)
+        centre_a = 0.0 if enabled else (session.bilayer_z_a if session.bilayer_z_a is not None
+                                        else oriented["report"].get("segment_bilayer_centre_A"))
         fit = run_stage(session, "mapping", embed_complex, aa_atoms, cg["protein"], membrane, box, slab,
-                        0.0 if enabled else session.bilayer_z_a, midplane if enabled else None, site=session.embed_site)
+                        centre_a, midplane if enabled else None, site=session.embed_site)
         membrane = fit["membrane"]
         for note in fit["notes"]:
             log(out, f"embed: {note}", "WARN" if "removed" in note else "INFO")

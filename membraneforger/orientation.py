@@ -33,7 +33,7 @@ from .runtools import log, run_command, sha256
 from .structio import read_pdb, residues_in_order, source_element, write_pdb, xyz_nm
 
 __all__ = ['ORIENTATION_MODES', 'NTERM_SIDES', 'OPM_ASSET_URL', 'PPM_MEMBRANE_CODES', 'OrientationRequest',
-           'OrientationFailure', 'parse_residue_ranges', 'select_residues', 'protein_chains', 'chain_sequence',
+           'OrientationFailure', 'parse_residue_ranges', 'select_residues', 'embedded_segment', 'protein_chains', 'chain_sequence',
            'pdb_id_from_header', 'resolve_pdb_id',
            'select_anchor_chains', 'OPMReference', 'parse_opm_file', 'fetch_opm_reference', 'match_chains',
            'atom_pairs', 'rigid_fit', 'apply_transform', 'spanning_chains', 'nterm_side_from_reference',
@@ -50,6 +50,9 @@ PPM_MEMBRANE_CODES = {"", "PMm", "PMp", "PMf", "Erf", "ERm", "GOL", "LYS", "END"
                       "GnO", "GnI", "GpI", "ARC", "LPC", "MPC", "OPC", "EPC", "MIC"}
 BACKBONE = ("N", "CA", "C", "O")
 PPM_INPUT_NAME = "anchor.pdb"  # PPM derives its output name from this: anchorout.pdb
+# With --orientation none, --orient-residues names the transmembrane segment; protein CA outside it within this many
+# A of the bilayer centre it gives (half the 3.0 nm hydrophobic belt of embedding.BELT_NM) are reported.
+EMBEDDED_SEGMENT_HALF_THICKNESS_A = 15.0
 # A residue selection submitted to PPM must hold at least one transmembrane helix (about 20 residues); fewer than
 # this many residues per anchor chain is refused rather than oriented.
 MIN_SEGMENT_RESIDUES = 10
@@ -553,6 +556,28 @@ def frame_metrics(oriented: list[dict], anchors: list[str], half_thickness_a: fl
             segment_metrics(oriented, anchors, half_thickness_a, ranges) if ranges else {})
 
 
+def embedded_segment(aa_atoms: list[dict], request: OrientationRequest, ranges: tuple,
+                     half_thickness_a: float = EMBEDDED_SEGMENT_HALF_THICKNESS_A) -> dict:
+    """With --orientation none: the bilayer centre (A) that puts the named transmembrane segment in the middle of the slab.
+
+    The input already has its membrane normal along z and is not rotated; --orient-residues then names the segment
+    that sits in the bilayer, and the bilayer centre is the midpoint of that segment's CA z range. This replaces the
+    hydrophobic-belt search over the whole protein (embedding.hydrophobic_belt), which an extracellular or
+    cytoplasmic domain with hydrophobic surface can pull off the helix.
+    """
+    chains = protein_chains(aa_atoms)
+    anchors, how = select_anchor_chains(chains, tuple(request.chains))
+    selected = select_residues(OrderedDict((label, chains[label]) for label in anchors), ranges)
+    z = [a["z"] for residues in selected.values() for _, _, atoms in residues for a in atoms if a["atom"] == "CA"]
+    if not z:
+        raise OrientationFailure(f"--orient-residues {', '.join(f'{f}-{l}' for f, l in ranges)} selects no CA atom")
+    centre = 0.5 * (min(z) + max(z))
+    shifted = [dict(a, z=a["z"] - centre) for a in aa_atoms]
+    segment = segment_metrics(shifted, anchors, half_thickness_a, ranges)
+    segment.update({"segment_ca_z_range_A": [round(min(z), 3), round(max(z), 3)], "half_thickness_A": half_thickness_a})
+    return {"anchor_chains": anchors, "anchor_selection": how, "segment_bilayer_centre_A": round(centre, 3), "segment": segment}
+
+
 def segment_metrics(oriented: list[dict], anchors: list[str], half_thickness_a: float, ranges: tuple) -> dict:
     """With a residue selection: the protein residues outside it whose CA lies in the hydrophobic slab.
 
@@ -601,7 +626,7 @@ def orient_complex(aa_atoms: list[dict], aa_path: Path, request: OrientationRequ
     if ranges and (request.mode == "opm" or request.opm_file):
         raise OrientationFailure("--orient-residues selects the residues submitted to PPM; it does not apply to --orientation opm "
                                  "or --opm-file")
-    if ranges and request.nterm_side not in ("in", "out"):
+    if ranges and request.mode != "none" and request.nterm_side not in ("in", "out"):
         # An OPM entry gives the side of a chain's N terminus, which need not be the side of the selection's first residue.
         raise OrientationFailure("--orient-residues needs --nterm-side in or out: the side of the membrane on which the FIRST "
                                  "SELECTED residue lies (for a type I single-pass protein oriented on its helix: out)")
@@ -612,6 +637,17 @@ def orient_complex(aa_atoms: list[dict], aa_path: Path, request: OrientationRequ
               "opm_cache": str(request.opm_cache) if request.opm_cache else None}}
     if request.mode == "none":
         report.update({"anchor_chains": [], "status": "skipped: orientation disabled; the input coordinates are used as given"})
+        if ranges:
+            report.update(embedded_segment(aa_atoms, request, ranges))
+            frame = report["segment"]
+            buried = frame["outside_segment_residues_inside_slab"]
+            log(out, f"embedded segment {', '.join(f'{f}-{l}' for f, l in ranges)} of chain(s) {', '.join(report['anchor_chains'])}: "
+                     f"bilayer centre at z = {report['segment_bilayer_centre_A']:+.2f} A (midpoint of its CA z range "
+                     f"{frame['segment_ca_z_range_A'][0]:+.1f} to {frame['segment_ca_z_range_A'][1]:+.1f} A); the input is not rotated; "
+                     f"{len(buried)}/{frame['outside_segment_ca_atoms']} protein CA outside the segment lie within "
+                     f"+-{frame['half_thickness_A']:.0f} A of that centre"
+                     + (f" ({', '.join(buried[:12])}{', ...' if len(buried) > 12 else ''})" if buried else ""),
+                "WARN" if buried else "INFO")
         return {"oriented": aa_atoms, "report": report, "R": np.eye(3), "t": np.zeros(3)}
     chains = protein_chains(aa_atoms)
     pdb_id, id_source = resolve_pdb_id(request.pdb_id, aa_path)
