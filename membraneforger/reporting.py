@@ -83,7 +83,8 @@ def write_run_manifest(session, status: str, error: dict | None, started: str, h
         "settings": vars(session.settings) if hasattr(session.settings, "__dict__") else
                     {f: getattr(session.settings, f) for f in session.settings.__dataclass_fields__},
         "stage_seconds": session.timings,
-        "orientation": orientation_summary(record.get("orientation")), "slice": record.get("slice"), "box": record.get("box"),
+        "orientation": orientation_summary(record.get("orientation")), "slice": record.get("slice"), "slice_check": record.get("slice_check"),
+        "membrane_validation": record.get("membrane_validation"), "box": record.get("box"),
         "coarse_grain": record.get("coarse_grain"), "aa_cg_mapping": record.get("aa_cg_mapping"),
         "embedding": record.get("embedding"), "lipid_edits": record.get("lipid_edits"), "box_trim": record.get("box_trim"),
         "backmap_isomer_review": record.get("backmap_isomer_review"),

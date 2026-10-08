@@ -144,6 +144,15 @@ def make_parser() -> argparse.ArgumentParser:
     orient.add_argument("--opm-cache", type=Path, metavar="DIR", help="cache for downloaded OPM files (default: ~/.cache/membraneforger/opm)")
     parser.add_argument("--xy-buffer", type=float, default=defaults.box_xy_buffer_nm, metavar="NM",
                         help="membrane kept around the complex on each side in x and y when the box is auto (default: %(default)s nm)")
+    check = parser.add_argument_group("slice validation (the sliced membrane against the embedded membrane it was cut from)")
+    check.add_argument("--apl-validate", choices=("yes", "no"), default="yes" if defaults.apl_validate else "no",
+                       help="stop before backmapping when a leaflet's Voronoi APL changes by more than --apl-tolerance (default: %(default)s)")
+    check.add_argument("--apl-tolerance", type=float, default=defaults.apl_slice_tolerance_percent, metavar="PERCENT",
+                       help="largest accepted change of the leaflet APL across slicing, in percent (default: %(default)s)")
+    check.add_argument("--rdf-validate", choices=("yes", "no"), default="yes" if defaults.rdf_validate else "no",
+                       help="compare the lateral headgroup RDF of the slice with the embedded membrane (warns only; default: %(default)s)")
+    check.add_argument("--no-slice-offset", action="store_true",
+                       help="keep the slice window centred on the complex instead of choosing the offset that best preserves lipid density")
     return parser
 
 
@@ -226,8 +235,11 @@ def main(argv: list | None = None) -> int:
     out = (args.out or Path.cwd() / f"{source.stem}_membraneforger").resolve()
     if not args.xy_buffer > 0:
         parser.error("--xy-buffer must be positive")
+    if not args.apl_tolerance > 0:
+        parser.error("--apl-tolerance must be positive")
     settings = Settings(fit_max_core_rmsd_a=args.fit_max_core_rmsd, fit_min_core_fraction=args.fit_min_core_fraction,
-                        box_xy_buffer_nm=args.xy_buffer)
+                        box_xy_buffer_nm=args.xy_buffer, apl_validate=args.apl_validate == "yes", apl_slice_tolerance_percent=args.apl_tolerance,
+                        rdf_validate=args.rdf_validate == "yes", slice_optimize_offset=not args.no_slice_offset)
     session = Session(out=out, name=args.name or out.name, gmx=gmx, forcefield=forcefield, data=data, python=python,
                       ntomp=args.ntomp, nsteps=args.nsteps, settings=settings, embed=embed,
                       box_a=box, bilayer_z_a=args.bilayer_z, delete_lipids=list(args.dellipid), add_lipid=args.addlipid,

@@ -17,6 +17,7 @@ from .backmapping import assemble_membrane_pdb, backmap_membrane, read_mapping
 from .config import AMINO, DEFAULT_LIGANDS, RENAME_MOLECULE, Settings
 from .embedding import check_box_z, edit_lipids, embed_complex
 from .martini import bilayer_midplane, classify_cg, make_membrane_whole
+from .membrane_report import MembraneValidation, protein_of_cg_frame, stage_from_gro, stage_from_membrane_pdb
 from .minimization import run_em, validate_em
 from .orientation import OrientationRequest, check_orientation_preserved, orient_complex
 from .reporting import write_run_manifest
@@ -37,6 +38,8 @@ STAGE_HINTS = {
     "orient": "{out}/orientation_report.json, the chains of the all-atom input, and {work}/orientation/ppm/ with the PPM "
               "transcript in {out}/" + LOG_NAME,
     "slice": "the slice report in {out}/run_manifest.json and the log, the --box option and --xy-buffer",
+    "slice_check": "{out}/membrane_validation.md and membrane_validation.json; --apl-tolerance and --apl-validate",
+    "membrane_check": "{out}/membrane_validation.md and membrane_validation.json",
     "mstool": "the --mstool-python interpreter and the transcript at the end of {out}/" + LOG_NAME,
     "classify": "the residue and bead names of the coarse-grained input listed in the message",
     "mapping": "{out}/aa_cg_mapping.tsv if written, and the chain sequences of both inputs",
@@ -77,6 +80,7 @@ class Session:
     work: Path | None = None
     timings: dict = field(default_factory=dict)
     record: dict = field(default_factory=dict)
+    analysis: object = None  # the MembraneValidation of this build (stage measurements; not written to the manifest)
 
 
 class StageFailure(Exception):
@@ -152,6 +156,8 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
                                    "bilayer_midplane_nm": round(midplane, 4), "bilayer_midplane_source": midplane_how, **leaflets})
     log(out, f"CG bilayer midplane z {midplane:.3f} nm ({midplane_how})"
              + (f"; PO4 normal {leaflets['po4_normal_tilt_from_z_deg']} deg from z" if leaflets else ""))
+    session.analysis = MembraneValidation(out, session.settings)
+    run_stage(session, "membrane_check", session.analysis.add_cg, "cg_frame", membrane, [], box, midplane, protein_of_cg_frame(cg["protein"]))
     enabled, anchors = oriented["report"]["enabled"], tuple(oriented["report"]["anchor_chains"])
     if session.embed:
         # An oriented complex has its bilayer centre at z = 0 and goes straight in; the midplane is the CG bilayer's own.
@@ -186,8 +192,14 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
         log(out, f"orientation preserved through placement: normal tilt {preserved['normal_tilt_deg']:.1e} deg, anchor depth "
                  f"{preserved['anchor_ca_depth_A']:+.2f} A kept"
                  + (f"; CG pose differs by {measured} deg (measured, not adopted)" if measured is not None else ""), "PASS")
+    embedded = run_stage(session, "membrane_check", session.analysis.add_cg, "embed", membrane, placed, box, midplane)
+    for leaflet in ("upper", "lower"):
+        e = embedded["leaflets"][leaflet]
+        log(out, f"embedded membrane, {leaflet} leaflet: {e['lipids']} lipids, APL {e['apl_A2']} A^2 (Voronoi; protein footprint "
+                 f"{e['protein_area_A2']:.0f} A^2); this is the reference the slice must preserve")
     requested = (session.box_a[0] / 10.0, session.box_a[1] / 10.0) if session.box_a else None
-    cut = run_stage(session, "slice", slice_membrane_cg, membrane, placed, box, midplane, session.settings, requested)
+    cut = run_stage(session, "slice", slice_membrane_cg, membrane, placed, box, midplane, session.settings, requested,
+                    session.analysis.slice_reference())
     record["slice"] = cut["report"]
     report, seam = cut["report"], cut["report"]["seam"]
     if requested:
@@ -203,6 +215,23 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
     else:
         log(out, f"slice ({report['mode']}): the complex plus {session.settings.box_xy_buffer_nm} nm reaches the whole "
                  f"{box[0]:.2f} x {box[1]:.2f} nm cell; the membrane is not cut")
+    selection = report["selection"]
+    log(out, f"slice selection: {selection['kept_by_anchor_rule']} lipids by their headgroup anchor; the earlier all-beads-inside rule "
+             f"would have kept {selection['kept_by_all_beads_inside_rule']} ({selection['rejected_by_old_rule_with_anchor_inside']} lipids "
+             f"with the anchor inside lost to a tail bead across the edge: {selection['rejected_by_old_rule_with_anchor_inside_by_leaflet']})")
+    if report["crop_offset"]["optimized"]:
+        log(out, f"slice window offset {report['crop_offset']['offset_nm']} nm chosen from {report['crop_offset']['candidates']} candidates "
+                 f"(score {report['crop_offset']['chosen']['score']} vs {report['crop_offset']['unshifted']['score']} centred)")
+    run_stage(session, "membrane_check", session.analysis.add_cg, "slice", cut["membrane"], cut["placed"], cut["box"], midplane)
+    try:
+        record["slice_check"] = run_stage(session, "slice_check", session.analysis.validate_slice, cut, membrane, placed, box)
+    finally:
+        record["membrane_validation"] = session.analysis.record(cut)
+        session.analysis.cut = cut
+        session.analysis.write(cut)
+    failed = ", ".join(k for k, v in record["slice_check"]["verdict"].items() if not v)
+    log(out, f"slice gate: {'PASS' if record['slice_check']['pass'] else 'FAIL'} ({failed or 'all checks'}); membrane_validation.md",
+        "PASS" if record["slice_check"]["pass"] else "WARN")
     placed, membrane, box = cut["placed"], cut["membrane"], cut["box"]
     if session.box_a:  # refuse a z that cannot hold the complex now, not after the slow backmapping
         run_stage(session, "mapping", check_box_z, placed, slab, session.box_a[2] / 10.0)
@@ -225,7 +254,18 @@ def backmap_and_assemble(session: Session, prepared: dict, seed: int) -> Path:
     natoms = run_stage(session, "assemble", assemble_membrane_pdb, prepared["placed"], lipids, prepared["box"], out / "membrane.pdb")
     log(out, f"membrane.pdb (seed {seed}): {len(prepared['placed'])} protein/ligand atoms placed, {len(lipids)} membrane "
              f"molecules backmapped ({natoms} atoms); inventory matches the coarse-grained input", "PASS")
+    if session.analysis is not None:
+        summary = run_stage(session, "membrane_check", session.analysis.add, stage_from_membrane_pdb(out / "membrane.pdb"))
+        log(out, "backmapped membrane: " + leaflet_apl_summary(summary) + " (cross-resolution anchors P/O3/NF; reported, not graded)")
+        session.record["membrane_validation"] = session.analysis.record(session.analysis.cut)
+        session.analysis.write(session.analysis.cut)
     return out / "membrane.pdb"
+
+
+def leaflet_apl_summary(summary: dict) -> str:
+    """One log phrase per leaflet: lipids, Voronoi APL and the change against the embedded reference."""
+    return "; ".join(f"{l} leaflet {summary['leaflets'][l]['lipids']} lipids, APL {summary['leaflets'][l]['apl_A2']} A^2 "
+                     f"({summary['vs_reference']['apl'][l]['delta_apl_percent']:+.1f} % vs embedded)" for l in ("upper", "lower"))
 
 
 def write_orientation_report(out: Path, report: dict) -> None:
@@ -321,6 +361,11 @@ def finish_system(session: Session, staged: dict) -> str:
     run_stage(session, "minimize", run_em, out, topology, gmx, session.ntomp, session.nsteps)
     record["em"] = run_stage(session, "validate", validate_em, system, topology, index)
     log(out, f"EM validated: {record['em']['summary']}", "PASS")
+    if session.analysis is not None:
+        summary = run_stage(session, "membrane_check", session.analysis.add, stage_from_gro(out / "em.unverified.gro"))
+        log(out, "minimized membrane: " + leaflet_apl_summary(summary))
+        record["membrane_validation"] = session.analysis.record(session.analysis.cut)
+        session.analysis.write(session.analysis.cut)
     record["audit"] = run_stage(session, "audit", audit_run, out, gmx, "em.unverified.gro", session.settings)
     log(out, f"independent audit: {len(record['audit']['checks'])} checks passed", "PASS")
     chairs = {mol: (e["rings_out_of_chair"], e["rings"]) for mol, e in record["audit"]["dihedral_restraints"].items() if "rings" in e}
