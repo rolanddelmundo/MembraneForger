@@ -218,7 +218,8 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
     if session.embed and session.embed_site == "free":
         reached = run_stage(session, "slice", refuse_frame_protein_in_slice, cg["protein"], slab, box, placed, cut)
         record["slice"]["frame_protein_beads_in_window"] = reached
-        log(out, "slice window holds no bead of the frame's own protein: the hole it leaves stays outside the cut membrane", "PASS")
+        log(out, f"slice window keeps {FRAME_PROTEIN_CLEARANCE_NM} nm from every bead of the frame's own protein: the hole it "
+                 "leaves stays outside the cut membrane", "PASS")
     report, seam = cut["report"], cut["report"]["seam"]
     if requested:
         record["box_trim"] = {"requested_A": list(session.box_a), "see": "slice"}
