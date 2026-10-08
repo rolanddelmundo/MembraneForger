@@ -216,6 +216,15 @@ class RingPiercing(unittest.TestCase):
                   "contact": {"distance_nm": contact, "atoms": ["POPS:H13Y(atom 20)", "ILE:CD(atom 3)"]}}
         return mf.backmap_verdict(staged, review or {}, mf.Settings(), last)
 
+    def test_backmap_verdict_counts_gm3_sugar_centres_as_wrong_configurations(self):
+        clean = self.verdict([], review={"gm3_sugar_centres_or_cis_bonds": 0})
+        self.assertTrue(clean["accept"])
+        verdict = self.verdict([], review={"gm3_sugar_centres_or_cis_bonds": 2})
+        self.assertFalse(verdict["accept"])
+        self.assertEqual(verdict["stage"], "backmap")
+        self.assertEqual(verdict["counts"]["wrong_stereocentres_or_double_bonds"], 2)
+        self.assertIn("wrong configuration", verdict["problem"])
+
     def test_backmap_verdict(self):
         poke = {"ring": ["PHE:CG(atom 5)"], "bond": ["DOPE:C25(atom 9)", "DOPE:H5R(atom 10)"], "ring_atoms": [5, 6], "bond_atoms": [9, 10]}
         heavy = {"ring": ["PHE:CG(atom 5)"], "bond": ["DOPE:C25(atom 9)", "DOPE:C26(atom 12)"], "ring_atoms": [5, 6], "bond_atoms": [9, 12]}
