@@ -325,7 +325,7 @@ class Integration(unittest.TestCase):
         if subprocess.run([sys.executable, "-c", "import mstool"], capture_output=True).returncode:
             raise unittest.SkipTest("mstool is not importable in this interpreter")
 
-    def prepare(self, cg=CG_GRO, **kwargs):
+    def prepare(self, cg=CG_GRO, aa=AA_PDB, **kwargs):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp, True)
         out = tmp / "out"
@@ -334,7 +334,7 @@ class Integration(unittest.TestCase):
         request = kwargs.pop("orientation", mf.OrientationRequest(mode="none"))
         session = mf.Session(out=out, name="t", gmx="gmx", forcefield=FORCEFIELD, data=mf.locate_data(None), python=sys.executable,
                              ntomp=1, nsteps=1, orientation=request, work=out / "work", **kwargs)
-        return session, mf.prepare_inputs(session, AA_PDB, cg)
+        return session, mf.prepare_inputs(session, aa, cg)
 
     def test_auto_box_slices_before_backmapping_and_records_it(self):
         session, prepared = self.prepare()
@@ -384,6 +384,32 @@ class Integration(unittest.TestCase):
         self.assertLess(float(np.ptp(z_shift)), 1e-2)                                         # embedding only translated the complex
         self.assertAlmostEqual(float(z_shift.mean()) / 10.0, session.record["coarse_grain"]["bilayer_midplane_nm"], places=2)
         self.assertEqual(sum(prepared["composition"].values()), report["lipids_after"])
+
+    def test_single_pass_protein_embeds_away_from_the_frames_receptor_hole(self):
+        # TM6 of the example receptor alone stands in for a single-pass protein; the GPR139 frame's receptor hole is
+        # far larger than one helix, so it goes on the unbroken bilayer away from that hole ("free" site)
+        aa = mf.read_all_atom(AA_PDB, FORCEFIELD)[0]
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        helix = tmp / "tm6.pdb"
+        mf.write_pdb([a for a in aa if a["chain"] == "R" and 349 <= a["resid"] <= 376], helix)
+        # one helix plus the default 1 nm buffer is a ~4 nm cell, where the cut edges alone move the APL past the gate
+        settings = mf.Settings(box_xy_buffer_nm=3.0)
+        session, prepared = self.prepare(cg=GPR139_FRAME, aa=helix, embed=True, embed_site="free", settings=settings)
+        embedding, report = session.record["embedding"], session.record["slice"]
+        self.assertEqual(embedding["site"], "free")
+        self.assertGreater(embedding["distance_to_frame_protein_nm"], 6.0)
+        self.assertLess(sum(embedding["removed_lipids"].values()), 15)
+        self.assertLessEqual(embedding["voids"]["largest_pocket_nm3"], mf.MAX_VOID_NM3)
+        self.assertTrue(report["cropped"])
+        self.assertEqual(report["frame_protein_beads_in_window"], 0)
+        self.assertTrue(session.record["slice_check"]["pass"])
+        self.assertEqual(sum(prepared["composition"].values()), report["lipids_after"])
+        self.assertGreater(min(prepared["box"][:2]), 7.0)
+        with self.assertRaises(mf.StageFailure) as caught:  # the same helix in the receptor's hole leaves a pocket
+            self.prepare(cg=GPR139_FRAME, aa=helix, embed=True, settings=settings)
+        self.assertEqual(caught.exception.stage, "mapping")
+        self.assertIn("--embed-site free", caught.exception.what)
 
     def test_user_box_is_validated_against_the_cell_and_cuts_the_membrane(self):
         session, prepared = self.prepare(box_a=(96.0, 111.8, 250.0))

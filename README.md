@@ -44,6 +44,7 @@ python -m membraneforger --aa complex.pdb --orient-chain R --out output_director
 | `--pdb-id ID` | exact PDB ID, to use its OPM orientation (default: the `HEADER` record of the input, never the file name) |
 | `--ppm-exe PATH` | the compiled PPM 3.0 program (`immers`), or set `MEMBRANEFORGER_PPM` |
 | `--cg 1` / `--cg 2` / `--cg FILE` | the membrane: `1` = one of the bundled GPR139 frames at random (default), `2` = one of the bundled kappa opioid receptor frames at random, or `custom=FILE`, a Martini 3 frame of your own complex (add `--embed` to use only its membrane) |
+| `--embed-site hole\|free` | where the protein goes in a bundled (or `--embed`) frame: `hole` (default) = where the frame's receptor was; `free` = the unbroken bilayer farthest from that receptor, for a protein much smaller than it, such as a single transmembrane helix (the slice must then stay clear of the receptor, and a single helix wants a larger `--xy-buffer`, e.g. 3) |
 | `--box X Y Z` | opt-in box edges in Å. Default (`BOX = auto`): the membrane is cut to the complex plus `--xy-buffer` (1.0 nm) in x and y, z from the protein height. A smaller x and y cuts the membrane around the complex; x and y may not exceed the membrane patch |
 | `--xy-buffer NM` | membrane kept around the complex on each side in x and y when the box is auto (default 1.0) |
 | `--apl-validate yes\|no`, `--apl-tolerance PERCENT` | the slice gate: stop before backmapping when a leaflet's area per lipid changes by more than the tolerance (default 5 %, warning above 3 %) against the membrane it was cut from |

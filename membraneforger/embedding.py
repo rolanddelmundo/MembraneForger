@@ -16,7 +16,8 @@ from .structio import element, wrap, xyz_nm
 
 __all__ = ['LIPID_NAMES', 'LIPID_ALIASES', 'CONVERTIBLE', 'BELT_NM', 'OVERLAP_NM', 'HYDROPHOBIC', 'CHARGED',
            'EXPOSURE_RADIUS_NM', 'BURIED_ABOVE', 'HARD_CORE_NM', 'MAX_VOID_NM3', 'lipid_name', 'hydrophobic_belt',
-           'periodic_mean', 'phosphate_planes', 'membrane_voids', 'embed_complex',
+           'periodic_mean', 'phosphate_planes', 'membrane_voids', 'EMBED_SITES', 'frame_protein_beads', 'free_site',
+           'frame_protein_in_slice', 'embed_complex',
            'trim_membrane', 'edit_lipids', 'check_box_z']
 
 # User-facing Martini 3 lipid names (INSANE spelling) and how they are spelled inside the classifier.
@@ -46,6 +47,10 @@ SEAM_CONTACT_NM = 0.30
 # The embedding stops when a pocket exceeds MAX_VOID_NM3, less than the volume of one phospholipid. With the 6WHC
 # complex in the 18 bundled frames: the uncut frames' largest pocket is 0.00-0.20 nm^3, this embedding leaves
 # 0.02-0.76 nm^3, and the earlier remove-on-contact rule left 1.2-6.8 nm^3 in the inner leaflet.
+# Where the complex goes in the frame (embed_complex site): "hole", where the frame's own protein was, or "free", the
+# point farthest from that protein, searched on a FREE_SITE_GRID_NM grid.
+EMBED_SITES = ("hole", "free")
+FREE_SITE_GRID_NM = 0.25
 VOID_GRID_NM = 0.1
 VOID_EMPTY_NM = 0.60
 VOID_MARGIN_NM = 0.30
@@ -181,11 +186,59 @@ def label_periodic(mask: np.ndarray) -> tuple[np.ndarray, list[int]]:
     return labels, sizes
 
 
+def frame_protein_beads(cg_protein: list[list[dict]], slab: tuple[float, float]) -> np.ndarray:
+    """Coordinates (nm) of every bead of the frame's own protein that lies within the bilayer's z range."""
+    beads = np.array([[b["x"], b["y"], b["z"]] for res in cg_protein for b in res], dtype=float).reshape(-1, 3)
+    return beads[(beads[:, 2] >= slab[0]) & (beads[:, 2] <= slab[1])]
+
+
+def free_site(cg_protein: list[list[dict]], slab: tuple[float, float], box: list[float],
+              grid_nm: float = FREE_SITE_GRID_NM) -> tuple[np.ndarray, float | None]:
+    """The point of the membrane plane farthest from the frame's own protein (periodic in x and y), and that distance (nm).
+
+    A bundled frame was equilibrated around a receptor; where the receptor was, the frame has a hole of the receptor's
+    shape. A complex much smaller than that receptor (a single transmembrane helix) cannot fill it, so it is placed
+    on the stretch of membrane farthest from it instead, where the frame is an unbroken bilayer. Without protein in
+    the bilayer the centre of the patch is returned with no distance.
+    """
+    cell = np.asarray(box[:2], float)
+    beads = frame_protein_beads(cg_protein, slab)
+    if not len(beads):
+        return 0.5 * cell, None
+    nx, ny = max(1, int(round(cell[0] / grid_nm))), max(1, int(round(cell[1] / grid_nm)))
+    X, Y = np.meshgrid((np.arange(nx) + 0.5) * cell[0] / nx, (np.arange(ny) + 0.5) * cell[1] / ny, indexing="ij")
+    points = np.column_stack([X.ravel(), Y.ravel()])
+    distance = cKDTree(wrap(beads[:, :2], cell), boxsize=cell).query(points)[0]
+    best = int(np.argmax(distance))
+    return points[best], float(distance[best])
+
+
+def frame_protein_in_slice(cg_protein: list[list[dict]], slab: tuple[float, float], box: list[float], placed: list[dict],
+                           cut: dict) -> int:
+    """How many beads of the frame's own protein (in the bilayer) fall inside the window a slice kept.
+
+    The slicer moves the complex by the window's lower corner; the same shift maps the frame's protein into the new
+    cell. An axis that was not cut keeps the whole cell, so any bead counts there.
+    """
+    beads = frame_protein_beads(cg_protein, slab)
+    if not len(beads):
+        return 0
+    cell, size = np.asarray(box[:2], float), np.asarray(cut["box"][:2], float)
+    lower = np.array([placed[0]["x"] - cut["placed"][0]["x"], placed[0]["y"] - cut["placed"][0]["y"]]) / 10.0
+    relative = np.mod(beads[:, :2] - lower, cell)
+    return int(np.all(relative < size - 1e-9, axis=1).sum())
+
+
 def embed_complex(aa_atoms: list[dict], cg_protein: list[list[dict]], membrane: list[dict], box: list[float],
                   slab: tuple[float, float], bilayer_z_a: float | None = None, midplane_nm: float | None = None,
                   overlap_nm: float = OVERLAP_NM, hard_core_nm: float = HARD_CORE_NM, relax_steps: int = RELAX_STEPS,
-                  max_void_nm3: float = MAX_VOID_NM3) -> dict:
-    """Put the complex where the frame's own protein was, with its hydrophobic belt on the midplane, and make room for it.
+                  max_void_nm3: float = MAX_VOID_NM3, site: str = "hole") -> dict:
+    """Put the complex into the frame's membrane with its hydrophobic belt on the midplane, and make room for it.
+
+    site "hole" (default) puts the complex where the frame's own protein was; site "free" puts it on the stretch of
+    membrane farthest from that protein (free_site), where the frame has no hole, for a complex much smaller than
+    the frame's protein. With "free" the frame's protein still holds its own place: its beads count as solid in the
+    pocket search, and the pipeline refuses a slice whose window reaches them (frame_protein_in_slice).
 
     Room is made by moving lipids, not by deleting every lipid the complex touches: the lipids closer than overlap_nm
     to a heavy atom are pushed out of the way at the coarse-grained level (slicing.relax_seam: soft repulsion from the
@@ -206,7 +259,14 @@ def embed_complex(aa_atoms: list[dict], cg_protein: list[list[dict]], membrane: 
     centre_z = belt["z_a"] / 10.0
     bb = np.array([[b["x"], b["y"], b["z"]] for res in cg_protein for b in res if b["atom"] == "BB"])
     inside = bb[(bb[:, 2] >= slab[0]) & (bb[:, 2] <= slab[1])] if len(bb) else bb
-    if len(inside):
+    if site not in EMBED_SITES:
+        raise SystemExit(f"unknown embedding site {site}; choose from {', '.join(EMBED_SITES)}")
+    away = None
+    if site == "free":
+        target_xy, away = free_site(cg_protein, slab, box)
+        where = ("the point of the membrane farthest from the frame's own protein "
+                 + (f"({away:.2f} nm from its nearest bead in the bilayer)" if away is not None else "(the frame has no protein in the bilayer)"))
+    elif len(inside):
         target_xy = np.array([periodic_mean(inside[:, 0], cell[0]), periodic_mean(inside[:, 1], cell[1])])
         where = f"the centre of the frame's own transmembrane protein ({len(inside)} BB beads in the bilayer)"
     else:
@@ -246,7 +306,8 @@ def embed_complex(aa_atoms: list[dict], cg_protein: list[list[dict]], membrane: 
     if not kept:
         raise SystemExit("every membrane molecule overlaps the placed complex; the input is not oriented along z")
     clearance = float(closest[closest >= hard_core_nm].min())
-    voids = membrane_voids(kept, protein_nm, box, midplane)
+    frame_protein = frame_protein_beads(cg_protein, slab) if site == "free" else np.zeros((0, 3))
+    voids = membrane_voids(kept, np.vstack([protein_nm, frame_protein]), box, midplane)
     touching = int((closest_start < overlap_nm).sum())
     notes = [f"bilayer centre of the all-atom input at z = {belt['z_a']:.1f} A "
              + ("(given)" if belt.get("given") else f"(hydrophobic belt: {belt['hydrophobic']} hydrophobic and "
@@ -259,7 +320,8 @@ def embed_complex(aa_atoms: list[dict], cg_protein: list[list[dict]], membrane: 
              + (", ".join(f"{name} {n}" for name, n in sorted(removed.items())) or "none")
              + f"; closest lipid bead to a heavy atom {clearance:.3f} nm",
              f"largest empty pocket in the acyl region {voids['largest_pocket_nm3']:.3f} nm^3 (limit {max_void_nm3} nm^3)"]
-    metrics = {"mode": "embed", "bilayer_centre_input_A": belt["z_a"], "hydrophobic_belt": belt,
+    metrics = {"mode": "embed", "site": site, "distance_to_frame_protein_nm": round(away, 3) if away is not None else None,
+               "bilayer_centre_input_A": belt["z_a"], "hydrophobic_belt": belt,
                "translation_A": [round(float(v), 3) for v in t], "target_xy_nm": [round(float(v), 3) for v in target_xy],
                "midplane_nm": round(midplane, 3), "overlap_cutoff_nm": overlap_nm, "hard_core_nm": hard_core_nm,
                "lipids_touching_complex": touching, "removed_lipids": dict(removed),
@@ -275,8 +337,11 @@ def embed_complex(aa_atoms: list[dict], cg_protein: list[list[dict]], membrane: 
         side = max(("lower", "upper"), key=lambda k: voids[k]["largest_pocket_nm3"])
         raise SystemExit(f"embedding left an empty pocket of {voids['largest_pocket_nm3']:.2f} nm^3 in the acyl region of the "
                          f"{side} leaflet at {voids[side]['largest_pocket_centre_nm']} nm (limit {max_void_nm3} nm^3): the "
-                         "frame's lipids cannot be moved around this complex without a hole; use a coarse-grained frame "
-                         "of this complex (--cg FILE) or another frame")
+                         "frame's lipids cannot be moved around this complex without a hole; "
+                         + ("for a complex much smaller than the frame's own protein (e.g. one transmembrane helix) use "
+                            "--embed-site free, which places it away from the frame's protein hole; otherwise "
+                            if site == "hole" else "")
+                         + "use a coarse-grained frame of this complex (--cg FILE) or another frame")
     return {"R": np.eye(3), "t": t, "placed": placed, "membrane": kept, "removed": removed, "removed_indices": removed_indices,
             "notes": notes, "metrics": metrics}
 
