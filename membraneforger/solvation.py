@@ -116,8 +116,7 @@ def solvate_system(system: dict, topology: dict, gmx: str, box: list[float]) -> 
     keep = ~((in_core & ~cavity) | clash)
     kept = [dict(a, resname="TIP3", atom=name, resid=nsolute + i + 1)
             for i in np.flatnonzero(keep) for a, name in zip(water[3 * i:3 * i + 3], ("OH2", "H1", "H2"))]
-    write_gro(solute + kept, box, out / "solv.gro", f"{system['name']} solvated")
-    (out / "solv_raw.gro").unlink()
+    write_gro(solute + kept, box, out / "solv.gro", f"{system['name']} solvated")  # solv_raw.gro (before the cut) is kept
     nwater = len(kept) // 3
     topology["molecules"].append(("TIP3", nwater, topology["solvent_itps"]["TIP3"]["atoms"], "SOL_ION"))
     topology["names"] += ["OH2", "H1", "H2"] * nwater
@@ -163,8 +162,6 @@ def add_ions(system: dict, topology: dict, gmx: str, box: list[float]) -> None:
         log(out, f"genion attempt {attempt}: {embedded} ions inside the bilayer, {clashing} touching solute; retrying", "WARN")
     else:
         raise SystemExit(f"no valid ion placement after {GENION_ATTEMPTS} genion attempts")
-    for stale in ("ions.tpr", "ions_mdout.mdp", "genion.ndx", "topol.pre_genion.top"):
-        (out / stale).unlink(missing_ok=True)
     mol, _, water_atoms, group = topology["molecules"].pop()
     topology["molecules"] += [(mol, nwater, water_atoms, group),
                               ("SOD", n_pos, topology["solvent_itps"]["SOD"]["atoms"], "SOL_ION"),

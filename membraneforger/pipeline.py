@@ -5,7 +5,6 @@
 """Run the two-input build stage by stage and publish em.gro only after validation and audit pass."""
 import json
 import os
-import shutil
 import time
 from collections import Counter
 from dataclasses import dataclass, field
@@ -14,14 +13,14 @@ from pathlib import Path
 from .alignment import map_all_atom_to_cg
 from .audit import audit_run, check_ring_piercing, closest_contact_between
 from .backmapping import assemble_membrane_pdb, backmap_membrane, read_mapping
-from .config import AMINO, DEFAULT_LIGANDS, RENAME_MOLECULE, Settings
+from .config import AMINO, DEFAULT_LIGANDS, INTERMEDIATES, RENAME_MOLECULE, Settings
 from .embedding import FRAME_PROTEIN_CLEARANCE_NM, check_box_z, edit_lipids, embed_complex, frame_protein_in_slice
 from .martini import bilayer_midplane, classify_cg, make_membrane_whole
 from .membrane_report import MembraneValidation, protein_of_cg_frame, stage_from_gro, stage_from_membrane_pdb
 from .minimization import run_em, validate_em
 from .orientation import OrientationRequest, check_orientation_preserved, orient_complex
 from .reporting import write_run_manifest
-from .runtools import LOG_NAME, gromacs_version, log, sha256
+from .runtools import INT_DIR, LOG_NAME, gromacs_version, log, sha256
 from .slicing import offset_slack, slice_membrane_cg
 from .solvation import add_ions, make_index, rebox_system, solvate_system
 from .stereo import check_gm3_stereo
@@ -33,7 +32,7 @@ __all__ = ['Session', 'StageFailure', 'run_stage', 'prepare_inputs', 'backmap_an
            'backmap_verdict', 'refuse_frame_protein_in_slice',
            'build_topology_and_box', 'finish_system', 'build_from_two_inputs', 'build']
 
-# What to look at when a stage fails; {out} and {work} are filled in at run time.
+# What to look at when a stage fails; {out}, {work} and {int} (the folder of intermediates) are filled in at run time.
 STAGE_HINTS = {
     "inputs": "the input file named in the message",
     "orient": "{out}/orientation_report.json, the chains of the all-atom input, and {work}/orientation/ppm/ with the PPM "
@@ -46,17 +45,17 @@ STAGE_HINTS = {
     "mapping": "{out}/aa_cg_mapping.tsv if written, and the chain sequences of both inputs",
     "backmap": "the mstool transcript in {out}/" + LOG_NAME + " and {work}/mstool/",
     "assemble": "{work}/membrane_aa.tsv",
-    "structure": "{out}/membrane.pdb",
+    "structure": "{int}/membrane.pdb",
     "topology": "the pdb2gmx transcript in {out}/" + LOG_NAME + " and {work}/topology_*/",
-    "box": "{out}/prot-memb.pdb",
-    "solvate": "{out}/boxed.gro and the gmx solvate transcript in {out}/" + LOG_NAME,
-    "ions": "{out}/solv.gro and the gmx genion transcript in {out}/" + LOG_NAME,
+    "box": "{int}/prot-memb.pdb",
+    "solvate": "{int}/boxed.gro and the gmx solvate transcript in {out}/" + LOG_NAME,
+    "ions": "{int}/solv.gro and the gmx genion transcript in {out}/" + LOG_NAME,
     "index": "{out}/topol.top",
-    "rings": "{out}/ring_piercing.json and the named atoms in {out}/boxed.gro",
-    "minimize": "{out}/em.log and the grompp/mdrun transcript in {out}/" + LOG_NAME,
-    "validate": "{out}/em.log and {out}/em.unverified.gro",
+    "rings": "{out}/ring_piercing.json and the named atoms in {int}/boxed.gro",
+    "minimize": "{int}/em.log and the grompp/mdrun transcript in {out}/" + LOG_NAME,
+    "validate": "{int}/em.log and {int}/em.unverified.gro (and {out}/em_clash_trace.json for a lipid)",
     "audit": "{out}/audit.json",
-    "publish": "{out}/em.unverified.gro",
+    "publish": "{int}/em.unverified.gro",
 }
 
 
@@ -104,10 +103,10 @@ def run_stage(session: Session, stage: str, function, *args, **kwargs):
     except StageFailure:
         raise
     except SystemExit as exc:
-        raise StageFailure(stage, str(exc), STAGE_HINTS[stage].format(out=session.out, work=session.work)) from None
+        raise StageFailure(stage, str(exc), STAGE_HINTS[stage].format(out=session.out, work=session.work, int=session.out / INT_DIR)) from None
     except Exception as exc:
         raise StageFailure(stage, f"{type(exc).__name__}: {exc}",
-                           STAGE_HINTS[stage].format(out=session.out, work=session.work)) from exc
+                           STAGE_HINTS[stage].format(out=session.out, work=session.work, int=session.out / INT_DIR)) from exc
     finally:
         session.timings[stage] = round(session.timings.get(stage, 0.0) + time.time() - start, 2)
 
@@ -281,6 +280,8 @@ def backmap_and_assemble(session: Session, prepared: dict, seed: int) -> Path:
     if any(counts.values()):
         log(out, "isomer review of the backmapped membrane: " + ", ".join(f"{k} {v}" for k, v in counts.items())
                  + f" (mstool list in {work}/mstool/log.txt; 'chiral' includes centres with malformed definitions)", "WARN")
+    if seed > 1 and (out / "membrane.pdb").is_file():  # the previous seed's membrane.pdb is kept with the working files
+        os.replace(out / "membrane.pdb", work / f"membrane_seed{seed - 1}.pdb")
     natoms = run_stage(session, "assemble", assemble_membrane_pdb, prepared["placed"], lipids, prepared["box"], out / "membrane.pdb")
     log(out, f"membrane.pdb (seed {seed}): {len(prepared['placed'])} protein/ligand atoms placed, {len(lipids)} membrane "
              f"molecules backmapped ({natoms} atoms); inventory matches the coarse-grained input", "PASS")
@@ -487,6 +488,25 @@ def build_from_two_inputs(session: Session, all_atom: Path, coarse_grain: Path, 
         log(out, f"backmap seed {seed}: {verdict['problem']}; backmapping again with another seed", "WARN")
 
 
+def keep_intermediates(out: Path, keep: tuple = ()) -> list[str]:
+    """Move the intermediates of a build (config.INTERMEDIATES) from the output directory into int/; returns their names.
+
+    Nothing is deleted: the folder holds every step on the way to em.gro next to the working files (int/work), and the
+    top level keeps the final outputs and the reports. A file left in int/ by an earlier step of the same build is
+    replaced by the one at the top level, which is newer. A build input among them (a --membrane PDB named
+    membrane.pdb inside the output directory) stays where it is.
+    """
+    folder = out / INT_DIR
+    folder.mkdir(exist_ok=True)
+    moved = []
+    for name in INTERMEDIATES:
+        source = out / name
+        if source.is_file() and source.resolve() not in {Path(k).resolve() for k in keep}:
+            os.replace(source, folder / name)
+            moved.append(name)
+    return moved
+
+
 def build(session: Session, all_atom: Path | None, coarse_grain: Path | None, membrane: Path | None, command: list) -> int:
     """Build one system end to end; em.gro appears only after validation and audit pass. Returns the exit code."""
     out = session.out
@@ -506,8 +526,8 @@ def build(session: Session, all_atom: Path | None, coarse_grain: Path | None, me
     (out / LOG_NAME).write_text(f"INFO: membraneforger {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
     if removed:
         log(out, f"removed stale outputs from an earlier run: {', '.join(removed)}", "WARN")
-    session.work = out / "work"  # inside the output directory so failed intermediates survive on any node
-    session.work.mkdir()
+    session.work = out / INT_DIR / "work"  # inside the output directory so the intermediates survive on any node
+    session.work.mkdir(parents=True)
     try:
         hashes = {p: sha256(p) for p in inputs}
         for p, digest in hashes.items():
@@ -526,16 +546,18 @@ def build(session: Session, all_atom: Path | None, coarse_grain: Path | None, me
         status = "PASS"
     except StageFailure as failure:
         error = {"stage": failure.stage, "what": failure.what, "inspect": failure.inspect}
-        (out / "em.gro").unlink(missing_ok=True)
-        log(out, f"work files kept in {session.work}")
+        (out / "em.gro").unlink(missing_ok=True)  # an unvalidated structure is never published; em.unverified.gro is kept
+        moved = keep_intermediates(out, tuple(inputs))
+        log(out, f"intermediates kept in {out / INT_DIR} ({len(moved)} files moved there, plus the working files)")
         log(out, f"{failure.stage}: {failure.what}. Inspect: {failure.inspect}", "ERROR")
         summary = f"{failure.stage}: {failure.what}"
     except BaseException:
         (out / "em.gro").unlink(missing_ok=True)
+        keep_intermediates(out, tuple(inputs))
         raise
     if status == "PASS":
-        shutil.rmtree(session.work)
-        session.work = None
+        moved = keep_intermediates(out, tuple(inputs))
+        log(out, f"intermediates kept in {out / INT_DIR} ({len(moved)} files moved there, plus the working files)")
         log(out, summary, "PASS")  # the last log line; the manifest written next hashes the finished log
     write_run_manifest(session, status, error, started, hashes, command)
     print(f"{session.name}\t{status}\t{summary}")

@@ -15,7 +15,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from .config import AMINO, DIHRES_EM_FC, EM_MDP, FMAX_TARGET
-from .runtools import run_command
+from .runtools import run_command, run_path
 from .structio import element, read_gro, read_pdb, wrap, xyz_nm
 from .validation import check_inputs_unchanged
 
@@ -60,16 +60,15 @@ def _minimize(out: Path, gmx: str, name: str, structure: str, coulomb: str, ntom
     for stale in (f"{name}.gro", result, f"{name}.log", f"{name}.edr", f"{name}.trr"):
         (out / stale).unlink(missing_ok=True)
     run_command(out, gmx.split() + ["grompp", "-f", f"{name}.mdp", "-c", structure, "-p", "topol.top",
-                                    "-n", "index_ini.ndx", "-o", f"{name}.tpr", "-po", "mdout.mdp", "-maxwarn", "0"],
-                produces=(f"{name}.tpr",))
-    (out / "mdout.mdp").unlink(missing_ok=True)
+                                    "-n", "index_ini.ndx", "-o", f"{name}.tpr", "-po", f"{name}_mdout.mdp", "-maxwarn", "0"],
+                produces=(f"{name}.tpr",))  # grompp's processed .mdp is kept with the other intermediates
     run_command(out, gmx.split() + ["mdrun", "-deffnm", name, "-c", result, "-ntmpi", "1", "-ntomp", str(ntomp)],
                 produces=(result, f"{name}.log"))
 
 
 def closest_contact(out: Path, number: int) -> str:
     """Name the atom closest to the one EM blew up on, to point at the overlap."""
-    atoms, box = read_gro(out / "solv_ions.gro")
+    atoms, box = read_gro(run_path(out, "solv_ions.gro"))
     label = lambda a: f"{a['resname']}{a['resid']}:{a['atom']}"
     xyz, target = wrap(xyz_nm(atoms), box), atoms[number - 1]
     others = [i for i, a in enumerate(atoms) if (a["resid"], a["resname"]) != (target["resid"], target["resname"])]
@@ -105,11 +104,11 @@ def force_culprit(out: Path, number: int, structure: str = "em.unverified.gro", 
 
 def stage_files(out: Path) -> list[tuple[str, Path]]:
     """The structures a build leaves behind, in the order the stages wrote them (those present)."""
-    stages = [("backmapped membrane (membrane.pdb)", out / "membrane.pdb"),
-              ("after the lipid scan and topology (prot-memb.pdb)", out / "prot-memb.pdb"),
-              ("boxed (boxed.gro)", out / "boxed.gro"), ("solvated (solv.gro)", out / "solv.gro"),
-              ("with ions (solv_ions.gro)", out / "solv_ions.gro"), ("restrained EM (emres.gro)", out / "emres.gro"),
-              ("final EM (em.unverified.gro)", out / "em.unverified.gro")]
+    stages = [("backmapped membrane (membrane.pdb)", run_path(out, "membrane.pdb")),
+              ("after the lipid scan and topology (prot-memb.pdb)", run_path(out, "prot-memb.pdb")),
+              ("boxed (boxed.gro)", run_path(out, "boxed.gro")), ("solvated (solv.gro)", run_path(out, "solv.gro")),
+              ("with ions (solv_ions.gro)", run_path(out, "solv_ions.gro")), ("restrained EM (emres.gro)", run_path(out, "emres.gro")),
+              ("final EM (em.unverified.gro)", run_path(out, "em.unverified.gro"))]
     return [(label, path) for label, path in stages if path.is_file()]
 
 
@@ -175,7 +174,7 @@ def trace_clash(out: Path, resname: str, resid: int, atom: str | None = None) ->
     the protein that backmapping holds rigid (work/rock.pdb).
     """
     rows = []
-    cg, rock, table = out / "work" / "cg_membrane.gro", out / "work" / "rock.pdb", out / "work" / "membrane_aa.tsv"
+    cg, rock, table = run_path(out, "work") / "cg_membrane.gro", run_path(out, "work") / "rock.pdb", run_path(out, "work") / "membrane_aa.tsv"
     source = slice_number(table, resname, resid) if table.is_file() else None
     if source is not None and cg.is_file() and rock.is_file():
         beads, box = read_gro(cg)
@@ -204,7 +203,7 @@ def validate_em(system: dict, topology: dict, index: dict) -> dict:
     """Check EM converged and that the minimized structure, topology, index and box are all consistent."""
     out = system["out"]
     check_inputs_unchanged(system["inputs"])
-    text = (out / "em.log").read_text(errors="replace")
+    text = (run_path(out, "em.log")).read_text(errors="replace")
     fmax, energy = re.findall(r"Maximum force\s*=\s*(\S+)", text), re.findall(r"Potential Energy\s*=\s*(\S+)", text)
     if not fmax or not energy or not math.isfinite(float(energy[-1])) or not math.isfinite(float(fmax[-1])):
         culprit = re.findall(r"on atom (\d+)", text)
@@ -214,7 +213,7 @@ def validate_em(system: dict, topology: dict, index: dict) -> dict:
         where = (f"; {force_culprit(out, int(culprit[-1]))}; before EM: {closest_contact(out, int(culprit[-1]))}"
                  if culprit else "; em.log names no atom")
         if culprit:
-            atoms = read_gro(out / "em.unverified.gro")[0]
+            atoms = read_gro(run_path(out, "em.unverified.gro"))[0]
             number = int(culprit[-1])
             if 1 <= number <= len(atoms) and atoms[number - 1]["resname"] not in AMINO:
                 a = atoms[number - 1]
@@ -225,7 +224,7 @@ def validate_em(system: dict, topology: dict, index: dict) -> dict:
                           "(every stage: em_clash_trace.json)" if first else
                           f"; {trace['residue']} clashes with no molecule at any saved stage (em_clash_trace.json)")
         raise SystemExit(f"EM final Fmax {float(fmax[-1]):.1f} >= {FMAX_TARGET:.0f} kJ/mol/nm{where}")
-    gro = (out / "em.unverified.gro").read_text().splitlines()
+    gro = (run_path(out, "em.unverified.gro")).read_text().splitlines()
     atoms = gro[2:2 + int(gro[1])]
     xyz = np.array([[float(line[20:28]), float(line[28:36]), float(line[36:44])] for line in atoms])
     if [line[10:15].strip() for line in atoms] != topology["names"] or not np.isfinite(xyz).all():
@@ -234,7 +233,7 @@ def validate_em(system: dict, topology: dict, index: dict) -> dict:
         raise SystemExit(f"index groups do not partition the system: {index}")
     if not index["SOL_ION"] or abs(topology["charge"]) > 1e-3:
         raise SystemExit("EM system is not solvated and neutral")
-    if not np.allclose([float(v) for v in gro[-1].split()][:2], read_gro(out / "boxed.gro")[1][:2], atol=1e-3):
+    if not np.allclose([float(v) for v in gro[-1].split()][:2], read_gro(run_path(out, "boxed.gro"))[1][:2], atol=1e-3):
         raise SystemExit("EM changed the membrane XY box")
     steps = re.findall(r"converged to Fmax < \S+ in (\d+) steps", text)
     return {"summary": f"Fmax {float(fmax[-1]):.1f}, Epot {float(energy[-1]):.4e}, {steps[-1] if steps else '?'} steps",

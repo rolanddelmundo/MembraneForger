@@ -715,6 +715,18 @@ class OutputProtection(unittest.TestCase):
             self.assertEqual(sorted(removed), ["em.gro", "toppar"])
             self.assertEqual([p.name for p in out.iterdir()], ["notes.txt"])
 
+    def test_membrane_kept_in_int_survives_the_stale_clear(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            (out / "int" / "work").mkdir(parents=True)
+            (out / "int" / "membrane.pdb").write_text("mine")
+            (out / "int" / "boxed.gro").write_text("old")
+            keep = out / "int" / "membrane.pdb"
+            mf.protect_inputs([keep], out, keep=keep)  # restart from the backmapped membrane an earlier build kept
+            self.assertIn("would be overwritten", failure(mf.protect_inputs, [out / "int" / "boxed.gro"], out))
+            mf.clear_stale_outputs(out, keep=keep)
+            self.assertEqual([p.name for p in (out / "int").iterdir()], ["membrane.pdb"])
+
     def test_changed_input_is_detected(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "a.pdb"
@@ -723,6 +735,48 @@ class OutputProtection(unittest.TestCase):
             mf.check_inputs_unchanged(hashes)
             path.write_text("two")
             self.assertIn("changed during the build", failure(mf.check_inputs_unchanged, hashes))
+
+
+class KeptIntermediates(unittest.TestCase):
+    """Nothing a build makes on the way to em.gro is deleted: the intermediates end up in <out>/int."""
+
+    def test_intermediates_move_into_int_and_inputs_stay(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            for name in ("boxed.gro", "solv_raw.gro", "em.log", "membrane.pdb", "em.gro", "topol.top", "notes.txt"):
+                (out / name).write_text(name)
+            moved = mf.pipeline.keep_intermediates(out, keep=(out / "membrane.pdb",))
+            self.assertEqual(sorted(moved), ["boxed.gro", "em.log", "solv_raw.gro"])
+            self.assertEqual((out / "int" / "boxed.gro").read_text(), "boxed.gro")
+            self.assertEqual(sorted(p.name for p in out.iterdir() if p.is_file()),
+                             ["em.gro", "membrane.pdb", "notes.txt", "topol.top"])  # final outputs and the input stay
+
+    def test_every_intermediate_is_a_generated_name(self):
+        self.assertTrue(set(mf.config.INTERMEDIATES) <= set(mf.config.GENERATED))
+        self.assertIn(mf.INT_DIR, mf.config.GENERATED)
+
+    def test_run_path_prefers_the_top_level_then_int(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            (out / "int").mkdir()
+            self.assertEqual(mf.run_path(out, "boxed.gro"), out / "boxed.gro")  # neither exists: the top-level path
+            (out / "int" / "boxed.gro").write_text("kept")
+            self.assertEqual(mf.run_path(out, "boxed.gro"), out / "int" / "boxed.gro")
+            (out / "boxed.gro").write_text("new")
+            self.assertEqual(mf.run_path(out, "boxed.gro"), out / "boxed.gro")
+
+    def test_a_retried_backmap_keeps_the_earlier_attempt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mstool"
+            path.mkdir()
+            (path / "step.pdb").write_text("one")
+            first = mf.backmapping.keep_attempt(path, 2)
+            self.assertEqual(first.name, "mstool_before_seed2")
+            path.mkdir()
+            second = mf.backmapping.keep_attempt(path, 2)
+            self.assertNotEqual(second, first)
+            self.assertTrue((first / "step.pdb").is_file() and second.is_dir())
+            self.assertIsNone(mf.backmapping.keep_attempt(path, 3))
 
 
 if __name__ == "__main__":

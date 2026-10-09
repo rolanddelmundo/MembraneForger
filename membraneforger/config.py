@@ -9,7 +9,7 @@ __all__ = ['ORIENTATION', 'ORIENT_CHAINS', 'ORIENT_RESIDUES', 'NTERM_SIDE', 'PDB
            'AMINO', 'SOLVENT', 'N_CAP', 'C_CAP', 'RENAME_RESIDUE', 'RENAME_ATOM', 'RENAME_MOLECULE', 'TERMINUS_MENU',
            'DEFAULT_LIGANDS', 'NSTEPS', 'DISULFIDE_MAX_A', 'DISULFIDE_OK_A', 'SLAB_Z_PAD_NM', 'MIN_Z_PAD_TOTAL_NM',
            'SALT_M', 'ION_RMIN_NM', 'GENION_ATTEMPTS', 'WATER_CLASH_NM', 'WATER_PROTECT_NM', 'LIPID_SCAN_A',
-           'LIPID_DELETE_A', 'GENERATED', 'INDEX_GROUPS', 'FMAX_TARGET', 'H_BOND_RANGE', 'GLPA_MAX_BOND_A',
+           'LIPID_DELETE_A', 'GENERATED', 'INTERMEDIATES', 'INDEX_GROUPS', 'FMAX_TARGET', 'H_BOND_RANGE', 'GLPA_MAX_BOND_A',
            'LYS_BACKBONE', 'ONE_LETTER', 'GM3_XML_TO_GLPA', 'LIPIDATED', 'CYSG_HDB', 'DIHRES_EM_FC', 'EM_MDP',
            'APL_VALIDATE', 'APL_SLICE_WARNING_PERCENT', 'APL_SLICE_TOLERANCE_PERCENT', 'RDF_VALIDATE', 'Settings']
 
@@ -84,11 +84,19 @@ LIPID_SCAN_A, LIPID_DELETE_A = 1.0, 0.10  # EM survived 0.15 A (6WHC_MORF) but n
 GENERATED = ("oriented.pdb", "orientation_report.json", "membrane.pdb", "aa_cg_mapping.tsv", "prot-memb.pdb",
              "topol.top", "topol.pre_genion.top", "boxed.gro",
              "solv_raw.gro", "solv.gro", "solv_ions.gro", "index_ini.ndx", "genion.ndx", "ions.mdp", "ions.tpr",
-             "ions_mdout.mdp", "em.mdp", "mdout.mdp", "em.tpr", "em.log", "em.edr", "em.trr", "em.gro",
-             "em.unverified.gro", "emres.mdp", "emres.tpr", "emres.log", "emres.edr", "emres.trr", "emres.gro", "toppar",
+             "ions_mdout.mdp", "em.mdp", "mdout.mdp", "em_mdout.mdp", "emres_mdout.mdp", "em.tpr", "em.log", "em.edr",
+             "em.trr", "em.gro", "em.unverified.gro", "emres.mdp", "emres.tpr", "emres.log", "emres.edr", "emres.trr",
+             "emres.gro", "toppar",
              "audit.json", "run_manifest.json", "ring_piercing.json", "membrane_validation.json", "membrane_validation.md",
              "membrane_validation_lipids.tsv", "membrane_validation_apl.png", "membrane_validation_species.png",
-             "membrane_validation_rdf.png", "membrane_validation_composition.png", "work")
+             "membrane_validation_rdf.png", "membrane_validation_composition.png", "membrane_validation_protein_density.png",
+             "em_clash_trace.json", "work", "int")
+# Generated files that are steps on the way to em.gro rather than final outputs or reports: at the end of every build,
+# passed or failed, they are moved into int/ (runtools.INT_DIR) next to the build's working files; nothing is deleted.
+INTERMEDIATES = ("oriented.pdb", "membrane.pdb", "prot-memb.pdb", "topol.pre_genion.top", "boxed.gro", "solv_raw.gro",
+                 "solv.gro", "solv_ions.gro", "genion.ndx", "ions.mdp", "ions.tpr", "ions_mdout.mdp", "em.mdp", "mdout.mdp",
+                 "em_mdout.mdp", "emres_mdout.mdp", "em.tpr", "em.log", "em.edr", "em.trr", "em.unverified.gro", "emres.mdp",
+                 "emres.tpr", "emres.log", "emres.edr", "emres.trr", "emres.gro")
 
 
 INDEX_GROUPS = ("System", "Protein_LIG", "MEMB", "SOL_ION")
