@@ -5,10 +5,8 @@
 """Re-derive what a build claims from its files alone, with parsers that share no code with the builder."""
 import json
 import re
-import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 import networkx as nx
@@ -16,6 +14,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from .config import DISULFIDE_OK_A, Settings
+from .runtools import INT_DIR, run_path
 from .stereo import check_gm3_stereo
 
 __all__ = ['gro_table', 'topology_includes', 'topology_molecules', 'itp_atoms', 'gromacs', 'check_topology',
@@ -128,23 +127,27 @@ def check_topology(run: Path, names: list) -> tuple[dict, list]:
             "include_files": len(reached), "stray_toppar_files": strays}, fails
 
 
+def audit_scratch(run: Path) -> Path:
+    """Where the audit writes its own grompp and gmx energy files: int/audit/ of the build, kept like every intermediate."""
+    scratch = run / INT_DIR / "audit"
+    scratch.mkdir(parents=True, exist_ok=True)
+    return scratch
+
+
 def check_grompp(run: Path, gmx: str, structure: str) -> tuple[dict, list]:
     """Rebuild the run input with -maxwarn 0, as built and with position restraints defined."""
     fails, report = [], {}
-    scratch = Path(tempfile.mkdtemp(prefix="membraneforger_audit_"))
-    try:
-        for label, mdp_extra, extra in (("as_built", "", []), ("posres", "define = -DPOSRES\n", ["-r", str(run / structure)])):
-            mdp = scratch / f"{label}.mdp"
-            mdp.write_text(mdp_extra + (run / "em.mdp").read_text())
-            code, output = gromacs(gmx, ["grompp", "-f", str(mdp), "-c", str(run / structure), "-p", str(run / "topol.top"),
-                                         "-n", str(run / "index_ini.ndx"), "-o", str(scratch / f"{label}.tpr"),
-                                         "-po", str(scratch / f"{label}_out.mdp"), "-maxwarn", "0"] + extra, run)
-            warnings, notes = len(re.findall(r"(?m)^WARNING \d+", output)), len(re.findall(r"(?m)^NOTE \d+", output))
-            report[label] = {"exit": code, "warnings": warnings, "notes": notes}
-            if code or warnings or not (scratch / f"{label}.tpr").is_file():
-                fails.append(f"grompp -maxwarn 0 ({label}) exit {code}, {warnings} warnings")
-    finally:
-        shutil.rmtree(scratch, ignore_errors=True)
+    scratch = audit_scratch(run)
+    for label, mdp_extra, extra in (("as_built", "", []), ("posres", "define = -DPOSRES\n", ["-r", str(run_path(run, structure))])):
+        mdp = scratch / f"{label}.mdp"
+        mdp.write_text(mdp_extra + run_path(run, "em.mdp").read_text())
+        code, output = gromacs(gmx, ["grompp", "-f", str(mdp), "-c", str(run_path(run, structure)), "-p", str(run / "topol.top"),
+                                     "-n", str(run / "index_ini.ndx"), "-o", str(scratch / f"{label}.tpr"),
+                                     "-po", str(scratch / f"{label}_out.mdp"), "-maxwarn", "0"] + extra, run)
+        warnings, notes = len(re.findall(r"(?m)^WARNING \d+", output)), len(re.findall(r"(?m)^NOTE \d+", output))
+        report[label] = {"exit": code, "warnings": warnings, "notes": notes}
+        if code or warnings or not (scratch / f"{label}.tpr").is_file():
+            fails.append(f"grompp -maxwarn 0 ({label}) exit {code}, {warnings} warnings")
     return report, fails
 
 
@@ -152,19 +155,16 @@ def check_energy(run: Path, gmx: str) -> tuple[dict, list]:
     """Check the energy and trajectory files with gmx check and compare gmx energy with em.log."""
     fails, report = [], {}
     for flag, name in (("-e", "em.edr"), ("-f", "em.trr")):
-        code, output = gromacs(gmx, ["check", flag, name], run)
+        code, output = gromacs(gmx, ["check", flag, str(run_path(run, name))], run)
         frames = re.findall(r"(?m)^(?:Last energy frame read|Last frame)\s+(\d+)", output)
         report[f"gmx_check_{name}"] = {"exit": code, "last_frame": int(frames[-1]) if frames else None}
         if code or not frames:  # a truncated file can still exit 0, so a complete read must be reported
             fails.append(f"gmx check {flag} {name}: exit {code}, {'no' if not frames else 'a'} complete read reported")
-    scratch = Path(tempfile.mkdtemp(prefix="membraneforger_audit_"))
-    try:
-        code, output = gromacs(gmx, ["energy", "-f", str(run / "em.edr"), "-o", str(scratch / "e.xvg")], run, "Potential\n\n")
-        series = [float(l.split()[1]) for l in (scratch / "e.xvg").read_text().splitlines()
-                  if l and l[0] not in "#@"] if code == 0 and (scratch / "e.xvg").is_file() else []
-    finally:
-        shutil.rmtree(scratch, ignore_errors=True)
-    log_text = (run / "em.log").read_text(errors="replace")
+    scratch = audit_scratch(run)
+    code, output = gromacs(gmx, ["energy", "-f", str(run_path(run, "em.edr")), "-o", str(scratch / "e.xvg")], run, "Potential\n\n")
+    series = [float(l.split()[1]) for l in (scratch / "e.xvg").read_text().splitlines()
+              if l and l[0] not in "#@"] if code == 0 and (scratch / "e.xvg").is_file() else []
+    log_text = run_path(run, "em.log").read_text(errors="replace")
     logged = re.findall(r"Potential Energy\s*=\s*(\S+)", log_text)
     fmax = re.findall(r"Maximum force\s*=\s*(\S+)", log_text)
     steps = re.findall(r"converged to Fmax < \S+ in (\d+) steps", log_text)
@@ -198,9 +198,9 @@ def superposed_rmsd(P: np.ndarray, Q: np.ndarray) -> float:
 def check_structure(run: Path, structure: str, settings: Settings) -> tuple[dict, list]:
     """Measure what EM did to the system: solute drift, lipid contacts, leaflets, box, solvent and ions."""
     fails = []
-    resn, names, xyz, box = gro_table(run / structure)
-    resn0, names0, xyz0, box0 = gro_table(run / "solv_ions.gro")
-    boxed = gro_table(run / "boxed.gro")[3]
+    resn, names, xyz, box = gro_table(run_path(run, structure))
+    resn0, names0, xyz0, box0 = gro_table(run_path(run, "solv_ions.gro"))
+    boxed = gro_table(run_path(run, "boxed.gro"))[3]
     if not np.isfinite(xyz).all():
         return {}, ["non-finite coordinates"]
     if names != names0:
@@ -279,7 +279,7 @@ def check_structure(run: Path, structure: str, settings: Settings) -> tuple[dict
 
 def closest_contact_between(run: Path, structure: str, first_group_atoms: int) -> dict:
     """Find the closest pair between the first N atoms (the solute) and the rest, hydrogens included, with periodic images."""
-    resn, names, xyz, box = gro_table(run / structure)
+    resn, names, xyz, box = gro_table(run_path(run, structure))
     cell = box[:3]
     wrapped = np.mod(xyz, cell)
     wrapped[wrapped >= cell] = 0.0
@@ -347,7 +347,7 @@ def check_dihedral_restraints(run: Path, structure: str) -> tuple[dict, list]:
     The +-120 rows fix stereocentres and the 0/180 rows fix double bonds: a structure on the wrong side has the wrong
     molecule, which no MD run corrects, so it fails. The +-60 rows hold sugar and inositol rings in their chair;
     a ring outside it is a conformation MD can repair, so it is reported, not failed."""
-    _, _, xyz, box = gro_table(run / structure)
+    _, _, xyz, box = gro_table(run_path(run, structure))
     cell = box[:3]
     top = run / "topol.top"
     includes = topology_includes(top, set())
@@ -450,7 +450,7 @@ def ring_piercings(xyz: np.ndarray, cell: np.ndarray, rings: np.ndarray, sizes: 
 
 def check_ring_piercing(run: Path, structure: str) -> tuple[dict, list]:
     """Fail if any covalent bond threads a 5- or 6-membered ring (lipid tails through aromatic, sterol or sugar rings)."""
-    resn, names, xyz, box = gro_table(run / structure)
+    resn, names, xyz, box = gro_table(run_path(run, structure))
     top = run / "topol.top"
     files = topology_includes(top, set())
     bonds_of = itp_bonds(files)
@@ -489,7 +489,7 @@ def check_disulfide_geometry(run: Path, structure: str) -> tuple[dict, list]:
     """Measure every SG-SG bond of the topology on the structure: a disulfide outside DISULFIDE_OK_A after EM has come apart."""
     # The topology guarantees the bond exists; this closes the loop on the coordinates minimization left behind
     # (CHARMM36 S-S equilibrium 2.03 A; the same window the builder accepts in the input).
-    resn, names, xyz, box = gro_table(run / structure)
+    resn, names, xyz, box = gro_table(run_path(run, structure))
     top = run / "topol.top"
     files = topology_includes(top, set())
     bonds_of, atoms_of = itp_bonds(files), itp_atoms(files)
@@ -523,14 +523,14 @@ DEFAULT_DATA = Path(__file__).resolve().parents[1] / "backmap_data"  # map.dat: 
 def audit_run(run: Path, gmx: str, structure: str = "em.gro", settings: Settings = Settings(), data: Path | None = None) -> dict:
     """Audit one build directory and write audit.json; raises if any check fails."""
     run = run.resolve()
-    names = gro_table(run / structure)[1]
+    names = gro_table(run_path(run, structure))[1]
     report, failures = {"structure": structure}, []
     data = Path(data) if data else DEFAULT_DATA
     for key, (part, fails) in (("topology", check_topology(run, names)), ("grompp", check_grompp(run, gmx, structure)),
                                ("energy", check_energy(run, gmx)), ("geometry", check_structure(run, structure, settings)),
                                ("ring_piercing", check_ring_piercing(run, structure)),
                                ("dihedral_restraints", check_dihedral_restraints(run, structure)),
-                               ("gm3_stereochemistry", check_gm3_stereo(run / structure, data)),
+                               ("gm3_stereochemistry", check_gm3_stereo(run_path(run, structure), data)),
                                ("disulfides", check_disulfide_geometry(run, structure))):
         report[key] = part
         failures += fails

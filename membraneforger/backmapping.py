@@ -5,7 +5,6 @@
 """Drive the mstool worker, verify what it returns, and assemble membrane.pdb."""
 import json
 import os
-import shutil
 from collections import Counter, OrderedDict
 from pathlib import Path
 
@@ -119,6 +118,17 @@ def read_isomer_review(path: Path, chirality: Path | None = None) -> dict:
     return counts
 
 
+def keep_attempt(path: Path, seed: int) -> Path | None:
+    """Rename what an earlier backmapping attempt left at `path` to <name>_before_seed<seed>, so a retry keeps it."""
+    if not (path.exists() or path.is_symlink()):
+        return None
+    target = path.with_name(f"{path.name}_before_seed{seed}")
+    if target.exists():
+        target = path.with_name(f"{path.name}_before_seed{seed}_{len(list(path.parent.glob(target.name + '*')))}")
+    os.replace(path, target)
+    return target
+
+
 def backmap_membrane(membrane: list[dict], placed: list[dict], box: list[float], mapping: dict, out: Path, work: Path,
                      python: str, data: Path, threads: int, nsteps: int, seed: int = 1) -> tuple[list[list[dict]], dict]:
     """Backmap the membrane with mstool around the placed all-atom complex, which is held as a rigid rock."""
@@ -131,7 +141,8 @@ def backmap_membrane(membrane: list[dict], placed: list[dict], box: list[float],
     job = {"mode": "backmap", "data": str(data), "structure": "cg_membrane.gro", "rock": "rock.pdb",
            "workdir": "mstool", "nsteps": nsteps, "result": "membrane_aa.tsv", "seed": seed,
            "rename": {f":{short}": f":{name}" for name, short in alias.items()}}
-    shutil.rmtree(work / "mstool", ignore_errors=True)  # a previous attempt's work must not be reused
+    for previous in ("mstool", "membrane_aa.tsv", "membrane_aa.tsv.chirality.json"):  # an earlier seed's work is kept, renamed,
+        keep_attempt(work / previous, seed)                                           # and never reused
     (work / "backmap.json").write_text(json.dumps(job))
     run_command(out, [python, WORKER, work / "backmap.json"],
                 env=dict(os.environ, OPENMM_CPU_THREADS=str(threads), OMP_NUM_THREADS=str(threads)),

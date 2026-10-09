@@ -95,13 +95,14 @@ def read_all_atom(path: Path, forcefield: Path) -> tuple[list[dict], list[str]]:
 
 def protect_inputs(inputs: list[Path], out: Path, keep: Path | None = None, resources: tuple = ()) -> None:
     """Refuse an output directory in which the build would overwrite or delete an input or an installation resource."""
-    # `keep` is the --membrane source: it may live in the output directory only under the name membrane.pdb,
-    # the one generated file that route never writes.
+    # `keep` is the --membrane source: it may live in the output directory (or in its int/ folder, where an earlier
+    # build kept it) only under the name membrane.pdb, the one generated file that route never writes.
     for path in inputs:
         if out not in path.parents:
             continue
         first = path.relative_to(out).parts[0]
-        if (first in GENERATED or first == LOG_NAME) and not (path == keep and path.name == "membrane.pdb" and path.parent == out):
+        kept = path == keep and path.name == "membrane.pdb" and path.parent in (out, out / "int")
+        if (first in GENERATED or first == LOG_NAME) and not kept:
             raise SystemExit(f"input {path} would be overwritten by the build; choose another --out")
     for resource in resources:
         if resource is not None and (out == resource or resource in out.parents or out in resource.parents):
@@ -115,7 +116,11 @@ def clear_stale_outputs(out: Path, keep: Path | None = None) -> list[str]:
         target = out / name
         if target == keep or not (target.exists() or target.is_symlink()):
             continue
-        if target.is_dir() and not target.is_symlink():
+        if target.is_dir() and not target.is_symlink() and keep is not None and target in Path(keep).parents:
+            for child in target.iterdir():  # the folder holding the --membrane source: clear everything else in it
+                if child != keep:
+                    shutil.rmtree(child) if child.is_dir() and not child.is_symlink() else child.unlink()
+        elif target.is_dir() and not target.is_symlink():
             shutil.rmtree(target)
         else:
             target.unlink()
