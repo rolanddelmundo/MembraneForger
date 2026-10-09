@@ -146,6 +146,76 @@ class LateralRDF(unittest.TestCase):
         self.assertGreater(abs(comparison["leaflets"]["upper"]["all"]["first_peak_shift_A"]), 1.0)
 
 
+class ProteinDensityProfiles(unittest.TestCase):
+    """Per-species density around the protein, relative to the leaflet mean, on a lattice with a known arrangement."""
+
+    def stage(self):
+        # a 12 x 12 nm cell, anchors on a 0.8 nm lattice at z 3 (lower) and 7 (upper); a protein column of radius 1 nm at the
+        # centre reaching only the lower leaflet's headgroups (z 2.8-4); lipids within 2 nm of its axis are ENR, the rest
+        # alternate POPC / CHOL
+        lipids, k = [], 0
+        for i in range(15):
+            for j in range(15):
+                x, y = 0.4 + 0.8 * i, 0.4 + 0.8 * j
+                r = np.hypot(x - 6.0, y - 6.0)
+                if r < 1.05:
+                    continue
+                name = "ENR" if r < 2.0 else ("POPC" if k % 2 else "CHOL")
+                k += 1
+                for leaflet, z in (("lower", 3.0), ("upper", 7.0)):
+                    lipids.append({"index": len(lipids), "resname": name, "leaflet": leaflet, "x_nm": x, "y_nm": y, "z_nm": z,
+                                   "z_range_nm": (z - 1.0, z + 1.0)})
+        angles = np.linspace(0, 2 * np.pi, 40, endpoint=False)
+        protein = np.array([[6.0 + rad * np.cos(a), 6.0 + rad * np.sin(a), z] for rad in (0.3, 0.6, 0.9) for a in angles
+                            for z in (2.8, 3.4, 4.0)])
+        return {"name": "test", "resolution": "cg", "box_nm": [12.0, 12.0, 10.0], "midplane_nm": 5.0, "lipids": lipids,
+                "protein_nm": protein}
+
+    def test_enriched_and_depleted_species_and_a_flat_total(self):
+        profiles = mf.protein_density_profiles(self.stage())
+        self.assertIsNone(profiles["upper"])  # no protein atom at the upper leaflet's headgroup depth
+        lower = profiles["lower"]["curves"]
+        self.assertGreater(lower["ENR"]["first_shell_ratio"], 3.0)            # all ENR sit next to the protein
+        self.assertLess(lower["POPC"]["first_shell_ratio"] or 0.0, 0.5)       # none of the others do
+        far = (lower["all"]["r_nm"] > 1.5) & (lower["all"]["r_nm"] < 2.8)
+        self.assertLess(abs(np.nanmean(lower["all"]["density_ratio"][far]) - 1.0), 0.2)  # all lipids: flat beyond the annulus
+        self.assertEqual(lower["all"]["n"], sum(c["n"] for name, c in lower.items() if name != "all"))
+
+    def test_cumulative_ratio_matches_the_first_shell_and_tends_to_one(self):
+        lower = mf.protein_density_profiles(self.stage())["lower"]["curves"]
+        for c in lower.values():
+            at_shell = int(np.argmin(np.abs(c["R_nm"] - 1.0)))
+            if c["first_shell_ratio"] is not None:
+                self.assertAlmostEqual(c["cumulative_ratio"][at_shell], c["first_shell_ratio"], places=2)
+        self.assertLess(abs(lower["all"]["cumulative_ratio"][-1] - 1.0), 0.1)  # 3 nm out, most of the 12 nm cell
+
+    def test_a_tilted_protein_is_measured_at_headgroup_depth(self):
+        stage = self.stage()
+        # add a long arm of protein deep in the lower leaflet (z 4.6, near the midplane), 2 nm off to the side: the
+        # headgroup-depth cross-section ignores it, the whole-slab definition counts the lipids above it as next to it
+        arm = np.array([[8.0 + 0.3 * k, 6.0, 4.6] for k in range(8)])
+        stage["protein_nm"] = np.vstack([stage["protein_nm"], arm])
+        head = mf.protein_density_profiles(stage)["lower"]
+        whole = mf.protein_density_profiles(stage, band_nm=None)["lower"]
+        column = self.stage()["protein_nm"]
+        self.assertEqual(head["protein_atoms_in_slab"], int((np.abs(column[:, 2] - 3.0) <= 0.6).sum()))  # z 2.8 and 3.4, not the arm
+        self.assertGreater(whole["curves"]["POPC"]["first_shell_n"], head["curves"]["POPC"]["first_shell_n"])
+
+    def test_summary_json_and_markdown_table(self):
+        summary = mf.membrane_report.density_summary(mf.protein_density_profiles(self.stage()))
+        json.dumps(summary)  # serializable
+        enr = summary["lower"]["species"]["ENR"]
+        self.assertEqual(len(enr["r_A"]), len(enr["density_ratio"]))
+        record = {"stages": [{"label": "Minimized", "protein_density": summary}]}
+        table = mf.membrane_report.density_markdown(record)
+        self.assertIn("**lower leaflet**", table)
+        self.assertIn("| all lipids |", table)
+        error = enr["first_shell_ratio"] / np.sqrt(enr["first_shell_n"])
+        self.assertIn(f"{enr['first_shell_ratio']:.2f} ± {error:.2f} (N {enr['n']}/{enr['first_shell_n']})", table)
+        framed = {"stages": [{"name": "cg_frame", "label": "CG frame", "protein_density": summary}]}
+        self.assertIn("No stage", mf.membrane_report.density_markdown(framed))  # the frame's own receptor is not the complex
+
+
 class QC(unittest.TestCase):
     def test_classification_tiers(self):
         self.assertEqual(mf.classify(2.0, 3.0, 5.0), "PASS")

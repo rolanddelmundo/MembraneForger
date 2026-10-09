@@ -10,7 +10,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-__all__ = ['LOG_NAME', 'LEVELS', 'log', 'sha256', 'run_command', 'find_gromacs', 'gromacs_version']
+__all__ = ['LOG_NAME', 'LEVELS', 'log', 'sha256', 'run_command', 'find_gromacs', 'gromacs_version', 'INT_DIR', 'run_path']
 
 LOG_NAME = "membranebuilder.log"
 LEVELS = ("INFO", "CHECK", "PASS", "WARN", "ERROR", "DEBUG")
@@ -30,6 +30,18 @@ def log(out: Path, message: str, level: str = "INFO") -> None:
 def sha256(path: Path) -> str:
     """Hash a file so we can tell if it changed mid-build."""
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+# Intermediates of a build (everything on the way to em.gro that is not a final output or a report) are kept in this
+# folder of the output directory, never deleted; run_path finds a file at the top level or there.
+INT_DIR = "int"
+
+
+def run_path(run: Path, name: str) -> Path:
+    """A file of a build directory: at the top level, else in int/ where the build keeps its intermediates."""
+    top = Path(run) / name
+    kept = Path(run) / INT_DIR / name
+    return kept if not top.exists() and kept.exists() else top
 
 
 def run_command(out: Path, cmd: list, stdin: str | None = None, env: dict | None = None, produces: tuple = (),

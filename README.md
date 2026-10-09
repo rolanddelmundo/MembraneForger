@@ -62,6 +62,12 @@ energies, geometry, lipid stereochemistry including every GM3 sugar centre). `em
 `index_ini.ndx` and `run_manifest.json`; the last line of `membranebuilder.log` says `PASS` or `FAIL`. Disulfides are
 taken from the input geometry (two cysteine SG atoms within 3.0 A, within one chain; SSBOND records are not read),
 listed in the manifest and re-measured after minimization (`docs/membraneforger_tutorial.md` 4.1).
+Nothing the build makes on the way is deleted: at the end of every run, passed or failed, the intermediates
+(`oriented.pdb`, `membrane.pdb`, `prot-memb.pdb`, `boxed.gro`, `solv.gro`, `solv_ions.gro`, the `.mdp`/`.tpr`/`.log`/`.edr`/`.trr`
+files of both minimizations, and `em.unverified.gro` when the build fails before publishing) are moved into `<out>/int/`,
+next to the working files (`int/work`: CG cut, mstool steps, earlier backmapping attempts) and the audit's scratch
+runs (`int/audit`). To redo the steps after backmapping, start from the kept membrane:
+`python -m membraneforger --membrane <out>/int/membrane.pdb --out <out>`.
 Backmapping dominates the run time (about 45 minutes on 8 cores). Equilibrate the system before production.
 
 **Membrane orientation**

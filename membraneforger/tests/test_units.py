@@ -3,11 +3,12 @@ import copy
 import sys
 import tempfile
 import unittest
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
 
-from .common import AA_PDB, CG_GRO, DATA, FORCEFIELD, MAPPING, POPC, failure, mf, residue, small_system
+from .common import AA_PDB, CG_GRO, DATA, FORCEFIELD, MAPPING, POPC, REPO, failure, mf, residue, small_system
 
 
 class MartiniClassification(unittest.TestCase):
@@ -364,6 +365,148 @@ class DisulfideAudit(unittest.TestCase):
         self.assertIn("outside 1.8-2.2 A after EM", fails[0])
 
 
+class EnergyMinimizationFailure(unittest.TestCase):
+    """A finite Fmax above the target names the atom it sits on and the residues packed around it."""
+
+    def setUp(self):
+        self.out = Path(tempfile.mkdtemp())
+        atom = lambda resid, resname, name, x, y, z: {"resid": resid, "resname": resname, "atom": name, "x": x, "y": y, "z": z}
+        self.atoms = [atom(1, "LEU", "CA", 1.00, 1.00, 1.00), atom(1, "LEU", "CB", 1.10, 1.00, 1.00),
+                      atom(2, "POPC", "C22", 1.15, 1.05, 1.00), atom(3, "POPC", "C31", 1.30, 1.00, 1.00),
+                      atom(4, "TIP3", "OH2", 2.50, 2.50, 2.50)]
+        for name in ("em.unverified.gro", "solv_ions.gro"):
+            mf.write_gro(self.atoms, [3.0, 3.0, 3.0], self.out / name, "test")
+
+    def test_the_culprit_and_its_neighbours_are_named(self):
+        text = mf.minimization.force_culprit(self.out, 2)
+        self.assertIn("largest force on atom 2 LEU1:CB", text)
+        self.assertIn("POPC2:C22 0.71 A", text)
+        self.assertIn("POPC3:C31 2.00 A", text)
+        self.assertNotIn("TIP3", text)
+        self.assertIn("is not in", mf.minimization.force_culprit(self.out, 99))
+
+    def stages(self):
+        """membrane.pdb with DOPC487 clear of everything; from boxed.gro on, its C21 sits 0.8 A from POPC12:C3."""
+        atom = lambda resid, resname, name, x, y, z, chain="L": {"resid": resid, "resname": resname, "atom": name, "chain": chain,
+                                                                 "segid": "", "x": x, "y": y, "z": z}
+        clean = [atom(1, "LEU", "CA", 10.0, 10.0, 10.0, "X"), atom(487, "DOPC", "C21", 15.0, 10.0, 10.0),
+                 atom(487, "DOPC", "O22", 16.2, 10.0, 10.0), atom(12, "POPC", "C3", 19.5, 10.0, 10.0)]
+        mf.write_pdb(clean, self.out / "membrane.pdb", f"CRYST1{30.0:9.3f}{30.0:9.3f}{30.0:9.3f}  90.00  90.00  90.00 P 1           1")
+        clash = [dict(a, x=a["x"] / 10.0, y=a["y"] / 10.0, z=a["z"] / 10.0) for a in clean]
+        clash[3] = dict(clash[3], x=1.42)  # POPC12:C3 0.08 nm from DOPC487:C21
+        for name in ("boxed.gro", "solv_ions.gro", "em.unverified.gro"):
+            mf.write_gro(clash, [3.0, 3.0, 3.0], self.out / name, "test")
+        (self.out / "work").mkdir(exist_ok=True)
+        # backmapping wrote 486 other lipids first; membrane.pdb lipid 487 is slice lipid 9
+        rows = [f"L\t{n + 100}\tPOPC\tP\t0\t0\t0" for n in range(486)] + ["L\t9\tDOPC\tC21\t0\t0\t0", "L\t9\tDOPC\tO22\t0\t0\t0"]
+        (self.out / "work" / "membrane_aa.tsv").write_text("chain\tresid\tresname\tname\tx\ty\tz\n" + "\n".join(rows) + "\n")
+        mf.write_gro([{"resid": 9, "resname": "DOPC", "atom": "GL1", "x": 1.5, "y": 1.0, "z": 1.0},
+                      {"resid": 487, "resname": "POPC", "atom": "GL1", "x": 1.0, "y": 1.0, "z": 1.0}], [3.0, 3.0, 3.0],
+                     self.out / "work" / "cg_membrane.gro", "beads")
+        mf.write_pdb([clean[0]], self.out / "work" / "rock.pdb")
+        return clash
+
+    def test_the_trace_finds_the_first_stage_and_the_molecule_a_lipid_clashes_with(self):
+        self.stages()
+        trace = mf.minimization.trace_clash(self.out, "DOPC", 487, "C21")
+        stages = {row["stage"]: row for row in trace["stages"]}
+        cg = stages["coarse-grained slice (work/cg_membrane.gro)"]
+        self.assertEqual(cg["slice_residue"], 9)  # through the backmapped table, not slice lipid 487
+        self.assertAlmostEqual(cg["closest_protein_heavy_atom_to_a_bead_A"], 5.0, places=3)
+        self.assertIsNone(mf.minimization.slice_number(self.out / "work" / "membrane_aa.tsv", "POPC", 487))  # names differ
+        self.assertFalse(stages["backmapped membrane (membrane.pdb)"]["clash"])
+        clean = stages["backmapped membrane (membrane.pdb)"]["heavy"]  # O22 at 16.2 A, POPC12:C3 at 19.5 A: 3.3 A, no clash
+        self.assertEqual((clean["mine"], clean["partner"], clean["distance_A"]), ("DOPC487:O22", "POPC12:C3", 3.3))
+        self.assertTrue(stages["boxed (boxed.gro)"]["clash"])
+        self.assertAlmostEqual(stages["boxed (boxed.gro)"]["atom"]["distance_A"], 0.8, places=3)
+        self.assertEqual(trace["first_clash"], {"stage": "boxed (boxed.gro)", "partner": "POPC12:C3"})
+        self.assertIsNone(mf.minimization.trace_clash(self.out, "DOPC", 999)["first_clash"])
+
+    def test_validate_em_names_the_first_clash_of_a_lipid_culprit(self):
+        atoms = self.stages()
+        (self.out / "em.log").write_text("Potential Energy  = -1.0e+06\nMaximum force     =  1.59323e+04 on atom 2\n")
+        message = failure(mf.validate_em, {"out": self.out, "inputs": {}}, {"names": [a["atom"] for a in atoms]}, {})
+        self.assertIn("largest force on atom 2 DOPC487:C21", message)
+        self.assertIn("DOPC487 first clashes in the boxed (boxed.gro) stage, with POPC12:C3", message)
+        self.assertTrue((self.out / "em_clash_trace.json").is_file())
+
+    def test_validate_em_reports_the_culprit_of_a_finite_fmax(self):
+        (self.out / "em.log").write_text("   Energies (kJ/mol)\nPotential Energy  = -1.0e+06\n"
+                                         "Maximum force     =  1.59323e+04 on atom 2\nNorm of force     =  1.0e+02\n")
+        message = failure(mf.validate_em, {"out": self.out, "inputs": {}}, {"names": [a["atom"] for a in self.atoms]}, {})
+        self.assertIn("EM final Fmax 15932.3 >= 500 kJ/mol/nm", message)
+        self.assertIn("largest force on atom 2 LEU1:CB", message)
+        self.assertIn("POPC2:C22", message)
+        self.assertIn("before EM: atom 2 LEU1:CB starts", message)
+
+
+class GroStageMolecules(unittest.TestCase):
+    """The minimized .gro spells GM3 as four CHARMM residues and truncates SAPI25 to SAPI2; the report must still see them
+    as lipids, and must not count them, or anything else it cannot place, as protein."""
+
+    LEAFLET = ("DOPC", "DOPC", "SAPI25", "GLPA")  # per leaflet
+
+    def setUp(self):
+        self.out = Path(tempfile.mkdtemp())
+        toppar = REPO / "forcefield" / "toppar"
+        self.itps = {n: mf.read_itp(toppar / f"{n}.itp") for n in ("DOPC", "SAPI25", "GLPA", "TIP3", "SOD")}
+        atoms, resid = [], 0
+
+        def molecule(name, x, y, sign):
+            nonlocal resid
+            resid += 1
+            spec = self.itps[name]["atoms"]
+            anchor = {"DOPC": "P", "SAPI25": "P", "GLPA": "NF"}.get(name)
+            for k, a in enumerate(spec):
+                z = 5.0 + sign * (2.0 if a["atom"] == anchor else 1.0 + 0.004 * k) if anchor else 8.5
+                atoms.append({"resid": resid, "resname": a["residue"][:5], "atom": a["atom"][:5], "x": x, "y": y, "z": z})
+
+        for i, name in enumerate(("ALA", "LEU", "GLY")):  # a three-residue protein through the bilayer
+            resid += 1
+            atoms += [{"resid": resid, "resname": name, "atom": n, "x": 3.0, "y": 3.0, "z": 4.0 + i} for n in ("N", "CA", "C", "O")]
+        self.protein_atoms = 12
+        for sign in (-1, 1):
+            for j, name in enumerate(self.LEAFLET):
+                molecule(name, 0.5 + 1.2 * j, 1.0 + (sign > 0), sign)
+        molecule("TIP3", 1.0, 1.0, 0)
+        molecule("SOD", 2.0, 2.0, 0)
+        mf.write_gro(atoms, [6.0, 6.0, 10.0], self.out / "em.unverified.gro", "test")
+        self.atoms = atoms
+        (self.out / "PROX.itp").write_text("[ moleculetype ]\nPROX 3\n[ atoms ]\n" + "".join(
+            f"{k + 1} C {a['resid']} {a['resname']} {a['atom']} {k + 1} 0.0 12.0\n" for k, a in enumerate(atoms[:12])))
+        includes = "".join(f'#include "{toppar / n}.itp"\n' for n in ("DOPC", "SAPI25", "GLPA", "TIP3", "SOD"))
+        (self.out / "topol.top").write_text('#include "PROX.itp"\n' + includes + "[ system ]\ntest\n[ molecules ]\nPROX 1\n"
+                                            "DOPC 2\nSAPI25 1\nGLPA 1\nDOPC 2\nSAPI25 1\nGLPA 1\nTIP3 1\nSOD 1\n")
+
+    def check(self, stage, source):
+        self.assertEqual(stage["molecule_source"], source)
+        self.assertEqual(Counter(r["resname"] for r in stage["lipids"]), Counter({"DOPC": 4, "SAP6": 2, "GM3": 2}))  # report labels
+        self.assertEqual(Counter(r["leaflet"] for r in stage["lipids"]), Counter({"lower": 4, "upper": 4}))
+        self.assertEqual(len(stage["protein_nm"]), self.protein_atoms)  # GM3 and PIP2 atoms are not protein
+        glpa = [res for res in stage["residues"] if res[0]["resname"] == "GLPA"]
+        self.assertEqual([len(res) for res in glpa], [183, 183])  # one molecule each, all four parts
+        self.assertEqual(stage["unrecognized"], {})
+
+    def test_molecules_come_from_the_topology(self):
+        self.check(mf.stage_from_gro(self.out / "em.unverified.gro"), "topology topol.top")
+
+    def test_without_a_topology_the_gro_spellings_are_mapped_back(self):
+        (self.out / "topol.top").unlink()
+        self.check(mf.stage_from_gro(self.out / "em.unverified.gro"), "residue names")
+
+    def test_a_topology_for_other_atoms_is_not_trusted(self):
+        (self.out / "topol.top").write_text((self.out / "topol.top").read_text().replace("SOD 1", "SOD 2"))
+        self.check(mf.stage_from_gro(self.out / "em.unverified.gro"), "residue names")
+
+    def test_unknown_molecules_are_reported_not_counted_as_protein(self):
+        (self.out / "topol.top").unlink()
+        atoms = self.atoms + [{"resid": 900, "resname": "XYZ", "atom": "C1", "x": 4.0, "y": 4.0, "z": 5.0}]
+        mf.write_gro(atoms, [6.0, 6.0, 10.0], self.out / "em.unverified.gro", "test")
+        stage = mf.stage_from_gro(self.out / "em.unverified.gro")
+        self.assertEqual(stage["unrecognized"], {"XYZ": 1})
+        self.assertEqual(len(stage["protein_nm"]), self.protein_atoms)
+
+
 class StageRunner(unittest.TestCase):
     def setUp(self):
         self.out = Path(tempfile.mkdtemp())
@@ -572,6 +715,18 @@ class OutputProtection(unittest.TestCase):
             self.assertEqual(sorted(removed), ["em.gro", "toppar"])
             self.assertEqual([p.name for p in out.iterdir()], ["notes.txt"])
 
+    def test_membrane_kept_in_int_survives_the_stale_clear(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            (out / "int" / "work").mkdir(parents=True)
+            (out / "int" / "membrane.pdb").write_text("mine")
+            (out / "int" / "boxed.gro").write_text("old")
+            keep = out / "int" / "membrane.pdb"
+            mf.protect_inputs([keep], out, keep=keep)  # restart from the backmapped membrane an earlier build kept
+            self.assertIn("would be overwritten", failure(mf.protect_inputs, [out / "int" / "boxed.gro"], out))
+            mf.clear_stale_outputs(out, keep=keep)
+            self.assertEqual([p.name for p in (out / "int").iterdir()], ["membrane.pdb"])
+
     def test_changed_input_is_detected(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "a.pdb"
@@ -580,6 +735,48 @@ class OutputProtection(unittest.TestCase):
             mf.check_inputs_unchanged(hashes)
             path.write_text("two")
             self.assertIn("changed during the build", failure(mf.check_inputs_unchanged, hashes))
+
+
+class KeptIntermediates(unittest.TestCase):
+    """Nothing a build makes on the way to em.gro is deleted: the intermediates end up in <out>/int."""
+
+    def test_intermediates_move_into_int_and_inputs_stay(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            for name in ("boxed.gro", "solv_raw.gro", "em.log", "membrane.pdb", "em.gro", "topol.top", "notes.txt"):
+                (out / name).write_text(name)
+            moved = mf.pipeline.keep_intermediates(out, keep=(out / "membrane.pdb",))
+            self.assertEqual(sorted(moved), ["boxed.gro", "em.log", "solv_raw.gro"])
+            self.assertEqual((out / "int" / "boxed.gro").read_text(), "boxed.gro")
+            self.assertEqual(sorted(p.name for p in out.iterdir() if p.is_file()),
+                             ["em.gro", "membrane.pdb", "notes.txt", "topol.top"])  # final outputs and the input stay
+
+    def test_every_intermediate_is_a_generated_name(self):
+        self.assertTrue(set(mf.config.INTERMEDIATES) <= set(mf.config.GENERATED))
+        self.assertIn(mf.INT_DIR, mf.config.GENERATED)
+
+    def test_run_path_prefers_the_top_level_then_int(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            (out / "int").mkdir()
+            self.assertEqual(mf.run_path(out, "boxed.gro"), out / "boxed.gro")  # neither exists: the top-level path
+            (out / "int" / "boxed.gro").write_text("kept")
+            self.assertEqual(mf.run_path(out, "boxed.gro"), out / "int" / "boxed.gro")
+            (out / "boxed.gro").write_text("new")
+            self.assertEqual(mf.run_path(out, "boxed.gro"), out / "boxed.gro")
+
+    def test_a_retried_backmap_keeps_the_earlier_attempt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mstool"
+            path.mkdir()
+            (path / "step.pdb").write_text("one")
+            first = mf.backmapping.keep_attempt(path, 2)
+            self.assertEqual(first.name, "mstool_before_seed2")
+            path.mkdir()
+            second = mf.backmapping.keep_attempt(path, 2)
+            self.assertNotEqual(second, first)
+            self.assertTrue((first / "step.pdb").is_file() and second.is_dir())
+            self.assertIsNone(mf.backmapping.keep_attempt(path, 3))
 
 
 if __name__ == "__main__":
