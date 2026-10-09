@@ -162,8 +162,12 @@ wrong. The Voronoi measurement below replaces them.)
 
 mstool backmaps the sliced membrane around the complex held as a rigid obstacle, the structure is checked for ring
 threading, stereochemistry and clashes (another seed is tried when needed), the topology is built, the box is set in
-z, water and 0.15 M NaCl are added, the system is minimized with and then without the lipid dihedral restraints,
-and an independent audit must pass before `em.gro` appears. The measurements of gate 2 were added around this part;
+z, water and 0.15 M NaCl are added, the system is minimized with and then without the lipid dihedral restraints, and
+an independent audit must pass before `em.gro` appears. Every intermediate is kept: at the end of each build, passed
+or failed, the steps on the way to `em.gro` (`config.INTERMEDIATES`) are moved into `<out>/int/`, beside the working
+files (`int/work`) and the audit's scratch runs (`int/audit`); the top level holds the final outputs and the reports.
+A retried backmapping seed keeps the earlier attempt (`int/work/mstool_before_seed<N>`,
+`int/work/membrane_seed<N>.pdb`). The measurements of gate 2 were added around this part;
 the build itself did not change.
 
 ### 4.1 Disulfides
