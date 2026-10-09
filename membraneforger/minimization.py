@@ -6,6 +6,7 @@
 
 When the lipid topologies carry CHARMM-GUI dihedral restraints, a restrained minimization (emres) runs first and the
 validated, unrestrained EM starts from its result."""
+import json
 import math
 import re
 from pathlib import Path
@@ -13,15 +14,20 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial import cKDTree
 
-from .config import DIHRES_EM_FC, EM_MDP, FMAX_TARGET
+from .config import AMINO, DIHRES_EM_FC, EM_MDP, FMAX_TARGET
 from .runtools import run_command
-from .structio import read_gro, wrap, xyz_nm
+from .structio import element, read_gro, read_pdb, wrap, xyz_nm
 from .validation import check_inputs_unchanged
 
-__all__ = ['has_dihedral_restraints', 'run_em', 'closest_contact', 'force_culprit', 'validate_em']
+__all__ = ['has_dihedral_restraints', 'run_em', 'closest_contact', 'force_culprit', 'stage_files', 'read_structure',
+           'closest_partner', 'slice_number', 'trace_clash', 'validate_em']
 
 # On an Fmax failure, the residues within this distance of the atom with the largest force are named.
 FORCE_NEIGHBOUR_NM = 0.3
+# trace_clash: a heavy-atom pair closer than CLASH_HEAVY_A, or any pair closer than CLASH_ANY_A, between two molecules is
+# a clash (heavy-atom contacts in a relaxed CHARMM membrane are about 3 A, H...H about 2 A); pairs are searched within
+# CLASH_SEARCH_NM.
+CLASH_HEAVY_A, CLASH_ANY_A, CLASH_SEARCH_NM = 2.0, 1.0, 0.5
 
 def has_dihedral_restraints(out: Path) -> bool:
     """Whether any molecule topology in toppar/ carries [ dihedral_restraints ] rows."""
@@ -97,6 +103,103 @@ def force_culprit(out: Path, number: int, structure: str = "em.unverified.gro", 
             + (neighbours or "none"))
 
 
+def stage_files(out: Path) -> list[tuple[str, Path]]:
+    """The structures a build leaves behind, in the order the stages wrote them (those present)."""
+    stages = [("backmapped membrane (membrane.pdb)", out / "membrane.pdb"),
+              ("after the lipid scan and topology (prot-memb.pdb)", out / "prot-memb.pdb"),
+              ("boxed (boxed.gro)", out / "boxed.gro"), ("solvated (solv.gro)", out / "solv.gro"),
+              ("with ions (solv_ions.gro)", out / "solv_ions.gro"), ("restrained EM (emres.gro)", out / "emres.gro"),
+              ("final EM (em.unverified.gro)", out / "em.unverified.gro")]
+    return [(label, path) for label, path in stages if path.is_file()]
+
+
+def read_structure(path: Path) -> tuple[list[dict], np.ndarray]:
+    """Atoms with coordinates in nm and the orthorhombic cell (nm) of a .gro or a .pdb with CRYST1."""
+    if path.suffix == ".gro":
+        atoms, box = read_gro(path)
+        return atoms, np.array(box[:3], dtype=float)
+    atoms, cryst = read_pdb(path)
+    cell = np.array([float(cryst[6:15]), float(cryst[15:24]), float(cryst[24:33])]) / 10.0 if cryst else np.array([1e4] * 3)
+    return [dict(a, x=a["x"] / 10.0, y=a["y"] / 10.0, z=a["z"] / 10.0) for a in atoms], cell
+
+
+def closest_partner(atoms: list[dict], cell: np.ndarray, resname: str, resid: int, atom: str | None = None) -> dict | None:
+    """The closest atom of any other residue to one residue (or one of its atoms): pairs over all atoms and heavy atoms."""
+    is_target = lambda a: a["resname"] == resname and a["resid"] == resid and a["resname"] not in AMINO
+    target = [i for i, a in enumerate(atoms) if is_target(a)]
+    if not target:
+        return None
+    xyz = np.mod(xyz_nm(atoms), cell)
+    tree = cKDTree(xyz, boxsize=cell)
+    label = lambda a: f"{a['resname']}{a['resid']}:{a['atom']}"
+    best = {}
+    for kind, mine in (("any", target), ("heavy", [i for i in target if element(atoms[i]["atom"]) != "H"]),
+                       ("atom", [i for i in target if atoms[i]["atom"] == atom] if atom else [])):
+        found = None
+        for i in mine:
+            for j in tree.query_ball_point(xyz[i], CLASH_SEARCH_NM):
+                if is_target(atoms[j]) or (kind == "heavy" and element(atoms[j]["atom"]) == "H"):
+                    continue
+                d = float(np.linalg.norm((xyz[j] - xyz[i] + 0.5 * cell) % cell - 0.5 * cell))
+                if found is None or d < found[0]:
+                    found = (d, label(atoms[i]), label(atoms[j]))
+        if found:
+            best[kind] = {"distance_A": round(10 * found[0], 3), "mine": found[1], "partner": found[2]}
+    return best
+
+
+def slice_number(table: Path, resname: str, resid: int) -> int | None:
+    """The coarse-grained slice number (work/cg_membrane.gro) of membrane.pdb lipid `resid`, from the backmapped table.
+
+    backmapping.assemble_membrane_pdb numbers the backmapped lipids 1, 2, 3, ... in the table's order (residue n gets
+    n % 9999 + 1); the table keeps each lipid's own slice number in its resid column. None when the lipid at that place
+    is not `resname` (the names do not line up) or the table is shorter.
+    """
+    groups, last = [], None
+    for line in table.read_text().splitlines()[1:]:
+        chain, number, name = line.split("\t")[:3]
+        if (chain, number, name) != last:
+            groups.append((int(number), name))
+            last = (chain, number, name)
+    candidates = [g for n, g in enumerate(groups) if n % 9999 + 1 == resid and g[1] == resname]
+    return candidates[0][0] if len(candidates) == 1 else None
+
+
+def trace_clash(out: Path, resname: str, resid: int, atom: str | None = None) -> dict:
+    """Follow one membrane residue through every saved stage and find where it first clashes with another molecule.
+
+    membrane.pdb numbers the lipids 1, 2, 3, ... in the order backmapping wrote them, and every .gro keeps that number, so
+    the same molecule is compared at each stage; its coarse-grained slice number is read from the backmapped table
+    (slice_number). A clash is a heavy-atom pair closer than
+    CLASH_HEAVY_A or any atom pair closer than CLASH_ANY_A. At the coarse-grained stage its beads are measured against
+    the protein that backmapping holds rigid (work/rock.pdb).
+    """
+    rows = []
+    cg, rock, table = out / "work" / "cg_membrane.gro", out / "work" / "rock.pdb", out / "work" / "membrane_aa.tsv"
+    source = slice_number(table, resname, resid) if table.is_file() else None
+    if source is not None and cg.is_file() and rock.is_file():
+        beads, box = read_gro(cg)
+        mine = np.array([[b["x"], b["y"], b["z"]] for b in beads if b["resid"] == source])
+        protein = xyz_nm([a for a in read_pdb(rock)[0] if element(a["atom"]) != "H"]) / 10.0
+        if len(mine) and len(protein):
+            cell = np.array(box[:3], dtype=float)
+            d = cKDTree(np.mod(protein, cell), boxsize=cell).query(np.mod(mine, cell))[0].min()
+            rows.append({"stage": "coarse-grained slice (work/cg_membrane.gro)", "slice_residue": source,
+                         "closest_protein_heavy_atom_to_a_bead_A": round(10 * d, 3)})
+    for label, path in stage_files(out):
+        atoms, cell = read_structure(path)
+        contact = closest_partner(atoms, cell, resname, resid, atom)
+        if contact is None:
+            rows.append({"stage": label, "absent": True})
+            continue
+        clash = (contact.get("heavy", {}).get("distance_A", 99.0) < CLASH_HEAVY_A
+                 or contact.get("any", {}).get("distance_A", 99.0) < CLASH_ANY_A)
+        rows.append({"stage": label, **contact, "clash": bool(clash)})
+    first = next((r for r in rows if r.get("clash")), None)
+    return {"residue": f"{resname}{resid}", "atom": atom, "stages": rows,
+            "first_clash": {"stage": first["stage"], "partner": (first.get("heavy") or first["any"])["partner"]} if first else None}
+
+
 def validate_em(system: dict, topology: dict, index: dict) -> dict:
     """Check EM converged and that the minimized structure, topology, index and box are all consistent."""
     out = system["out"]
@@ -110,6 +213,17 @@ def validate_em(system: dict, topology: dict, index: dict) -> dict:
         culprit = re.findall(r"Maximum force\s*=\s*\S+\s+on atom\s+(\d+)", text)
         where = (f"; {force_culprit(out, int(culprit[-1]))}; before EM: {closest_contact(out, int(culprit[-1]))}"
                  if culprit else "; em.log names no atom")
+        if culprit:
+            atoms = read_gro(out / "em.unverified.gro")[0]
+            number = int(culprit[-1])
+            if 1 <= number <= len(atoms) and atoms[number - 1]["resname"] not in AMINO:
+                a = atoms[number - 1]
+                trace = trace_clash(out, a["resname"], a["resid"], a["atom"])
+                (out / "em_clash_trace.json").write_text(json.dumps(trace, indent=2) + "\n")
+                first = trace["first_clash"]
+                where += (f"; {trace['residue']} first clashes in the {first['stage']} stage, with {first['partner']} "
+                          "(every stage: em_clash_trace.json)" if first else
+                          f"; {trace['residue']} clashes with no molecule at any saved stage (em_clash_trace.json)")
         raise SystemExit(f"EM final Fmax {float(fmax[-1]):.1f} >= {FMAX_TARGET:.0f} kJ/mol/nm{where}")
     gro = (out / "em.unverified.gro").read_text().splitlines()
     atoms = gro[2:2 + int(gro[1])]
