@@ -191,6 +191,7 @@ complex, so the same code measures the coarse-grained and the atomistic stages. 
 | Ring penetration / clashes (build) | | | ✓ | ✓ | ✓ | | |
 | Voronoi APL (global and per species) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Lateral headgroup RDF | ✓ | ✓ | ✓ | | | | |
+| Lipids around the protein (per species, per leaflet) | | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Bilayer thickness (global, local map) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Composition / leaflet asymmetry | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Z-density / core hydration | | | | | ✓ | ✓ | ✓ |
@@ -294,6 +295,31 @@ within 1.5 nm of the midplane, its insertion depth (mean z of those atoms relati
 flag. Across slicing (gate 1) thickness may change by 3 / 5 % (PASS / WARNING), tilt by 1 / 3 degrees and depth by
 0.5 / 1.5 A; in the examples thickness changes by 0.2 % (KOR1: 42.9 to 42.8 A) and tilt and depth by 0.0, as expected
 from a rigid translation.
+
+### 5.6a Lipids around the protein
+
+The lateral RDF above is lipid to lipid; how each species is distributed around the protein is a separate profile
+(`rdf.protein_density_profiles`, section "Lipids around the protein" of `membrane_validation.md`, figure
+`membrane_validation_protein_density.png`). For every lipid of a leaflet it takes the in-plane distance from the
+headgroup anchor to the nearest protein heavy atom of the protein's cross-section at headgroup depth (within 0.6 nm
+of the leaflet's median anchor z). Each distance shell's membrane area is measured on a 0.05 nm grid (the protein is
+not a cylinder), and the species' density is divided by its mean density over the leaflet's lipid-accessible area:
+1 = as common as anywhere, > 1 enriched next to the protein, < 1 depleted. One frame puts zero or one molecule of a
+species in each shell, so the figure shows the cumulative ratio, the density within R over the leaflet mean (a
+depletion-enrichment index), which tends to 1 far from the protein; the table gives its value at 10 A, the first
+shell, with the counting uncertainty (ratio / sqrt(n)). The cross-section is taken at headgroup depth because a
+tilted helix shifts laterally by up to 2 nm across a leaflet: against all protein atoms of the leaflet, even the
+total lipid density read 1.3-1.4 at the protein for a single-pass protein tilted 53 degrees (0.9-1.1 at headgroup
+depth). The CG frame stage is left out: its protein is the frame's own receptor, not the complex.
+
+**Reading the minimized and trajectory .gro files.** The .gro format keeps 5 characters of a residue name (SAPI25 is
+written SAPI2) and the GM3 topology splits each molecule into four residues (CER160 BGLC BGAL ANE5AC, written CER16
+BGLC BGAL ANE5A). The minimized stage and the equilibration frames therefore take their molecules from the build's
+topology (`topol.top` and its .itp files), which is exact; without a topology that matches the file, the residue
+names are mapped back with those two rules. A molecule that is neither lipid, protein nor solvent is reported
+(`WARNING`, "molecules identified") and left out of every measurement. Before this, PIP2 and GM3 were missing from
+the minimized stage and their atoms were counted as protein, which inflated the protein footprint and made every
+species read about 30 % too tightly packed after minimization.
 
 ### 5.7 Integrity
 
