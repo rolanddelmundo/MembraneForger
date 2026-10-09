@@ -384,6 +384,51 @@ class EnergyMinimizationFailure(unittest.TestCase):
         self.assertNotIn("TIP3", text)
         self.assertIn("is not in", mf.minimization.force_culprit(self.out, 99))
 
+    def stages(self):
+        """membrane.pdb with DOPC487 clear of everything; from boxed.gro on, its C21 sits 0.8 A from POPC12:C3."""
+        atom = lambda resid, resname, name, x, y, z, chain="L": {"resid": resid, "resname": resname, "atom": name, "chain": chain,
+                                                                 "segid": "", "x": x, "y": y, "z": z}
+        clean = [atom(1, "LEU", "CA", 10.0, 10.0, 10.0, "X"), atom(487, "DOPC", "C21", 15.0, 10.0, 10.0),
+                 atom(487, "DOPC", "O22", 16.2, 10.0, 10.0), atom(12, "POPC", "C3", 19.5, 10.0, 10.0)]
+        mf.write_pdb(clean, self.out / "membrane.pdb", f"CRYST1{30.0:9.3f}{30.0:9.3f}{30.0:9.3f}  90.00  90.00  90.00 P 1           1")
+        clash = [dict(a, x=a["x"] / 10.0, y=a["y"] / 10.0, z=a["z"] / 10.0) for a in clean]
+        clash[3] = dict(clash[3], x=1.42)  # POPC12:C3 0.08 nm from DOPC487:C21
+        for name in ("boxed.gro", "solv_ions.gro", "em.unverified.gro"):
+            mf.write_gro(clash, [3.0, 3.0, 3.0], self.out / name, "test")
+        (self.out / "work").mkdir(exist_ok=True)
+        # backmapping wrote 486 other lipids first; membrane.pdb lipid 487 is slice lipid 9
+        rows = [f"L\t{n + 100}\tPOPC\tP\t0\t0\t0" for n in range(486)] + ["L\t9\tDOPC\tC21\t0\t0\t0", "L\t9\tDOPC\tO22\t0\t0\t0"]
+        (self.out / "work" / "membrane_aa.tsv").write_text("chain\tresid\tresname\tname\tx\ty\tz\n" + "\n".join(rows) + "\n")
+        mf.write_gro([{"resid": 9, "resname": "DOPC", "atom": "GL1", "x": 1.5, "y": 1.0, "z": 1.0},
+                      {"resid": 487, "resname": "POPC", "atom": "GL1", "x": 1.0, "y": 1.0, "z": 1.0}], [3.0, 3.0, 3.0],
+                     self.out / "work" / "cg_membrane.gro", "beads")
+        mf.write_pdb([clean[0]], self.out / "work" / "rock.pdb")
+        return clash
+
+    def test_the_trace_finds_the_first_stage_and_the_molecule_a_lipid_clashes_with(self):
+        self.stages()
+        trace = mf.minimization.trace_clash(self.out, "DOPC", 487, "C21")
+        stages = {row["stage"]: row for row in trace["stages"]}
+        cg = stages["coarse-grained slice (work/cg_membrane.gro)"]
+        self.assertEqual(cg["slice_residue"], 9)  # through the backmapped table, not slice lipid 487
+        self.assertAlmostEqual(cg["closest_protein_heavy_atom_to_a_bead_A"], 5.0, places=3)
+        self.assertIsNone(mf.minimization.slice_number(self.out / "work" / "membrane_aa.tsv", "POPC", 487))  # names differ
+        self.assertFalse(stages["backmapped membrane (membrane.pdb)"]["clash"])
+        clean = stages["backmapped membrane (membrane.pdb)"]["heavy"]  # O22 at 16.2 A, POPC12:C3 at 19.5 A: 3.3 A, no clash
+        self.assertEqual((clean["mine"], clean["partner"], clean["distance_A"]), ("DOPC487:O22", "POPC12:C3", 3.3))
+        self.assertTrue(stages["boxed (boxed.gro)"]["clash"])
+        self.assertAlmostEqual(stages["boxed (boxed.gro)"]["atom"]["distance_A"], 0.8, places=3)
+        self.assertEqual(trace["first_clash"], {"stage": "boxed (boxed.gro)", "partner": "POPC12:C3"})
+        self.assertIsNone(mf.minimization.trace_clash(self.out, "DOPC", 999)["first_clash"])
+
+    def test_validate_em_names_the_first_clash_of_a_lipid_culprit(self):
+        atoms = self.stages()
+        (self.out / "em.log").write_text("Potential Energy  = -1.0e+06\nMaximum force     =  1.59323e+04 on atom 2\n")
+        message = failure(mf.validate_em, {"out": self.out, "inputs": {}}, {"names": [a["atom"] for a in atoms]}, {})
+        self.assertIn("largest force on atom 2 DOPC487:C21", message)
+        self.assertIn("DOPC487 first clashes in the boxed (boxed.gro) stage, with POPC12:C3", message)
+        self.assertTrue((self.out / "em_clash_trace.json").is_file())
+
     def test_validate_em_reports_the_culprit_of_a_finite_fmax(self):
         (self.out / "em.log").write_text("   Energies (kJ/mol)\nPotential Energy  = -1.0e+06\n"
                                          "Maximum force     =  1.59323e+04 on atom 2\nNorm of force     =  1.0e+02\n")
