@@ -26,12 +26,14 @@ Outputs: membrane_validation.json (everything), membrane_validation.md (the tabl
 (one row per lipid and stage with its Voronoi area) and, when matplotlib is importable, four PNG figures.
 """
 import json
+import math
 from collections import Counter
 from pathlib import Path
 
 import numpy as np
 from scipy.spatial import cKDTree
 
+from .audit import itp_atoms, topology_includes, topology_molecules
 from .config import AMINO, SOLVENT, Settings
 from .lipids import LIPID_AA_ANCHORS, display_name
 from .packing import (
@@ -48,7 +50,7 @@ from .packing import (
     window_distribution,
 )
 from .qc import classify, classify_percentile, metric, overall_status, records_table
-from .rdf import leaflet_rdfs, rdf_comparison, region_rdfs, window_rdf_distribution
+from .rdf import PROFILE_FIRST_SHELL_NM, leaflet_rdfs, protein_density_profiles, rdf_comparison, region_rdfs, window_rdf_distribution
 from .runtools import log
 from .structio import element, read_gro, read_pdb, residues_in_order, xyz_nm
 from .structure_metrics import (
@@ -106,19 +108,83 @@ def residues_in_order_by_chain(atoms: list[dict]) -> list[tuple]:
     return [(k[1], k[2], seen[k]) for k in order]
 
 
-def stage_from_gro(path: Path, name: str = "minimize") -> dict:
-    """Analysis stage from a GROMACS .gro of the built system (nm): lipids by residue name, the rest minus solvent is solute."""
+# How a lipid's residue name can appear in a .gro: the format keeps 5 characters (SAPI25 -> SAPI2), and the GM3 topology
+# (GLPA.itp) splits each molecule into four residues, CER160 BGLC BGAL ANE5AC, written CER16 BGLC BGAL ANE5A.
+GRO_RESNAME_ALIASES = {"SAPI2": "SAPI25", "SAPI": "SAPI25"}
+GLPA_PARTS = ("CER16", "BGLC", "BGAL", "ANE5A")
+# Water and ions as residue or moleculetype names (CHARMM TIP3/SOD/CLA/POT, GROMACS SOL/NA/CL/K).
+SOLVENT_NAMES = frozenset(SOLVENT) | {"SOL", "HOH", "WAT", "NA", "CL", "K"}
+
+
+def gro_molecules(atoms: list[dict], topology: Path) -> list[tuple[str, list[int]]] | None:
+    """Split a .gro of the built system into molecules with the [ molecules ] table of its topology and the .itp files.
+
+    Each molecule is (moleculetype, atom indices). This is exact whatever the .gro does to residue names (truncated to
+    5 characters, GM3 split into CHARMM sugar residues). None when the topology does not describe these atoms.
+    """
+    try:
+        sizes = {mol: len(entries) for mol, entries in itp_atoms(topology_includes(topology, set())).items()}
+        table = topology_molecules(topology)
+    except (OSError, SystemExit, ValueError):
+        return None
+    if any(mol not in sizes for mol, _ in table) or sum(sizes[mol] * n for mol, n in table) != len(atoms):
+        return None
+    molecules, start = [], 0
+    for mol, n in table:
+        for _ in range(n):
+            molecules.append((mol, list(range(start, start + sizes[mol]))))
+            start += sizes[mol]
+    return molecules
+
+
+def gro_molecules_by_name(atoms: list[dict]) -> list[tuple[str, list[int]]]:
+    """Fallback without a topology: molecules from residue runs, with the .gro spellings mapped back to the lipid names.
+
+    A residue is a run of equal (resid, resname) (numbers wrap at 99999); SAPI2 is SAPI25, and a GM3 is one run of its
+    four parts CER16 BGLC BGAL ANE5A, a new molecule starting at each CER16.
+    """
+    molecules, last = [], None
+    for i, a in enumerate(atoms):
+        name = GRO_RESNAME_ALIASES.get(a["resname"], a["resname"])
+        if name in GLPA_PARTS:
+            if name == GLPA_PARTS[0] and last != (a["resid"], name) or not molecules or molecules[-1][0] != "GLPA":
+                molecules.append(("GLPA", []))
+            molecules[-1][1].append(i)
+            last = (a["resid"], name)
+            continue
+        if (a["resid"], name) != last:
+            molecules.append((name, []))
+            last = (a["resid"], name)
+        molecules[-1][1].append(i)
+    return molecules
+
+
+def stage_from_gro(path: Path, name: str = "minimize", topology: Path | None = None) -> dict:
+    """Analysis stage from a GROMACS .gro of the built system (nm).
+
+    Molecules come from the topology (`topology`, else topol.top next to the .gro) when it describes the file, else from
+    residue names (gro_molecules_by_name). Lipids are the molecules whose type is an all-atom lipid; protein and ligands
+    are only protein residues and the topology's other non-solvent molecules. Anything else is reported in
+    stage["unrecognized"] and kept out of both, instead of being counted as protein.
+    """
     atoms, box = read_gro(path)
-    lipids = [a for a in atoms if a["resname"] in AA_LIPIDS]
-    solute = [a for a in atoms if a["resname"] not in AA_LIPIDS and a["resname"] not in SOLVENT and element(a["atom"]) != "H"]
-    residues = []
-    last = None
-    for a in lipids:  # residue numbers wrap at 99999 in .gro, so a residue is a run of equal (resid, resname)
-        key = (a["resid"], a["resname"])
-        if key != last:
-            residues.append([])
-            last = key
-        residues[-1].append(a)
+    top = topology if topology is not None else path.parent / "topol.top"
+    molecules = gro_molecules(atoms, top) if top.is_file() else None
+    source = f"topology {top.name}" if molecules is not None else "residue names"
+    if molecules is None:
+        molecules = gro_molecules_by_name(atoms)
+    residues, solute, others, unrecognized = [], [], [], Counter()
+    for mol, members in molecules:
+        if mol in AA_LIPIDS:
+            residues.append([dict(atoms[i], resname=mol) for i in members])
+        elif mol in SOLVENT_NAMES:
+            others += [atoms[i] for i in members]
+        elif source.startswith("topology") or all(atoms[i]["resname"] in AMINO for i in members):
+            solute += [atoms[i] for i in members]
+            others += [atoms[i] for i in members]
+        else:
+            unrecognized[mol] += 1
+    solute = [a for a in solute if element(a["atom"]) != "H"]
     cell = np.array(box[:3])
     for res in residues:  # make each lipid whole: mdrun may write atoms in different periodic images
         xyz = xyz_nm(res)
@@ -127,8 +193,10 @@ def stage_from_gro(path: Path, name: str = "minimize") -> dict:
             a["x"], a["y"], a["z"] = float(x), float(y), float(z)
     stage = aa_stage(name, residues, xyz_nm(solute), box[:3])
     stage["residues"] = residues
+    stage["molecule_source"] = source
+    stage["unrecognized"] = dict(unrecognized)
     stage["tails"] = aa_leaflet_tail_split(residues, stage["midplane_nm"])
-    groups = aa_groups_from_atoms(atoms, AA_LIPIDS)
+    groups = aa_groups_from_atoms([a for res in residues for a in res] + others, AA_LIPIDS)
     stage["water_nm"] = groups["water"]
     stage["z_groups"] = groups
     return stage
@@ -226,9 +294,20 @@ class MembraneValidation:
         summary = stage_summary(stage, measure, rdfs, self.reference if stage["name"] != "embed" else None)
         summary["thickness"] = {k: thickness[k] for k in ("thickness_A", "local_sd_nm", "cells_filled", "n_per_leaflet")}
         summary["protein"] = {k: orientation[k] for k in ("tilt_deg", "depth_A", "com_z_A", "n_slab", "embedded_fraction")} if orientation else None
+        density = protein_density_profiles(stage) if len(stage["protein_nm"]) else {}
+        summary["protein_density"] = density_summary(density)
         records = self.structure_records(stage, thickness, orientation)
+        if "molecule_source" in stage:  # an all-atom .gro stage: say how its molecules were identified, and what was not
+            unknown = stage.get("unrecognized") or {}
+            records.append(metric("molecules identified", stage["name"], len(stage["lipids"]), "lipids", n=len(stage["lipids"]),
+                                  status="WARNING" if unknown else "PASS",
+                                  reason=f"from {stage['molecule_source']}"
+                                         + ("; not lipid, protein or solvent, left out of every measurement: "
+                                            + ", ".join(f"{k} x{v}" for k, v in sorted(unknown.items())) if unknown else "")))
+            summary["molecule_source"], summary["unrecognized"] = stage["molecule_source"], dict(unknown)
         summary["records"] = records
         self.stages[stage["name"]] = {"stage": stage, "measure": measure, "rdfs": rdfs, "thickness": thickness, "orientation": orientation,
+                                      "protein_density": density,
                                       "records": records, **{k: stage[k] for k in ("interdigitation", "core_hydration") if k in stage}}
         self.summaries = [s for s in self.summaries if s["name"] != stage["name"]] + [summary]
         return summary
@@ -588,6 +667,7 @@ def write_markdown(record: dict) -> str:
              "Lateral diffusion, area compressibility K_A and leaflet tension need a restraint-free production window; same tool, "
              "same report. Without matched references these are REFERENCE NEEDED, without enough sampling INSUFFICIENT SAMPLING.\n",
              "## Species\n", species_markdown(record),
+             "## Lipids around the protein\n", density_markdown(record),
              "## Reading the tables\n",
              "- The construction check is the slicing test: the cut keeps the same lipids with the same neighbours except at the new seam, so "
              "its APL must match theirs in the uncut membrane within a few percent.\n"
@@ -597,6 +677,108 @@ def write_markdown(record: dict) -> str:
              "backmapping keeps the lipid count and the cell, hence the leaflet APL; minimization relaxes short contacts and may move the "
              "RDF's first peak toward the atomistic contact distance without changing the leaflet mean.\n"]
     return "\n".join(text)
+
+
+# Species colours of the density-profile figure: one fixed categorical slot per species, so a species keeps its colour in
+# every stage. Ten species exceed the eight slots, but no leaflet holds more than eight: the species found in both
+# leaflets take slots 1-5, the upper-only (PSM, GM3) and lower-only (POPS, DOPS, SAP6) ones share slots 6-8.
+DENSITY_FIGURE_FROM_A = 6.0  # the cumulative curves start here: nearer, the lipid area within R is a fraction of one lipid's
+CATEGORICAL = ("#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948")
+SPECIES_SLOT = {"CHOL": 0, "POPC": 1, "DOPC": 2, "POPE": 3, "DOPE": 4, "PSM": 5, "GM3": 6, "POPS": 5, "DOPS": 6, "SAP6": 7}
+
+
+def density_summary(density: dict) -> dict:
+    """The JSON form of protein_density_profiles: per leaflet and species, N, first-shell N and ratio, and the curve."""
+    out = {}
+    for leaflet, block in density.items():
+        if not block:
+            out[leaflet] = None
+            continue
+        out[leaflet] = {"protein_atoms_in_slab": block["protein_atoms_in_slab"], "first_shell_nm": PROFILE_FIRST_SHELL_NM,
+                        "species": {name: {"n": c["n"], "first_shell_n": c["first_shell_n"], "first_shell_ratio": c["first_shell_ratio"],
+                                           "well_sampled": c["well_sampled"], "r_A": [round(10 * float(v), 2) for v in c["r_nm"]],
+                                           "density_ratio": [None if not np.isfinite(v) else round(float(v), 3) for v in c["density_ratio"]],
+                                           "R_A": [round(10 * float(v), 2) for v in c["R_nm"]],
+                                           "cumulative_ratio": [None if not np.isfinite(v) else round(float(v), 3)
+                                                                for v in c["cumulative_ratio"]]}
+                                    for name, c in block["curves"].items()}}
+    return out
+
+
+def density_stages(record: dict) -> list[dict]:
+    """Stages with a density profile around the complex (the CG frame's profile is around the frame's own receptor)."""
+    return [s for s in record["stages"] if s.get("name") != "cg_frame" and any((s.get("protein_density") or {}).values())]
+
+
+def density_markdown(record: dict) -> str:
+    """First-shell enrichment of each species around the protein, per leaflet and stage (the table view of the figure)."""
+    stages = density_stages(record)
+    if not stages:
+        return "No stage has protein atoms inside the bilayer.\n"
+    text = [f"Density of each species within {10 * PROFILE_FIRST_SHELL_NM:.0f} A of the protein (in-plane, headgroup anchor to the "
+            "nearest protein heavy atom in that leaflet), divided by the species' mean density over the leaflet: 1 = as common as "
+            "anywhere, > 1 enriched next to the protein, < 1 depleted; +- is the counting (Poisson) uncertainty, ratio / sqrt(n) for "
+            "n molecules in the shell, so a ratio from one or two molecules is not a finding. N = molecules of the species in the "
+            "leaflet / within the first shell. Curves: membrane_validation_protein_density.png.\n"]
+    for leaflet in ("upper", "lower"):
+        species = sorted({sp for s in stages for sp in ((s["protein_density"].get(leaflet) or {}).get("species") or {})},
+                         key=lambda sp: (sp != "all", sp))
+        text += [f"\n**{leaflet} leaflet**\n", "| Species | " + " | ".join(s["label"] for s in stages) + " |",
+                 "|---|" + "---:|" * len(stages)]
+        for sp in species:
+            cells = []
+            for s in stages:
+                c = ((s["protein_density"].get(leaflet) or {}).get("species") or {}).get(sp)
+                if not c:
+                    cells.append("-")
+                    continue
+                ratio, shell = c["first_shell_ratio"], c["first_shell_n"]
+                error = f" ± {ratio / math.sqrt(shell):.2f}" if ratio is not None and shell > 0 else ""
+                cells.append(f"{fmt(ratio, 2)}{error} (N {c['n']}/{shell})" + ("" if c["well_sampled"] else " few"))
+            text.append(f"| {'all lipids' if sp == 'all' else display_name(sp)} | " + " | ".join(cells) + " |")
+    return "\n".join(text) + "\n"
+
+
+def density_figure(out: Path, record: dict, plt) -> Path | None:
+    """Per-species density around the protein: rows = leaflets, columns = stages; one fixed colour per species."""
+    stages = density_stages(record)
+    if not stages:
+        return None
+    fig, axes = plt.subplots(2, len(stages), figsize=(3.1 * len(stages) + 1.6, 6.2), sharex=True, sharey="row", squeeze=False)
+    for row, leaflet in enumerate(("upper", "lower")):
+        for col, s in enumerate(stages):
+            ax = axes[row][col]
+            block = (s["protein_density"].get(leaflet) or {}).get("species") or {}
+            ax.axhline(1.0, color="#c3c2b7", linewidth=0.8)
+            for name in sorted(block, key=lambda sp: (sp == "all", SPECIES_SLOT.get(sp, 99))):
+                c = block[name]
+                r = np.array(c["R_A"])
+                y = np.array([np.nan if v is None else v for v in c["cumulative_ratio"]], dtype=float)
+                y[r < DENSITY_FIGURE_FROM_A] = np.nan  # the innermost radii hold a fraction of a lipid's area
+                if name == "all":
+                    ax.plot(r, y, color="#52514e", linewidth=1.4, linestyle="--", label="all lipids")
+                else:
+                    ax.plot(r, y, color=CATEGORICAL[SPECIES_SLOT.get(name, 7)], linewidth=1.4,
+                            label=f"{display_name(name)} (N={c['n']})" + ("" if c["well_sampled"] else ", few"))
+            if row == 0:
+                ax.set_title(s["label"], fontsize=9)
+            if col == 0:
+                ax.set_ylabel(f"{leaflet} leaflet\ndensity within R / leaflet mean")
+            if row == 1:
+                ax.set_xlabel("R, distance from the protein (Å)")
+            ax.axvline(10 * PROFILE_FIRST_SHELL_NM, color="#c3c2b7", linewidth=0.8, linestyle=":")
+            for side in ("top", "right"):
+                ax.spines[side].set_visible(False)
+            ax.tick_params(labelsize=7)
+        handles, labels = axes[row][-1].get_legend_handles_labels()
+        axes[row][-1].legend(handles, labels, fontsize=6.5, frameon=False, loc="upper left", bbox_to_anchor=(1.02, 1.0))
+    fig.suptitle("Lipids around the protein: density of each species within R of the protein, over its leaflet mean\n"
+                 "(headgroup anchors; in-plane distance to the protein at headgroup depth; dotted line = first shell)", fontsize=8.5)
+    fig.tight_layout()
+    path = out / "membrane_validation_protein_density.png"
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    return path
 
 
 def write_outputs(out: Path, record: dict, stages: dict) -> list[Path]:
@@ -618,6 +800,7 @@ def write_outputs(out: Path, record: dict, stages: dict) -> list[Path]:
 MATRIX_ROWS = [("Ring penetration / clashes", "pipeline (ring_piercing.json, lipid scan, audit)", ("slice", "backmap", "minimize")),
                ("Voronoi APL", "measure", ("cg_frame", "embed", "slice", "backmap", "minimize", "equilibrated", "final")),
                ("Lateral RDF", "rdfs", ("cg_frame", "embed", "slice")),
+               ("Lipids around the protein", "protein_density", ("embed", "slice", "backmap", "minimize", "equilibrated", "final")),
                ("Bilayer thickness", "thickness", ("cg_frame", "embed", "slice", "backmap", "minimize", "equilibrated", "final")),
                ("Composition / asymmetry", "measure", ("cg_frame", "embed", "slice", "backmap", "minimize", "equilibrated", "final")),
                ("Z-density / core hydration", "core_hydration", ("minimize", "equilibrated", "final")),
@@ -745,6 +928,9 @@ def render_figures(out: Path, record: dict, stages: dict) -> list[Path]:
     fig.savefig(out / "membrane_validation_rdf.png", dpi=150)
     plt.close(fig)
     written.append(out / "membrane_validation_rdf.png")
+    density = density_figure(out, record, plt)
+    if density is not None:
+        written.append(density)
     # D. composition: counts by species and leaflet, embed vs slice
     pair = [n for n in ("embed", "slice") if n in summaries]
     if len(pair) == 2:
