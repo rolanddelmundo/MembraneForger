@@ -404,7 +404,11 @@ def finish_system(session: Session, staged: dict) -> str:
     record["em"] = run_stage(session, "validate", validate_em, system, topology, index)
     log(out, f"EM validated: {record['em']['summary']}", "PASS")
     if session.analysis is not None:
-        summary = run_stage(session, "membrane_check", session.analysis.add, stage_from_gro(out / "em.unverified.gro"))
+        minimized = stage_from_gro(out / "em.unverified.gro", topology=out / "topol.top")
+        if minimized["unrecognized"]:
+            log(out, f"minimized membrane: molecules {minimized['unrecognized']} are neither lipid, protein nor solvent and are left "
+                     "out of the membrane measurements", "WARN")
+        summary = run_stage(session, "membrane_check", session.analysis.add, minimized)
         log(out, "minimized membrane: " + leaflet_apl_summary(summary))
         record["membrane_validation"] = session.analysis.record(session.analysis.cut)
         session.analysis.write(session.analysis.cut)

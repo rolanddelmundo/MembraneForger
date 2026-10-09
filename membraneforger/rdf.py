@@ -21,7 +21,10 @@ a construction error. Distances are reported in A.
 import numpy as np
 from scipy.spatial import cKDTree
 
-__all__ = ['lateral_rdf', 'rdf_features', 'leaflet_rdfs', 'region_rdfs', 'window_rdf_distribution', 'compare_rdf', 'rdf_comparison']
+from .packing import leaflet_slab
+
+__all__ = ['lateral_rdf', 'rdf_features', 'leaflet_rdfs', 'region_rdfs', 'window_rdf_distribution', 'compare_rdf', 'rdf_comparison',
+           'protein_density_profiles']
 
 MIN_PAIR_SPECIES = 20   # same-species curves are computed for species with at least this many molecules in the leaflet
 DR_NM = 0.1             # 1 A bins: a leaflet of 150-250 anchors gives about 10 pairs per bin in the first shell
@@ -237,4 +240,87 @@ def rdf_comparison(reference: dict, sample: dict, max_peak_shift_a: float, max_n
         out["leaflets"][leaflet] = rows
     out["criteria"] = {"first_peak_shift_A": {"pass": warning_shift_a, "warning": max_peak_shift_a}, "max_rms_in_noise_units": max_noise_units,
                        "decided_by": "the all-anchor curve of each leaflet; species curves are reported"}
+    return out
+
+
+# ------------------------------------------------------------------------------------- around the protein, per species
+PROFILE_R_MAX_NM = 3.0      # lateral distance from the protein covered by the profiles
+PROFILE_DR_NM = 0.1         # 1 A shells
+PROFILE_GRID_NM = 0.05      # grid that measures the membrane area in each shell around an irregular protein
+PROFILE_ACCESSIBLE_NM = 0.3  # an anchor never sits closer than this to a protein heavy atom: nearer area is not lipid area
+PROFILE_FIRST_SHELL_NM = 1.0  # the annulus of lipids in contact with the protein (summarized as one enrichment number)
+PROFILE_HEAD_BAND_NM = 0.6  # protein atoms within this of the leaflet's median anchor z: its cross-section at headgroup depth
+PROFILE_MIN_SPECIES = 10    # species with fewer molecules in a leaflet get no curve; below MIN_PAIR_SPECIES, "few"
+
+
+def protein_density_profiles(stage: dict, r_max_nm: float = PROFILE_R_MAX_NM, dr_nm: float = PROFILE_DR_NM,
+                             grid_nm: float = PROFILE_GRID_NM, band_nm: float | None = PROFILE_HEAD_BAND_NM) -> dict:
+    """How each lipid species is distributed around the protein, leaflet by leaflet: density relative to its leaflet mean.
+
+    For every lipid of a leaflet, the in-plane (x, y; periodic) distance from its headgroup anchor to the nearest protein
+    heavy atom of the protein's cross-section at headgroup depth (within band_nm of the leaflet's median anchor z) is
+    binned in dr_nm shells. The cross-section is taken at the anchors' own depth because a tilted helix shifts laterally
+    by up to 2 nm across a leaflet: measured against all protein atoms of the leaflet's slab (band_nm=None,
+    packing.leaflet_slab), a headgroup above the helix's buried end looks close to a protein that is not beside it, and
+    even the total lipid density reads 1.3-1.4 at the protein (a single-pass protein tilted 53 degrees; 0.9-1.1 at
+    headgroup depth). Each shell's membrane area is
+    measured on a grid_nm grid (the protein is not a cylinder), so a shell's density is lipids / area. That density is
+    divided by the species' mean density over the leaflet's lipid-accessible area (farther than PROFILE_ACCESSIBLE_NM
+    from any protein atom): 1 = as common as anywhere in the leaflet, > 1 enriched next to the protein, < 1 depleted.
+    Shells of one frame hold zero or one molecule of a species, so the cumulative ratio is reported too: the species'
+    density within R of the protein over its leaflet mean (a depletion-enrichment index), whose noise falls as R grows
+    and which tends to 1 far from the protein. The first-shell value is the cumulative ratio at PROFILE_FIRST_SHELL_NM.
+    A leaflet without protein atoms at that depth has no profile.
+    """
+    cell = np.array(stage["box_nm"][:2], dtype=float)
+    edges = np.arange(0.0, r_max_nm + dr_nm / 2, dr_nm)
+    nx, ny = max(1, int(round(cell[0] / grid_nm))), max(1, int(round(cell[1] / grid_nm)))
+    gx, gy = np.meshgrid((np.arange(nx) + 0.5) * cell[0] / nx, (np.arange(ny) + 0.5) * cell[1] / ny, indexing="ij")
+    grid = np.column_stack([gx.ravel(), gy.ravel()])
+    cell_area = float(cell[0] * cell[1]) / len(grid)
+    out = {}
+    protein = np.asarray(stage["protein_nm"], dtype=float).reshape(-1, 3)
+    for leaflet in ("lower", "upper"):
+        rows = [r for r in stage["lipids"] if r["leaflet"] == leaflet]
+        if not rows:
+            out[leaflet] = None
+            continue
+        if band_nm is None:
+            low, high = leaflet_slab(stage, leaflet)
+        else:  # the protein's cross-section in the headgroup layer, where the anchors are
+            plane = float(np.median([r["z_nm"] for r in rows]))
+            low, high = plane - band_nm, plane + band_nm
+        inside = protein[(protein[:, 2] >= low) & (protein[:, 2] <= high)]
+        if not len(inside):
+            out[leaflet] = None
+            continue
+        tree = cKDTree(np.mod(inside[:, :2], cell), boxsize=cell)
+        grid_d = tree.query(grid)[0]
+        shell_area = np.histogram(grid_d, edges)[0] * cell_area
+        open_d = grid_d[grid_d >= PROFILE_ACCESSIBLE_NM]
+        accessible = float(len(open_d) * cell_area)
+        within_area = np.array([(open_d < r).sum() for r in edges[1:]], dtype=float) * cell_area  # lipid area within each R
+        first_area = float((open_d < PROFILE_FIRST_SHELL_NM).sum() * cell_area)
+        anchors = np.mod(np.array([[r["x_nm"], r["y_nm"]] for r in rows]), cell)
+        lipid_d = tree.query(anchors)[0]
+        names = np.array([r["resname"] for r in rows])
+        curves = {}
+        for species in ["all"] + sorted(set(names)):
+            mine = lipid_d if species == "all" else lipid_d[names == species]
+            if species != "all" and len(mine) < PROFILE_MIN_SPECIES:
+                continue
+            bulk = len(mine) / accessible if accessible > 0 else float("nan")
+            counts = np.histogram(mine, edges)[0]
+            within = np.array([(mine < r).sum() for r in edges[1:]], dtype=float)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                ratio = np.where(shell_area > 0, counts / shell_area / bulk, np.nan)
+                cumulative = np.where(within_area > 0, within / within_area / bulk, np.nan)
+            first = int((mine < PROFILE_FIRST_SHELL_NM).sum())
+            curves[species] = {"r_nm": 0.5 * (edges[1:] + edges[:-1]), "density_ratio": ratio, "counts": counts, "n": len(mine),
+                               "R_nm": edges[1:].copy(), "cumulative_ratio": cumulative,
+                               "first_shell_n": first,
+                               "first_shell_ratio": round(first / first_area / bulk, 3) if first_area > 0 and bulk > 0 else None,
+                               "well_sampled": len(mine) >= MIN_PAIR_SPECIES}
+        out[leaflet] = {"protein_atoms_in_slab": len(inside), "accessible_area_nm2": round(accessible, 3),
+                        "first_shell_area_nm2": round(first_area, 3), "curves": curves}
     return out

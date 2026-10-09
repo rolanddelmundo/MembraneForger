@@ -3,11 +3,12 @@ import copy
 import sys
 import tempfile
 import unittest
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
 
-from .common import AA_PDB, CG_GRO, DATA, FORCEFIELD, MAPPING, POPC, failure, mf, residue, small_system
+from .common import AA_PDB, CG_GRO, DATA, FORCEFIELD, MAPPING, POPC, REPO, failure, mf, residue, small_system
 
 
 class MartiniClassification(unittest.TestCase):
@@ -437,6 +438,73 @@ class EnergyMinimizationFailure(unittest.TestCase):
         self.assertIn("largest force on atom 2 LEU1:CB", message)
         self.assertIn("POPC2:C22", message)
         self.assertIn("before EM: atom 2 LEU1:CB starts", message)
+
+
+class GroStageMolecules(unittest.TestCase):
+    """The minimized .gro spells GM3 as four CHARMM residues and truncates SAPI25 to SAPI2; the report must still see them
+    as lipids, and must not count them, or anything else it cannot place, as protein."""
+
+    LEAFLET = ("DOPC", "DOPC", "SAPI25", "GLPA")  # per leaflet
+
+    def setUp(self):
+        self.out = Path(tempfile.mkdtemp())
+        toppar = REPO / "forcefield" / "toppar"
+        self.itps = {n: mf.read_itp(toppar / f"{n}.itp") for n in ("DOPC", "SAPI25", "GLPA", "TIP3", "SOD")}
+        atoms, resid = [], 0
+
+        def molecule(name, x, y, sign):
+            nonlocal resid
+            resid += 1
+            spec = self.itps[name]["atoms"]
+            anchor = {"DOPC": "P", "SAPI25": "P", "GLPA": "NF"}.get(name)
+            for k, a in enumerate(spec):
+                z = 5.0 + sign * (2.0 if a["atom"] == anchor else 1.0 + 0.004 * k) if anchor else 8.5
+                atoms.append({"resid": resid, "resname": a["residue"][:5], "atom": a["atom"][:5], "x": x, "y": y, "z": z})
+
+        for i, name in enumerate(("ALA", "LEU", "GLY")):  # a three-residue protein through the bilayer
+            resid += 1
+            atoms += [{"resid": resid, "resname": name, "atom": n, "x": 3.0, "y": 3.0, "z": 4.0 + i} for n in ("N", "CA", "C", "O")]
+        self.protein_atoms = 12
+        for sign in (-1, 1):
+            for j, name in enumerate(self.LEAFLET):
+                molecule(name, 0.5 + 1.2 * j, 1.0 + (sign > 0), sign)
+        molecule("TIP3", 1.0, 1.0, 0)
+        molecule("SOD", 2.0, 2.0, 0)
+        mf.write_gro(atoms, [6.0, 6.0, 10.0], self.out / "em.unverified.gro", "test")
+        self.atoms = atoms
+        (self.out / "PROX.itp").write_text("[ moleculetype ]\nPROX 3\n[ atoms ]\n" + "".join(
+            f"{k + 1} C {a['resid']} {a['resname']} {a['atom']} {k + 1} 0.0 12.0\n" for k, a in enumerate(atoms[:12])))
+        includes = "".join(f'#include "{toppar / n}.itp"\n' for n in ("DOPC", "SAPI25", "GLPA", "TIP3", "SOD"))
+        (self.out / "topol.top").write_text('#include "PROX.itp"\n' + includes + "[ system ]\ntest\n[ molecules ]\nPROX 1\n"
+                                            "DOPC 2\nSAPI25 1\nGLPA 1\nDOPC 2\nSAPI25 1\nGLPA 1\nTIP3 1\nSOD 1\n")
+
+    def check(self, stage, source):
+        self.assertEqual(stage["molecule_source"], source)
+        self.assertEqual(Counter(r["resname"] for r in stage["lipids"]), Counter({"DOPC": 4, "SAP6": 2, "GM3": 2}))  # report labels
+        self.assertEqual(Counter(r["leaflet"] for r in stage["lipids"]), Counter({"lower": 4, "upper": 4}))
+        self.assertEqual(len(stage["protein_nm"]), self.protein_atoms)  # GM3 and PIP2 atoms are not protein
+        glpa = [res for res in stage["residues"] if res[0]["resname"] == "GLPA"]
+        self.assertEqual([len(res) for res in glpa], [183, 183])  # one molecule each, all four parts
+        self.assertEqual(stage["unrecognized"], {})
+
+    def test_molecules_come_from_the_topology(self):
+        self.check(mf.stage_from_gro(self.out / "em.unverified.gro"), "topology topol.top")
+
+    def test_without_a_topology_the_gro_spellings_are_mapped_back(self):
+        (self.out / "topol.top").unlink()
+        self.check(mf.stage_from_gro(self.out / "em.unverified.gro"), "residue names")
+
+    def test_a_topology_for_other_atoms_is_not_trusted(self):
+        (self.out / "topol.top").write_text((self.out / "topol.top").read_text().replace("SOD 1", "SOD 2"))
+        self.check(mf.stage_from_gro(self.out / "em.unverified.gro"), "residue names")
+
+    def test_unknown_molecules_are_reported_not_counted_as_protein(self):
+        (self.out / "topol.top").unlink()
+        atoms = self.atoms + [{"resid": 900, "resname": "XYZ", "atom": "C1", "x": 4.0, "y": 4.0, "z": 5.0}]
+        mf.write_gro(atoms, [6.0, 6.0, 10.0], self.out / "em.unverified.gro", "test")
+        stage = mf.stage_from_gro(self.out / "em.unverified.gro")
+        self.assertEqual(stage["unrecognized"], {"XYZ": 1})
+        self.assertEqual(len(stage["protein_nm"]), self.protein_atoms)
 
 
 class StageRunner(unittest.TestCase):

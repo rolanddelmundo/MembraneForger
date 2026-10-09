@@ -50,13 +50,13 @@ from .trajectory import (
 __all__ = ['frame_series', 'convergence_gate', 'equilibrium_gate', 'write_equilibration_report', 'main']
 
 
-def frame_series(paths: list[Path], settings: Settings) -> dict:
+def frame_series(paths: list[Path], settings: Settings, topology: Path | None = None) -> dict:
     """Per-frame APL, thickness, core hydration and protein orientation from .gro frames, plus anchor and box series."""
     series = {"frame": [], "apl_upper_A2": [], "apl_lower_A2": [], "thickness_A": [], "core_water_percent": [], "tilt_deg": [],
               "depth_A": [], "area_nm2": [], "water_path": [], "interdigitation": []}
     anchors, boxes = [], []
     for k, path in enumerate(paths):
-        stage = stage_from_gro(Path(path), name="equilibrated")
+        stage = stage_from_gro(Path(path), name="equilibrated", topology=topology)  # falls back to names for stripped frames
         measure = measure_packing(stage)
         thickness = bilayer_thickness(stage)
         orientation = protein_orientation(stage["protein_nm"], stage["midplane_nm"]) if len(stage["protein_nm"]) else None
@@ -288,7 +288,7 @@ def main(argv: list | None = None) -> int:
     args.reference_scd = json.loads(args.reference_scd.read_text()) if args.reference_scd else None
     settings = Settings()
     energy = box_series_from_xvg(args.energy) if args.energy else None
-    frames = frame_series(args.frames, settings) if args.frames else None
+    frames = frame_series(args.frames, settings, args.out / "topol.top") if args.frames else None
     times = None
     if frames is not None:
         if args.frame_dt:
