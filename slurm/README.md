@@ -21,6 +21,17 @@ directly, so nothing has to be activated and your shell start-up files are not t
 Each task writes `<name>/` next to the PDB files and a log `mforger_<job>_<task>.log` in the submit folder. The
 script checks the environment, the input file, GROMACS and PPM before it starts, so a mistake fails in seconds.
 
+## Several membranes for one structure
+
+`RUNS=5` in the sbatch script builds each structure five times, once in each of the first five frames of the chosen
+membrane series (`--runs 5`): `<name>/GPR1/em.gro` to `<name>/GPR5/em.gro`, five replicate systems that differ in
+their lipid arrangement. The runs are sequential within the task, so raise `--time` accordingly (about 1 hour per run
+on 8 cores). To run them in parallel instead, give each array task its own frame by name
+(`MEMBRANE=GPR1`, `GPR2`, ...; `python -m membraneforger --list-membranes` lists the 18).
+
+On a cluster whose GROMACS is a module (Gemini: `Gromacs/2026.3-Container`), set `MODULES="Gromacs/2026.3-Container"`
+and `GMX=gmx` in the USER-DEFINED block; the Python environment from `setup.sh` is still used for everything else.
+
 ## PPM 3.0
 
 A structure that is not yet oriented in a membrane (no OPM entry, e.g. a model) is oriented with PPM 3.0, the

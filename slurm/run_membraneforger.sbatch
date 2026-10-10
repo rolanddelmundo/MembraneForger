@@ -24,21 +24,29 @@ set -uo pipefail
 # ================================== USER-DEFINED ==================================
 WORK="${SLURM_SUBMIT_DIR:-$PWD}"           # folder with the input PDBs; results go to $WORK/<name>/
 REPO="$HOME/MembraneForger"                 # the cloned MembraneForger repository (where setup.sh ran)
-GMX="$REPO/env/bin/gmx"                     # GROMACS command (setup.sh installs one here)
+GMX="$REPO/env/bin/gmx"                     # GROMACS command (setup.sh installs one here); with a GROMACS module,
+                                            # name the module in MODULES and set GMX=gmx
+MODULES=""                                  # modules to load first, e.g. "Gromacs/2026.3-Container"
 PPM="$REPO/ppm3_code/immers"                # PPM 3.0 executable with res.lib next to it
 NAMES=(best_model_clean best_model_core_engaged_clean)   # $WORK/<name>.pdb; keep --array above in step
 
 ORIENT="--orient-chain R --nterm-side out"  # chain that crosses the membrane, and the side of its N terminus
                                             # (GPCRs: out). Already oriented (OPM/CHARMM-GUI): "--orientation none"
-MEMBRANE=1                                  # 1 = a random bundled GPR139 frame, 2 = a random KOR frame. Same frame
-                                            # for every model: "$REPO/examples/preeq_cg_cellmem/GPR1_cg_cellmem.gro"
-                                            # and add --embed to EXTRA
+MEMBRANE=1                                  # 1 = a random bundled GPR139 frame, 2 = a random KOR frame, or one frame
+                                            # by name for every model (GPR1 ... GPR9, KOR1 ... KOR9)
+RUNS=1                                      # >1 with MEMBRANE=1 or 2: build each model that many times, once in each
+                                            # of the first RUNS frames of the series ($WORK/<name>/<frame>/em.gro);
+                                            # the runs are sequential, about 1 hour each: raise --time
 EXTRA=""                                    # other options, e.g. "--xy-buffer 2.0" for production systems
 # ==================================================================================
 
 PY="$REPO/env/bin/python"
 task="${SLURM_ARRAY_TASK_ID:-0}"
 die() { echo "ERROR: $*"; exit 1; }
+
+if [ -n "$MODULES" ]; then
+    module load $MODULES || die "module load $MODULES failed"
+fi
 
 # Fail in seconds, not after an hour of backmapping, when something is missing.
 [ -x "$PY" ] || die "$PY not found: run 'bash $REPO/slurm/setup.sh' on a login node first (or fix REPO)"
@@ -60,6 +68,7 @@ version=$($GMX --version 2>/dev/null | grep "GROMACS version") || die "GROMACS c
 read -ra orient <<<"$ORIENT"
 read -ra extra <<<"$EXTRA"
 args=(--aa "$pdb" --cg "$MEMBRANE" --out "$WORK/$name" --gmx "$GMX" --ntomp "${SLURM_CPUS_PER_TASK:-8}")
+[ "${RUNS:-1}" -gt 1 ] && args+=(--runs "$RUNS")
 if [[ " $ORIENT $EXTRA " != *" --orientation none "* && " $ORIENT $EXTRA " != *" --orientation opm "* ]]; then
     [ -x "$PPM" ] || die "PPM 3.0 executable $PPM not found (see $REPO/slurm/README.md)"
     [ -f "$(dirname "$PPM")/res.lib" ] || die "res.lib must sit next to $PPM"
@@ -72,6 +81,10 @@ cd "$REPO" || exit 1
 "$PY" -m membraneforger "${args[@]}" ${orient[@]+"${orient[@]}"} ${extra[@]+"${extra[@]}"}
 status=$?
 
-tail -n 1 "$WORK/$name/membranebuilder.log" 2>/dev/null
+if [ "${RUNS:-1}" -gt 1 ]; then
+    for log in "$WORK/$name"/*/membranebuilder.log; do [ -f "$log" ] && echo "$(basename "$(dirname "$log")"): $(tail -n 1 "$log")"; done
+else
+    tail -n 1 "$WORK/$name/membranebuilder.log" 2>/dev/null
+fi
 echo "exit $status $(date '+%F %T')"
 exit $status

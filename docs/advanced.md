@@ -55,7 +55,8 @@ PPM 3.0 is not bundled. Compile its Fortran source (distributed by the OPM team,
 | A protein much smaller than a GPCR (one transmembrane helix) | add `--embed-site free` and a larger `--xy-buffer`, e.g. 3 |
 | A Martini 3 frame of your own complex | `--cg FILE`: the all-atom structure is fitted onto the frame's coarse-grained protein and no lipid is removed |
 | A Martini 3 membrane you want to use with a different protein | `--cg FILE --embed` |
-| A specific bundled frame for every model | `--cg examples/preeq_cg_cellmem/GPR1_cg_cellmem.gro --embed` |
+| A specific bundled frame, for a repeatable build | `--cg GPR1` (any of `GPR1` … `GPR9`, `KOR1` … `KOR9`; `--list-membranes` lists them) |
+| The same complex in five distinct membranes | `--runs 5`: one build per frame, GPR1 to GPR5 (or KOR1 to KOR5 with `--cg 2`), see [several membranes for one complex](#several-membranes-for-one-complex) |
 
 A bundled membrane is a patch equilibrated around a GPCR. Orientation makes the all-atom side general, but a membrane
 frame of your own complex is a patch around that protein and fits only that protein.
@@ -87,6 +88,23 @@ Eighteen frames (30 µs, Martini 3) of a GPCR in an asymmetric ten-species cell-
 Martini and CHARMM36 names differ for two species. GM3 is `DPG3` in the coarse-grained frames (CER16, BGLC, BGAL and
 ANE5A merged into one molecule) and PIP2 is `SAP6` there and `SAPI25` in the all-atom files.
 [examples/preeq_cg_cellmem/README.md](../examples/preeq_cg_cellmem/README.md) lists the frames in detail.
+
+### Several membranes for one complex
+
+The bundled frames are independent 30 µs replicates of one cell-membrane model, so building the same complex in
+several of them gives replicate systems that differ in their lipid arrangement, not in composition (each frame is
+within 1–2 mole percent of the averages above). `--runs N` does that in one command: the complex is built N times,
+each time in the next frame of the chosen series (GPR1, GPR2, … for `--cg 1`; KOR1, KOR2, … for `--cg 2`), one
+complete, validated system per run in `<out>/<frame>/`, and the command's last line counts the runs that passed.
+
+```bash
+python -m membraneforger --aa complex.pdb --orient-chain R --nterm-side out --runs 5 --out complex_runs
+# complex_runs/GPR1/em.gro ... complex_runs/GPR5/em.gro
+```
+
+The runs are sequential, so five runs take about five times as long as one (`RUNS=5` in
+`slurm/run_membraneforger.sbatch`; raise its time limit). `--cg NAME` builds in one particular frame
+(`--list-membranes` lists them), which is the way to spread the runs over separate jobs.
 
 The bundled frames had been written with their coordinates rotated about z relative to the box, each by its own
 angle. They have been rotated back in place (`examples/align_frames.py`), and MembraneForger checks every frame it

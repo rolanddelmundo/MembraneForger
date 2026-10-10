@@ -781,3 +781,39 @@ class KeptIntermediates(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BundledMembranes(unittest.TestCase):
+    """--cg 1 | 2 | NAME resolve to files in examples/preeq_cg_cellmem/; anything else is the user's own file."""
+
+    def test_every_bundled_frame_has_a_name(self):
+        frames = mf.bundled_frames()
+        self.assertEqual(sorted(frames), [f"GPR{i}" for i in range(1, 10)] + [f"KOR{i}" for i in range(1, 10)])
+        self.assertTrue(all(p.is_file() for p in frames.values()))
+
+    def test_a_frame_name_resolves_in_any_spelling(self):
+        expected = REPO / "examples" / "preeq_cg_cellmem" / "KOR5_cg_cellmem.gro"
+        for spelling in ("KOR5", "kor5", "Kor5", "KOR5.gro", "KOR5_cg_cellmem.gro", " KOR5 "):
+            self.assertEqual(mf.bundled_membrane(spelling), expected, spelling)
+
+    def test_codes_1_and_2_pick_the_receptor_series(self):
+        for _ in range(5):
+            self.assertRegex(mf.bundled_membrane("1").name, r"^GPR[1-9]_cg_cellmem\.gro$")
+            self.assertRegex(mf.bundled_membrane("2").name, r"^KOR[1-9]_cg_cellmem\.gro$")
+
+    def test_runs_take_the_first_frames_of_the_series_in_a_fixed_order(self):
+        self.assertEqual([p.name for p in mf.bundled_series("1")[:5]], [f"GPR{i}_cg_cellmem.gro" for i in range(1, 6)])
+        self.assertEqual([p.name for p in mf.bundled_series("2")], [f"KOR{i}_cg_cellmem.gro" for i in range(1, 10)])
+        self.assertEqual(mf.MAX_RUNS, len(mf.bundled_series("1")))
+
+    def test_a_path_or_custom_file_is_not_bundled(self):
+        for value in ("custom=KOR5.gro", str(CG_GRO), "examples/preeq_cg_cellmem/KOR5_cg_cellmem.gro", "membrane.gro", "3"):
+            self.assertIsNone(mf.bundled_membrane(value), value)
+
+    def test_a_missing_frame_name_is_refused_by_name(self):
+        self.assertIn("no bundled membrane named GPR12", failure(mf.bundled_membrane, "GPR12"))
+
+    def test_listing_names_every_frame(self):
+        text = mf.describe_bundled_membranes()
+        for name in mf.bundled_frames():
+            self.assertIn(f"{name}_cg_cellmem.gro", text)

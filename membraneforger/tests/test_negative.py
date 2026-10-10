@@ -220,6 +220,35 @@ class CommandLineRefusals(unittest.TestCase):
                                     "--mstool-python", self.no_mstool)
         self.assertIn("6WHC_MTZP_cg_cellmem.gro", output)
 
+    def test_a_bundled_frame_can_be_named(self):
+        out = self.tmp / "named"
+        code, output = self.run_cli("--aa", AA_PDB, "--cg", "kor5", "--out", out, "--gmx", self.gmx, "--mstool-python", self.no_mstool)
+        self.assertEqual(code, 1)
+        self.assertIn("KOR5_cg_cellmem.gro", output)  # that frame, and no other, was the input
+        self.assertNotRegex(output, r"(GPR[1-9]|KOR[1-46-9])_cg_cellmem\.gro")
+        self.assertIn("ERROR: mstool:", output)  # the build went on to the mstool stage, i.e. the frame was embedded into
+        self.assertIn("no bundled membrane named GPR12", self.run_cli("--aa", AA_PDB, "--cg", "GPR12")[1])
+        code, output = self.run_cli("--list-membranes")
+        self.assertEqual(code, 0)
+        self.assertIn("KOR9_cg_cellmem.gro", output)
+
+    def test_runs_build_in_several_bundled_membranes(self):
+        out = self.tmp / "runs"
+        code, output = self.run_cli("--aa", AA_PDB, "--cg", "2", "--runs", "3", "--out", out, "--gmx", self.gmx,
+                                    "--mstool-python", self.no_mstool)
+        self.assertEqual(code, 1)  # every run stopped at the mstool stage, after embedding into its own frame
+        for i in (1, 2, 3):
+            self.assertIn(f"run {i} of 3: membrane KOR{i}_cg_cellmem.gro", output)
+            self.assertTrue((out / f"KOR{i}" / "membranebuilder.log").is_file())
+            self.assertTrue((out / f"KOR{i}" / "run_manifest.json").is_file())
+        self.assertNotIn("KOR4_cg_cellmem.gro", output)
+        self.assertEqual(output.count("ERROR: mstool:"), 3)
+        self.assertIn("0 of 3 runs passed; failed: KOR1, KOR2, KOR3", output)
+        self.assertIn("--runs must be between 1 and 9", self.run_cli("--aa", AA_PDB, "--runs", "10")[1])
+        self.assertIn("--runs must be between 1 and 9", self.run_cli("--aa", AA_PDB, "--runs", "0")[1])
+        self.assertIn("use it with --cg 1 or --cg 2", self.run_cli("--aa", AA_PDB, "--cg", "KOR1", "--runs", "2")[1])
+        self.assertIn("use it with --cg 1 or --cg 2", self.run_cli("--aa", AA_PDB, "--cg", CG_GRO, "--runs", "2")[1])
+
     def test_lipid_and_box_options_are_checked(self):
         self.assertIn("unknown lipid XYZ", self.run_cli("--aa", AA_PDB, "--dellipid", "XYZ")[1])
         self.assertIn("unknown lipid", self.run_cli("--aa", AA_PDB, "--addlipid", "DPPC")[1])

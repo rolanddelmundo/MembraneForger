@@ -2,7 +2,9 @@
 
 Eighteen frames of a single GPCR in an asymmetric, ten-species cell-membrane model, each taken at 30 µs of a
 Martini 3 simulation. They are the bundled membranes of MembraneForger: `--cg 1` picks one of the GPR139 frames at random, `--cg 2`
-one of the kappa opioid receptor frames, and a particular frame can be given as `--cg custom=FILE --embed`.
+one of the kappa opioid receptor frames, and `--cg NAME` (for example `--cg KOR5`) a particular frame.
+`python -m membraneforger --list-membranes` lists them, and `--runs N` builds one complex in the first N frames of a
+series, giving N replicate systems that differ in their lipid arrangement.
 
 | Files | Receptor | Replicates |
 |---|---|---|
