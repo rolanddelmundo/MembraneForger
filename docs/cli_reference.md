@@ -14,10 +14,12 @@ are in Å unless the option says nm.
 | Option | Meaning | Default |
 |---|---|---|
 | `--aa PDB` (`--all-atom`) | All-atom protein or protein–ligand structure. The only source of protein and ligand chemistry. | required, unless `--membrane` |
-| `--cg 1\|2\|FILE` (`--coarse-grain`) | The membrane. `1` picks a bundled GPR139 frame at random, `2` a bundled kappa opioid receptor frame. A file (or `custom=FILE`) is a Martini 3 frame of your own complex. | `1` |
-| `--embed` | With `--cg FILE`, embed the protein into that frame's membrane instead of fitting it onto the frame's own protein. Always on for the bundled frames. | off |
+| `--cg 1\|2\|NAME\|FILE` (`--coarse-grain`) | The membrane. `1` picks a bundled GPR139 frame at random, `2` a bundled kappa opioid receptor frame. A name (`GPR1` … `GPR9`, `KOR1` … `KOR9`, any case) picks that bundled frame, so the build is repeatable. A file (or `custom=FILE`) is a Martini 3 frame of your own complex. | `1` |
+| `--runs N` | Build the complex N times, each time in a different bundled membrane of the `--cg 1` or `--cg 2` series (its first N frames, so `--runs 5` with `--cg 1` is GPR1 to GPR5), one system per run in `<out>/<frame>/`. Needs `--cg 1` or `2`; at most 9. | `1` |
+| `--list-membranes` | Print the bundled frames by name and exit. | — |
+| `--embed` | With `--cg FILE`, embed the protein into that frame's membrane instead of fitting it onto the frame's own protein. Always on for the bundled frames (`1`, `2` or a name). | off |
 | `--embed-site hole\|free` | Where an embedded complex goes. `hole` is where the frame's receptor was. `free` is unbroken membrane at least 1 nm from that receptor, for a much smaller protein such as one transmembrane helix. | `hole` |
-| `-o`, `--out DIR` | Output directory. | `./<membrane file stem>_membraneforger` |
+| `-o`, `--out DIR` | Output directory (with `--runs`, the parent of one directory per run). | `./<membrane file stem>_membraneforger`, with `--runs` `./<structure stem>_membraneforger` |
 | `--name NAME` | System name used in logs and in `[ system ]`. | output directory name |
 | `--membrane PDB` | Skip orientation and backmapping and start from an assembled protein + membrane PDB with a `CRYST1` record, for example `<out>/int/membrane.pdb` of an earlier build. Replaces `--aa` and `--cg`. | — |
 
