@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use MembraneForger, please cite this repository, together with Martini 3, mstool, CHARMM36, CHARMM-GUI, CGenFF, GROMACS, and PPM 3.0 or OPM when you use them for orientation."
+title: "MembraneForger"
+version: "2.0.0"
+date-released: "2026-10-10"
+authors:
+  - given-names: "Roland"
+    family-names: "Del Mundo"
+    email: "rdelmundo@coh.org"
+license: "MIT"
+repository-code: "https://github.com/rolanddelmundo/MembraneForger"
+references:
+  - type: software
+    title: "mstool"
+    url: "https://github.com/ksy141/mstool"
+  - type: software
+    title: "GROMACS"
+    url: "https://www.gromacs.org"
+  - type: software
+    title: "Martini force fields"
+    url: "https://github.com/marrink-lab/martini-forcefields"
