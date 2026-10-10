@@ -1,13 +1,5 @@
 # Changelog
 
-## Unreleased
-
-- **`--runs N`** builds the complex in N different bundled membranes, the first N frames of the `--cg 1` or `--cg 2`
-  series, one validated system per run in `<out>/<frame>/`. `RUNS` in `slurm/run_membraneforger.sbatch` passes it.
-- **Bundled frames by name.** `--cg NAME` builds in one particular bundled membrane (`GPR1` … `GPR9`,
-  `KOR1` … `KOR9`) instead of a random one, and `--list-membranes` lists them. `--cg 1`, `--cg 2` and `--cg FILE`
-  are unchanged.
-
 ## 2.0.0 (2026-10-10)
 
 MembraneForger now needs only an all-atom structure. It orients the complex in the membrane, embeds it in a bundled
@@ -27,6 +19,11 @@ This is a major version because two defaults changed. Commands written for 1.0.0
 - **Single-input builds.** `--cg 1` (default) and `--cg 2` embed the complex in a bundled GPR139 or kappa opioid
   receptor membrane: 18 frames of an asymmetric ten-species cell membrane, 30 µs of Martini 3 each, in
   `examples/preeq_cg_cellmem/`. `--cg FILE --embed` embeds into a frame of your own.
+- **`--runs N`** builds the complex in N different bundled membranes, the first N frames of the `--cg 1` or `--cg 2`
+  series, one validated system per run in `<out>/<frame>/`. `RUNS` in `slurm/run_membraneforger.sbatch` passes it.
+- **Bundled frames by name.** `--cg NAME` builds in one particular bundled membrane (`GPR1` … `GPR9`,
+  `KOR1` … `KOR9`) instead of a random one, and `--list-membranes` lists them. `--cg 1`, `--cg 2` and `--cg FILE`
+  are unchanged.
 - **Membrane orientation** from an exact OPM/OPRLM entry or a local PPM 3.0 run, applied to the whole complex as one
   rigid body (`--orientation`, `--orient-chain(s)`, `--nterm-side`, `--pdb-id`, `--ppm-exe`).
 - **`--orient-residues`** orients on a transmembrane segment only, or with `--orientation none` names the embedded
