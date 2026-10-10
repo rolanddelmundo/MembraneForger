@@ -24,7 +24,7 @@ limitations; section 8 the settings.
 ## 1. Inputs
 
 - `--aa complex.pdb`: the all-atom complex, the only source of protein and ligand chemistry.
-- `--cg 1 | 2 | FILE`: a bundled GPR139 or kappa opioid receptor frame (18.3 x 18.3 nm, about 1,300 lipids, ten
+- `--cg 1 | 2 | NAME | FILE`: a bundled GPR139 or kappa opioid receptor frame, random (`1`, `2`) or by name (`GPR1` ... `KOR9`) (18.3 x 18.3 nm, about 1,300 lipids, ten
   species, 30 us of Martini 3), or your own Martini 3 frame.
 - `--orient-chain R` names the chain that spans the membrane; `--nterm-side in|out` is needed by PPM when no OPM
   entry exists. The complete complex moves as one rigid body.

@@ -64,6 +64,9 @@ python -m membraneforger --aa complex.pdb --orient-chain R --nterm-side out --ou
 `--nterm-side` refers to residue 1 as it appears in your file. A receptor that still carries its signal peptide
 usually needs `in`. The [tutorial](docs/membraneforger_tutorial.md) walks through a full build.
 
+To build the same protein in five different membranes, add `--runs 5`: one system per bundled frame, in
+`my_build/GPR1/` to `my_build/GPR5/` (see [Advanced options](docs/advanced.md#several-membranes-for-one-complex)).
+
 ## Inputs and outputs
 
 **Inputs**
@@ -71,7 +74,7 @@ usually needs `in`. The [tutorial](docs/membraneforger_tutorial.md) walks throug
 | Input | Option | Notes |
 |---|---|---|
 | All-atom structure | `--aa complex.pdb` | Required. Keep every chain you want simulated, each with a unique chain ID. Remove water, ions and crystallization additives, and residue insertion codes. Ligands need a topology in `forcefield/toppar/`. Hydrogens are optional. |
-| Membrane | `--cg 1`, `--cg 2` or `--cg FILE` | Optional. `1` (default) and `2` pick a bundled GPR139 or kappa opioid receptor membrane. A file is a Martini 3 frame of your own complex. |
+| Membrane | `--cg 1`, `--cg 2`, `--cg NAME` or `--cg FILE` | Optional. `1` (default) and `2` pick a bundled GPR139 or kappa opioid receptor membrane at random; a name such as `KOR5` picks that bundled frame (`--list-membranes` lists them). A file is a Martini 3 frame of your own complex. |
 | Orientation | `--orient-chain`, `--nterm-side`, `--orientation` | Which chain sits in the membrane and how to orient it. |
 
 **Main outputs** in the `--out` directory

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **`--runs N`** builds the complex in N different bundled membranes, the first N frames of the `--cg 1` or `--cg 2`
+  series, one validated system per run in `<out>/<frame>/`. `RUNS` in `slurm/run_membraneforger.sbatch` passes it.
+- **Bundled frames by name.** `--cg NAME` builds in one particular bundled membrane (`GPR1` … `GPR9`,
+  `KOR1` … `KOR9`) instead of a random one, and `--list-membranes` lists them. `--cg 1`, `--cg 2` and `--cg FILE`
+  are unchanged.
+
 ## 2.0.0 (2026-10-10)
 
 MembraneForger now needs only an all-atom structure. It orients the complex in the membrane, embeds it in a bundled
