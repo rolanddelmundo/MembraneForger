@@ -25,7 +25,7 @@ in the same membrane model, 11.2 × 11.2 nm) used by the tests:
 
 ```bash
 python -m membraneforger --aa examples/preeq_cg_cellmem/6WHC_MTZP_prot-lig.pdb \
-    --cg examples/preeq_cg_cellmem/6WHC_MTZP_cg_cellmem.gro --out example_out
+    --cg examples/preeq_cg_cellmem/6WHC_MTZP_cg_cellmem.gro --orientation none --out example_out
 ```
 
 History of the 18 KOR/GPR frames: as first committed, their coordinates were rotated about z relative to the box line
