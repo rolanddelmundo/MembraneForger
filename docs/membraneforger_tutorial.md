@@ -351,7 +351,28 @@ sialic acid C2 and C4-C8) and the two ceramide trans bonds of every GM3 with the
 `backmap_data/map.dat` (`membraneforger/stereo.py`, the same test as `examples/check_gm3_stereo.py`), and fails the
 build on any inverted centre or cis bond: a configuration never corrects itself in MD. The same test runs on
 `membrane.pdb` right after backmapping, where a wrong GM3 counts as a wrong configuration in the backmap verdict and
-another seed is tried, so a build only reaches the audit with a GM3 that was wrong on every attempt. The GIPR data that motivated this work
+another seed is tried, so a build only reaches the audit with a GM3 that was wrong on every attempt.
+
+Two lipids threaded through each other, or an atom placed on top of another molecule's atom, are the other defects
+minimization cannot repair: steepest descent ends at a finite Fmax on the atom the bonds hold in place (one build ended
+at Fmax 20878 kJ/mol/nm on a DOPC carbon 2.4 A from a POPC carbon, unchanged through 50000 steps). The lipid scan and
+the start-contact check only look at lipids against the solute, so the build now also tests the structure the way
+GROMACS sees it (`membraneforger/contacts.py`): every non-bonded pair (different molecules, or the same molecule more
+than `nrexcl` bonds apart) against `contact_rmin_fraction` (0.6) of its own Lennard-Jones Rmin, taken from the NBFIX
+table or the combination rule, hydrogens included, under periodic boundaries; and every pair of bonds of two molecules
+for a crossing (closest approach below `bond_crossing_nm`, 0.12, inside both bonds). At 0.6 Rmin the repulsion of a
+heavy-atom pair is thousands of kJ/mol/nm, while hydrogen bonds and packed tails stay above about 0.7 Rmin. Pairs of
+two solvent molecules are not judged: `gmx genion` puts an ion on a water's site, whose neighbours then sit at
+water-water distances (0.6-0.7 of the chloride-oxygen Rmin), and a free water or ion relaxes in the first EM steps; a
+solvent molecule caught in the protein or a lipid is what the gate is for. The gates: `boxed.gro` right after
+backmapping (a finding that involves a lipid rejects the seed, like a ring threading), the water and ion placement (a
+water is dropped, an ion placement retried, when any of its atoms is inside the limit of a protein, ligand or lipid
+atom), `solv_ions.gro` before EM (a lipid or solvent finding, or any crossing, stops the build), and `em.unverified.gro`
+after EM (nothing may remain). Every gate's findings are written to `contacts.json`,
+by stage, and an Fmax failure names the culprit's element, its force-field overlaps before and after EM and the stage a
+lipid first clashed in (`em_clash_trace.json`).
+
+The GIPR data that motivated this work
 (backmap 57 / 59, minimized 57 / 59 against a slice at 56 / 59 A^2) are consistent with what the report measures:
 backmapping and minimization keep the lipid count and the cell, hence the leaflet mean; what they change is local.
 
@@ -483,7 +504,8 @@ the build's own checks). Where the thresholds live: `Settings` in `config.py`
 
 `membraneforger/config.py` carries the defaults, each with the reasoning: `box_xy_buffer_nm` (1.0), the slice
 offset search (`slice_optimize_offset`, `slice_offset_search_nm` 0.5, `slice_offset_step_nm` 0.1), the seam
-(`seam_min_bead_nm` 0.30, `seam_hard_core_nm` 0.15, `seam_relax_steps` 400), the gate (`APL_VALIDATE`,
+(`seam_min_bead_nm` 0.30, `seam_hard_core_nm` 0.15, `seam_relax_steps` 400), the force-field contact gate
+(`contact_rmin_fraction` 0.6, `bond_crossing_nm` 0.12), the gate (`APL_VALIDATE`,
 `APL_SLICE_WARNING_PERCENT` 3, `APL_SLICE_TOLERANCE_PERCENT` 5, `RDF_VALIDATE`, the RDF ceilings and
 `slice_window_samples` 12 per axis). On the command line: `--apl-validate yes|no`, `--apl-tolerance PERCENT`,
 `--rdf-validate yes|no`, `--no-slice-offset`, `--xy-buffer NM`.

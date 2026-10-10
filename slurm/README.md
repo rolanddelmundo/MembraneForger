@@ -1,6 +1,9 @@
 # Running MembraneForger on a Slurm cluster
 
 Two files: `setup.sh` (once per user, on a login node) and `run_membraneforger.sbatch` (one array task per structure).
+A third, `test_contact_gates.sbatch`, repeats a failed build with a branch checked out as a worktree beside the
+repository (edit `REPO`, `BRANCH`, `PREVIOUS`; on Gemini it loads `Gromacs/2026.3-Container`), runs the unit tests
+first and prints the new build's result and its `contacts.json` summary.
 
 ```bash
 git clone https://github.com/rolanddelmundo/MembraneForger.git ~/MembraneForger

@@ -380,8 +380,8 @@ class EnergyMinimizationFailure(unittest.TestCase):
     def test_the_culprit_and_its_neighbours_are_named(self):
         text = mf.minimization.force_culprit(self.out, 2)
         self.assertIn("largest force on atom 2 LEU1:CB", text)
-        self.assertIn("POPC2:C22 0.71 A", text)
-        self.assertIn("POPC3:C31 2.00 A", text)
+        self.assertIn("POPC2:C22(C) 0.71 A", text)
+        self.assertIn("POPC3:C31(C) 2.00 A", text)
         self.assertNotIn("TIP3", text)
         self.assertIn("is not in", mf.minimization.force_culprit(self.out, 99))
 
@@ -419,7 +419,7 @@ class EnergyMinimizationFailure(unittest.TestCase):
         self.assertEqual((clean["mine"], clean["partner"], clean["distance_A"]), ("DOPC487:O22", "POPC12:C3", 3.3))
         self.assertTrue(stages["boxed (boxed.gro)"]["clash"])
         self.assertAlmostEqual(stages["boxed (boxed.gro)"]["atom"]["distance_A"], 0.8, places=3)
-        self.assertEqual(trace["first_clash"], {"stage": "boxed (boxed.gro)", "partner": "POPC12:C3"})
+        self.assertEqual(trace["first_clash"], {"stage": "boxed (boxed.gro)", "partner": "POPC12:C3", "mine": "DOPC487:C21", "distance_A": 0.8})
         self.assertIsNone(mf.minimization.trace_clash(self.out, "DOPC", 999)["first_clash"])
 
     def test_validate_em_names_the_first_clash_of_a_lipid_culprit(self):
@@ -427,7 +427,8 @@ class EnergyMinimizationFailure(unittest.TestCase):
         (self.out / "em.log").write_text("Potential Energy  = -1.0e+06\nMaximum force     =  1.59323e+04 on atom 2\n")
         message = failure(mf.validate_em, {"out": self.out, "inputs": {}}, {"names": [a["atom"] for a in atoms]}, {})
         self.assertIn("largest force on atom 2 DOPC487:C21", message)
-        self.assertIn("DOPC487 first clashes in the boxed (boxed.gro) stage, with POPC12:C3", message)
+        self.assertIn("DOPC487 first clashes in the boxed (boxed.gro) stage, DOPC487:C21 0.80 A from POPC12:C3", message)
+        self.assertIn("force-field overlaps of DOPC487 after EM: not checked (no topol.top)", message)
         self.assertTrue((self.out / "em_clash_trace.json").is_file())
 
     def test_validate_em_reports_the_culprit_of_a_finite_fmax(self):

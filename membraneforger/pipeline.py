@@ -14,6 +14,7 @@ from .alignment import map_all_atom_to_cg
 from .audit import audit_run, check_ring_piercing, closest_contact_between
 from .backmapping import assemble_membrane_pdb, backmap_membrane, read_mapping
 from .config import AMINO, DEFAULT_LIGANDS, INTERMEDIATES, RENAME_MOLECULE, Settings
+from .contacts import check_contacts, describe_contacts, record_contacts
 from .embedding import FRAME_PROTEIN_CLEARANCE_NM, check_box_z, edit_lipids, embed_complex, frame_protein_in_slice
 from .martini import bilayer_midplane, classify_cg, make_membrane_whole
 from .membrane_report import MembraneValidation, protein_of_cg_frame, stage_from_gro, stage_from_membrane_pdb
@@ -29,7 +30,7 @@ from .topology import build_topology, lipid_clashes, prepare_structure, repair_s
 from .validation import align_frame_to_box, check_inputs_unchanged, clear_stale_outputs, protect_inputs, read_all_atom, read_cg
 
 __all__ = ['Session', 'StageFailure', 'run_stage', 'prepare_inputs', 'backmap_and_assemble', 'heavy_atom_piercings', 'membrane_piercings',
-           'backmap_verdict', 'refuse_frame_protein_in_slice',
+           'backmap_verdict', 'refuse_frame_protein_in_slice', 'review_contacts', 'refuse_overlaps',
            'build_topology_and_box', 'finish_system', 'build_from_two_inputs', 'build']
 
 # What to look at when a stage fails; {out}, {work} and {int} (the folder of intermediates) are filled in at run time.
@@ -52,6 +53,8 @@ STAGE_HINTS = {
     "ions": "{int}/solv.gro and the gmx genion transcript in {out}/" + LOG_NAME,
     "index": "{out}/topol.top",
     "rings": "{out}/ring_piercing.json and the named atoms in {int}/boxed.gro",
+    "contacts": "{out}/contacts.json (every force-field contact and bond crossing found, by stage) and the named atoms in "
+                "the structure it reports",
     "minimize": "{int}/em.log and the grompp/mdrun transcript in {out}/" + LOG_NAME,
     "validate": "{int}/em.log and {int}/em.unverified.gro (and {out}/em_clash_trace.json for a lipid)",
     "audit": "{out}/audit.json",
@@ -377,7 +380,31 @@ def build_topology_and_box(session: Session, membrane: Path, ligands: set, expec
     rings = run_stage(session, "rings", review_ring_piercing, out, "boxed.gro")
     solute_atoms = sum(n * len(atoms) for _, n, atoms, group in topology["molecules"] if group == "Protein_LIG")
     contact = run_stage(session, "rings", closest_contact_between, out, "boxed.gro", solute_atoms)
-    return {"system": system, "topology": topology, "box": box, "rings": rings, "solute_atoms": solute_atoms, "contact": contact}
+    overlaps = run_stage(session, "contacts", review_contacts, session, "boxed.gro", solute_atoms, "boxed")
+    return {"system": system, "topology": topology, "box": box, "rings": rings, "solute_atoms": solute_atoms, "contact": contact,
+            "overlaps": overlaps}
+
+
+def review_contacts(session: Session, structure: str, solute_atoms: int, stage: str) -> dict:
+    """Run the force-field contact and bond-crossing check on one structure, save it to contacts.json and log it."""
+    out = session.out
+    report = check_contacts(out, structure, solute_atoms, session.settings)
+    record_contacts(out, stage, report)
+    found = len(report["contacts"]) + len(report["crossings"])
+    if found:
+        log(out, f"{structure}: {describe_contacts(report, limit=2)} (contacts.json)", "WARN")
+    else:
+        log(out, f"{structure}: no non-bonded pair inside {session.settings.contact_rmin_fraction:g} of its LJ Rmin and no bond "
+                 f"crossing among {report['atoms']} atoms", "PASS")
+    return report
+
+
+def refuse_overlaps(report: dict, classes: tuple, when: str) -> None:
+    """Stop the build when the contact check found an overlap of the given classes, or a bond crossing of any class."""
+    contacts = [c for c in report["contacts"] if c["class"] in classes]
+    if contacts or report["crossings"]:
+        kinds = tuple(sorted(set(classes) | {c["class"] for c in report["crossings"]}))
+        raise SystemExit(f"{describe_contacts(report, kinds)} {when}; minimization cannot be trusted to separate them (contacts.json)")
 
 
 def finish_system(session: Session, staged: dict) -> str:
@@ -394,15 +421,18 @@ def finish_system(session: Session, staged: dict) -> str:
     else:
         log(out, f"no bond threads any of {rings['rings_checked']} rings before EM", "PASS")
     record["disulfides"] = {label: pairs for label, pairs in system["disulfides"].items() if pairs}
-    run_stage(session, "solvate", solvate_system, system, topology, gmx, box)
-    run_stage(session, "ions", add_ions, system, topology, gmx, box)
+    run_stage(session, "solvate", solvate_system, system, topology, gmx, box, session.settings)
+    run_stage(session, "ions", add_ions, system, topology, gmx, box, session.settings)
+    overlaps = run_stage(session, "contacts", review_contacts, session, "solv_ions.gro", staged["solute_atoms"], "solv_ions")
+    record["contacts_before_em"] = {k: overlaps[k] for k in ("contacts_by_class", "crossings_by_class")}
+    run_stage(session, "contacts", refuse_overlaps, overlaps, ("membrane", "solvent"), "before EM")
     index = run_stage(session, "index", make_index, out, topology)
     log(out, "index_ini.ndx: " + ", ".join(f"{k} {v}" for k, v in index.items()))
     record["box_nm"] = box
     record["topology"] = {"molecules": [[mol, n] for mol, n, _, _ in topology["molecules"]],
                           "atoms": len(topology["names"]), "net_charge": round(topology["charge"], 4), "index_groups": index}
     run_stage(session, "minimize", run_em, out, topology, gmx, session.ntomp, session.nsteps)
-    record["em"] = run_stage(session, "validate", validate_em, system, topology, index)
+    record["em"] = run_stage(session, "validate", validate_em, system, topology, index, session.settings)
     log(out, f"EM validated: {record['em']['summary']}", "PASS")
     if session.analysis is not None:
         minimized = stage_from_gro(out / "em.unverified.gro", topology=out / "topol.top")
@@ -431,13 +461,19 @@ def backmap_verdict(staged: dict, review: dict, settings: Settings, last: bool) 
     heavy = heavy_atom_piercings({"pierced": pierced})
     wrong = review.get("chiral_well_formed", 0) + review.get("cistrans", 0) + review.get("gm3_sugar_centres_or_cis_bonds", 0)
     contact = staged["contact"]
+    overlaps = staged.get("overlaps") or {"contacts": [], "crossings": []}
+    membrane_overlaps = [c for c in overlaps["contacts"] + overlaps["crossings"] if c["class"] == "membrane"]
     counts = {"heavy_atom_ring_threadings": len(heavy), "hydrogen_ring_threadings": len(pierced) - len(heavy),
               "solute_internal_ring_threadings": len(staged["rings"]["pierced"]) - len(pierced),
+              "membrane_contact_violations": sum(c["class"] == "membrane" for c in overlaps["contacts"]),
+              "membrane_bond_crossings": sum(c["class"] == "membrane" for c in overlaps["crossings"]),
               "wrong_stereocentres_or_double_bonds": wrong, "closest_membrane_solute_contact_nm": contact["distance_nm"]}
     problem, stage = None, "rings"
     if heavy:
         problem = (f"{'-'.join(heavy[0]['bond'])} threads the ring of {heavy[0]['ring'][0]} "
                    f"({len(heavy)} heavy-atom threading(s) involving the membrane; minimization cannot undo this)")
+    elif membrane_overlaps:  # lipids on top of each other or of the solute, by the force field's own measure
+        problem, stage = describe_contacts(overlaps, ("membrane",), limit=2), "contacts"
     elif wrong:
         problem, stage = f"{wrong} lipid stereocentre(s) or double bond(s) have the wrong configuration", "backmap"
     elif contact["distance_nm"] < settings.min_start_contact_nm:
@@ -538,6 +574,7 @@ def build(session: Session, all_atom: Path | None, coarse_grain: Path | None, me
         else:
             staged = build_topology_and_box(session, membrane, set(DEFAULT_LIGANDS), None, hashes)
             run_stage(session, "rings", refuse_threaded_rings, heavy_atom_piercings(staged["rings"]), 0)
+            run_stage(session, "contacts", refuse_overlaps, staged["overlaps"], ("membrane",), f"in {membrane.name}")
             if staged["contact"]["distance_nm"] < session.settings.min_start_contact_nm:
                 contact = staged["contact"]
                 run_stage(session, "rings", refuse_backmap, f"{contact['atoms'][0]} starts {10 * contact['distance_nm']:.2f} A "

@@ -25,6 +25,7 @@ from .solvation import *
 from .minimization import *
 from .stereo import *
 from .audit import *
+from .contacts import *
 from .reporting import *
 from .pipeline import *
 from .cli import *
