@@ -7,6 +7,9 @@
 - **Bundled frames by name.** `--cg NAME` builds in one particular bundled membrane (`GPR1` … `GPR9`,
   `KOR1` … `KOR9`) instead of a random one, and `--list-membranes` lists them. `--cg 1`, `--cg 2` and `--cg FILE`
   are unchanged.
+- **Portable Slurm script.** `slurm/run_membraneforger.sbatch` keeps every cluster-specific value in three marked
+  blocks (scheduler, software, this run) with working defaults, so only those are edited; submitted as is it builds
+  the bundled 6WHC example. `slurm/examples/gemini_6WHC.sbatch` is the filled-in Gemini version.
 
 ## 2.0.0 (2026-10-10)
 

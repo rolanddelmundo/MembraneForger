@@ -37,7 +37,8 @@ pip install numpy scipy networkx "pandas<3" openmm mstool==0.3.9 matplotlib
 ```
 
 On a Slurm cluster, `bash slurm/setup.sh` builds a self-contained environment with GROMACS instead, and
-`slurm/run_membraneforger.sbatch` runs one structure per array task. See [slurm/README.md](slurm/README.md).
+`slurm/run_membraneforger.sbatch` runs one structure per array task; its three marked blocks (scheduler, software,
+this run) are all that needs filling in for any cluster. See [slurm/README.md](slurm/README.md).
 
 ## Quick start
 
