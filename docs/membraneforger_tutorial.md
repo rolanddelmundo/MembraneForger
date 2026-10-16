@@ -183,6 +183,12 @@ within 3.0 A becomes a bond and a pair stretched beyond 3.0 A in a model is miss
 the manifest against what you expect); a disulfide between two chains is refused, because each chain gets its own
 topology; a cysteine within 3.0 A of two others is refused as ambiguous.
 
+`--exclude-disulfide CHAIN:RESID-CHAIN:RESID` answers the first of those limitations: the named pair is left
+reduced although its SG atoms are within 3.0 A, so a close contact a predicted model produces where the chemistry
+does not support a bond does not become one. pdb2gmx is run with `-ss` for that chain and told not to link it, and
+both cysteines are built as reduced CYS with their HG1 hydrogen; coordinates are untouched. See
+[advanced options](advanced.md#disulfides).
+
 ## 5. Validation
 
 ### 5.1 What is measured, and where

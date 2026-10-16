@@ -78,6 +78,9 @@ class Session:
     bilayer_z_a: float | None = None  # z of the bilayer centre in the all-atom input (A) when embedding without orientation
     delete_lipids: list = field(default_factory=list)
     add_lipid: str | None = None
+    # Cysteine pairs (chain, resid, resid) kept reduced although their SG atoms sit within DISULFIDE_MAX_A:
+    # a contact the model predicts but the chemistry does not support (--exclude-disulfide).
+    exclude_disulfides: tuple = ()
     work: Path | None = None
     timings: dict = field(default_factory=dict)
     record: dict = field(default_factory=dict)
@@ -355,7 +358,8 @@ def build_topology_and_box(session: Session, membrane: Path, ligands: set, expec
     out, gmx = session.out, session.gmx
     work = session.work / f"topology_{attempt}"  # pdb2gmx scratch; one per backmapping attempt
     work.mkdir()
-    system = run_stage(session, "structure", prepare_structure, membrane, out, session.name, session.forcefield, ligands)
+    system = run_stage(session, "structure", prepare_structure, membrane, out, session.name, session.forcefield, ligands,
+                       session.exclude_disulfides)
     system["inputs"] = {**hashes, membrane: system["sha"]}
     log(out, f"{membrane.name}: {system['natoms']} atoms, chains {','.join(system['chains'])}, sha256 {system['sha'][:12]}; "
              f"dropped altloc B of {', '.join(system['alternates']) or 'none'}")
@@ -394,6 +398,8 @@ def finish_system(session: Session, staged: dict) -> str:
     else:
         log(out, f"no bond threads any of {rings['rings_checked']} rings before EM", "PASS")
     record["disulfides"] = {label: pairs for label, pairs in system["disulfides"].items() if pairs}
+    if system["excluded_disulfides"]:
+        record["excluded_disulfides"] = [list(spec) for spec in system["excluded_disulfides"]]
     run_stage(session, "solvate", solvate_system, system, topology, gmx, box)
     run_stage(session, "ions", add_ions, system, topology, gmx, box)
     index = run_stage(session, "index", make_index, out, topology)

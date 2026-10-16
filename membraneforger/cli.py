@@ -6,6 +6,7 @@
 import argparse
 import os
 import random
+import re
 import shutil
 import sys
 from dataclasses import replace
@@ -18,7 +19,8 @@ from .pipeline import Session, build
 from .runtools import find_gromacs
 
 __all__ = ['BUNDLED_MEMBRANES', 'MAX_RUNS', 'bundled_frames', 'bundled_membrane', 'bundled_series', 'describe_bundled_membranes',
-           'make_parser', 'locate_forcefield', 'locate_data', 'parse_chains', 'parse_box', 'orientation_request', 'run_sessions', 'main']
+           'make_parser', 'locate_forcefield', 'locate_data', 'parse_chains', 'parse_box', 'parse_disulfide_pair',
+           'orientation_request', 'run_sessions', 'main']
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 BUNDLED_DIR = REPOSITORY / "examples" / "preeq_cg_cellmem"
@@ -169,6 +171,9 @@ def make_parser() -> argparse.ArgumentParser:
                         help=f"remove every molecule of this lipid (repeatable): {', '.join(LIPID_NAMES)}")
     parser.add_argument("--addlipid", metavar="LIPID",
                         help=f"turn the lipids removed by --dellipid into this lipid instead ({', '.join(CONVERTIBLE)})")
+    parser.add_argument("--exclude-disulfide", action="append", default=[], metavar="CHAIN:RESID-CHAIN:RESID",
+                        help="keep this cysteine pair reduced although its SG atoms are close enough to be bonded "
+                             "(repeatable), in the input's own numbering, e.g. A:860-A:1252")
     parser.add_argument("-o", "--out", type=Path, help="output directory (default: ./<coarse-grain stem>_membraneforger)")
     parser.add_argument("--name", help="system name for logs and [ system ] (default: output directory name)")
     parser.add_argument("--toppar", type=Path, default=os.environ.get("MEMBRANEFORGER_TOPPAR"),
@@ -244,6 +249,19 @@ def locate_data(requested: Path | None) -> Path:
     return Path(requested or next((p for p in candidates if p.is_dir()), candidates[0])).resolve()
 
 
+def parse_disulfide_pair(spec: str) -> tuple[str, int, int]:
+    """Read one --exclude-disulfide CHAIN:RESID-CHAIN:RESID into (chain, lower resid, higher resid)."""
+    match = re.fullmatch(r"\s*(\S):(\d+)\s*-\s*(\S):(\d+)\s*", spec)
+    if not match:
+        raise SystemExit(f"--exclude-disulfide {spec}: expected CHAIN:RESID-CHAIN:RESID, e.g. A:860-A:1252")
+    left, a, right, b = match.group(1), int(match.group(2)), match.group(3), int(match.group(4))
+    if left != right:
+        raise SystemExit(f"--exclude-disulfide {spec}: both cysteines must be in the same chain")
+    if a == b:
+        raise SystemExit(f"--exclude-disulfide {spec}: names one residue twice")
+    return (left, min(a, b), max(a, b))
+
+
 def main(argv: list | None = None) -> int:
     """Run one build from command-line arguments and return its exit code."""
     parser = make_parser()
@@ -283,6 +301,10 @@ def main(argv: list | None = None) -> int:
     try:
         for name in args.dellipid + ([args.addlipid] if args.addlipid else []):
             lipid_name(name)
+    except SystemExit as exc:
+        parser.error(str(exc))
+    try:
+        exclude_disulfides = tuple(parse_disulfide_pair(spec) for spec in args.exclude_disulfide)
     except SystemExit as exc:
         parser.error(str(exc))
     try:
@@ -328,7 +350,7 @@ def main(argv: list | None = None) -> int:
     session = Session(out=out, name=args.name or out.name, gmx=gmx, forcefield=forcefield, data=data, python=python,
                       ntomp=args.ntomp, nsteps=args.nsteps, settings=settings, embed=embed, embed_site=args.embed_site,
                       box_a=box, bilayer_z_a=args.bilayer_z, delete_lipids=list(args.dellipid), add_lipid=args.addlipid,
-                      orientation=orientation)
+                      exclude_disulfides=exclude_disulfides, orientation=orientation)
     resolved = [p.resolve() if p else None for p in (args.all_atom, args.coarse_grain, args.membrane)]
     if args.runs > 1:
         return run_sessions(session, resolved[0], frames, [sys.executable] + sys.argv)
