@@ -49,7 +49,8 @@ __all__ = ['prepare_structure', 'find_disulfides', 'repair_structure', 'set_disu
            'patch_caps', 'write_posre', 'check_disulfides', 'build_protein', 'place_h', 'h_parents', 'check_h_bonds',
            'match_by_name', 'match_by_graph', 'match_glpa', 'molecule_itp', 'forcefield_includes', 'build_topology']
 
-def prepare_structure(source: Path, out: Path, name: str, forcefield: Path, ligands: set) -> dict:
+def prepare_structure(source: Path, out: Path, name: str, forcefield: Path, ligands: set,
+                      exclude_disulfides: tuple = ()) -> dict:
     """Split the input into protein chains and other residues (ligands, lipids), keeping altloc A."""
     atoms, cryst1 = read_pdb(source)
     if not cryst1:
@@ -72,16 +73,29 @@ def prepare_structure(source: Path, out: Path, name: str, forcefield: Path, liga
     return {"source": source, "out": out, "name": name, "sha": sha256(source), "cryst1": cryst1, "chains": chains,
             "others": others, "natoms": len(atoms) - len(dropped),
             "alternates": sorted({f"{a['chain']}:{a['resname']}{a['resid']}" for a in dropped}),
-            "disulfides": find_disulfides(chains), "forcefield": forcefield, "ligands": set(ligands)}
+            "disulfides": find_disulfides(chains, exclude_disulfides), "excluded_disulfides": tuple(exclude_disulfides),
+            "forcefield": forcefield, "ligands": set(ligands)}
 
 
-def find_disulfides(chains: dict) -> dict[str, list[tuple[int, int]]]:
-    """Disulfides are read from the structure itself: any two cysteine SG atoms within DISULFIDE_MAX_A are bonded."""
+def find_disulfides(chains: dict, exclude: tuple = ()) -> dict[str, list[tuple[int, int]]]:
+    """Disulfides are read from the structure itself: any two cysteine SG atoms within DISULFIDE_MAX_A are bonded.
+
+    A pair named in exclude as (chain, resid, resid) stays reduced: it is not bonded, not repaired and not expected
+    in the topology. Both of its cysteines remain free to pair with any other cysteine they are close to.
+    """
     sg = [(label, a) for label, chain in chains.items() for a in chain if a["resname"] == "CYS" and a["atom"] == "SG"]
+    cysteines = {(label, a["resid"]) for label, a in sg}
+    excluded = {(label, min(x, y), max(x, y)) for label, x, y in exclude}
+    unknown = [spec for spec in sorted(excluded) if {(spec[0], spec[1]), (spec[0], spec[2])} - cysteines]
+    if unknown:
+        raise SystemExit("--exclude-disulfide names residues that are not both cysteines of the input: "
+                         + ", ".join(f"{c}:{x}-{c}:{y}" for c, x, y in unknown))
     found: dict[str, list[tuple[int, int]]] = {label: [] for label in chains}
     partner: dict[tuple, tuple] = {}
     for (la, a), (lb, b) in itertools.combinations(sg, 2):
         if dist(a, b) >= DISULFIDE_MAX_A:
+            continue
+        if la == lb and (la, min(a["resid"], b["resid"]), max(a["resid"], b["resid"])) in excluded:
             continue
         ka, kb = (la, a["resid"]), (lb, b["resid"])
         if la != lb:
@@ -303,19 +317,27 @@ def split_caps(residues: list) -> tuple[list[dict], dict, dict]:
     return body, ncap, ccap
 
 
-def run_pdb2gmx(cmd: list[str], cwd: Path, env: dict, selections: list[str], timeout: int = 900) -> tuple[int, str]:
-    """Drive pdb2gmx through a pty, picking each terminus menu entry by its label."""
+def run_pdb2gmx(cmd: list[str], cwd: Path, env: dict, selections: list[str], keep_disulfides: set | None = None,
+                timeout: int = 900) -> tuple[int, str]:
+    """Drive pdb2gmx through a pty, picking each terminus menu entry by its label.
+
+    keep_disulfides answers the -ss link prompts by the residue pair each one names, never by its order: a pair in
+    the set is bonded ("y") and every other prompted pair is left reduced ("n"). None means -ss was not asked for.
+    """
     menu = re.compile(r"^\s*(\d+)\s*:\s*(.+?)\s*$", re.M)
+    link = re.compile(r"Link CYS-(\d+) SG-\d+ and CYS-(\d+) SG-\d+ \(y/n\)")
     master, slave = pty.openpty()
     proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdin=slave, stdout=slave, stderr=slave, close_fds=True)
     os.close(slave)
     out, sent, menu_start = "", 0, 0
+    answered: set[tuple[int, int]] = set()
     deadline = time.time() + timeout
     try:
         while True:
             if time.time() > deadline:
                 proc.kill()
-                raise SystemExit("pdb2gmx timed out waiting for a terminus menu")
+                raise SystemExit("pdb2gmx timed out waiting for a prompt (terminus menu, or a -ss link question whose "
+                                 "wording this GROMACS does not share)")
             if not select.select([master], [], [], 0.2)[0]:
                 if proc.poll() is not None:
                     break
@@ -327,6 +349,13 @@ def run_pdb2gmx(cmd: list[str], cwd: Path, env: dict, selections: list[str], tim
             if not chunk:
                 break
             out += chunk
+            if keep_disulfides is not None:
+                for a, b in link.findall(out):
+                    pair = (min(int(a), int(b)), max(int(a), int(b)))
+                    if pair in answered:
+                        continue
+                    answered.add(pair)
+                    os.write(master, b"y\n" if pair in keep_disulfides else b"n\n")
             if sent < len(selections) and "terminus type" in out[menu_start:].lower():
                 choice = [n for n, label in menu.findall(out[menu_start:][-4000:]) if label.lower() == selections[sent].lower()]
                 if choice:
@@ -480,10 +509,15 @@ def build_protein(system: dict, label: str, work: Path, toppar: Path, gmx: str, 
     notes += [add_lipidated_residue(work, name, body, system["forcefield"]) for name in sorted(lipidated)]
     pdb_in, pdb_out, top = work / f"{mol}_in.pdb", work / f"{mol}.pdb", work / f"{mol}.top"
     write_pdb(body, pdb_in)
+    # -ss asks before linking each pair, and run_pdb2gmx answers by residue pair. Only chains with an excluded pair
+    # take that path; every other chain keeps pdb2gmx's automatic linking, as every validated build did.
+    excluded = sorted((x, y) for c, x, y in system["excluded_disulfides"] if c == label)
+    options = (["-ss"] if excluded else []) + ([] if lipidated else ["-ignh", "-missing"])
     cmd = gmx.split() + ["pdb2gmx", "-f", str(pdb_in), "-o", str(pdb_out), "-p", str(top), "-i", str(work / f"{mol}_pr.itp"),
-                         "-ff", "charmm36", "-water", "tip3p", "-ter"] + ([] if lipidated else ["-ignh", "-missing"])
+                         "-ff", "charmm36", "-water", "tip3p", "-ter"] + options
     rc, transcript = run_pdb2gmx(cmd, work, dict(os.environ, GMXLIB=str(work), GMX_MAXBACKUP="-1"),
-                                 [TERMINUS_MENU[nterm], TERMINUS_MENU[cterm]])
+                                 [TERMINUS_MENU[nterm], TERMINUS_MENU[cterm]],
+                                 keep_disulfides=set(system["disulfides"][label]) if excluded else None)
     log(out, f"$ {' '.join(cmd)}\n{transcript}", "DEBUG")
     if rc != 0:
         errors = re.findall(r"(?s)Fatal error:\s*\n(.*?)\n\s*\n", transcript)
@@ -498,6 +532,8 @@ def build_protein(system: dict, label: str, work: Path, toppar: Path, gmx: str, 
         itp.write_text(moleculetype_block(top, mol))
     write_posre(itp, mol)
     check_disulfides(itp, mol, system["disulfides"][label])
+    if excluded:
+        notes.append(f"{mol}: kept reduced " + ", ".join(f"CYS{x}/CYS{y}" for x, y in excluded))
     if system["disulfides"][label]:
         notes.append(f"{mol}: disulfides " + ", ".join(f"CYS{a}-CYS{b}" for a, b in sorted(system["disulfides"][label])))
     topology_atoms = read_itp(itp)["atoms"]

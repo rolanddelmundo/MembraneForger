@@ -176,6 +176,18 @@ Disulfides are taken from the input geometry: two cysteine SG atoms within 3.0 �
 are not read. The pairs are listed in `run_manifest.json` (`disulfides`) and re-measured after minimization. A
 disulfide between two chains is refused. See [tutorial 4.1](membraneforger_tutorial.md#41-disulfides).
 
+A pair close enough to be bonded that should nevertheless stay reduced — a contact a predicted model produces where
+the chemistry does not support a disulfide, such as two cysteines of a cytosolic protein — is named with
+`--exclude-disulfide CHAIN:RESID-CHAIN:RESID`, in the input's own numbering, repeatable:
+
+    --exclude-disulfide A:860-A:1252
+
+That pair is then not bonded, not repaired to 2.03 Å and not expected in the topology: `pdb2gmx` is asked before
+linking (`-ss`) and told to leave it, so both cysteines are built as reduced CYS carrying their HG1 thiol hydrogen.
+Every other pair of the same chain is still bonded, and a chain with no excluded pair is built exactly as before.
+Coordinates are never changed, so the two sulfurs start where the model put them and the minimization relaxes the
+contact. The exclusions appear in the build log and in `run_manifest.json` (`excluded_disulfides`).
+
 ## Using MembraneForger from Python
 
 `membraneforger/example.py` shows how to call the build from Python, and
