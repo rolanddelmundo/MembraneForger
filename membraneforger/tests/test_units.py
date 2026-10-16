@@ -3,11 +3,12 @@ import copy
 import sys
 import tempfile
 import unittest
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
 
-from .common import AA_PDB, CG_GRO, FORCEFIELD, MAPPING, POPC, failure, mf, residue, small_system
+from .common import AA_PDB, CG_GRO, DATA, FORCEFIELD, MAPPING, POPC, REPO, failure, mf, residue, small_system
 
 
 class MartiniClassification(unittest.TestCase):
@@ -130,6 +131,59 @@ class MstoolCompatibility(unittest.TestCase):
         self.assertEqual(malformed_chirals([good], bonds), [])
         self.assertEqual(malformed_chirals([good, bad], bonds), ["C2"])
 
+    def test_gm3_chirality_definitions_are_well_formed_and_correct(self):
+        """Every GM3 definition names four neighbours of its centre and, on the sugars, reads correct on a reference."""
+        import json
+        import xml.etree.ElementTree as ET
+
+        from membraneforger.mstool_worker import malformed_chirals
+        gm3_block = (DATA / "map.dat").read_text().split("RESI GM3")[1].split("RESI ")[0]
+        block = gm3_block.split("[ chiral ]")[1].split("[")[0]
+        chirals = [line.split() for line in block.splitlines() if line.strip()]
+        gm3 = next(r for r in ET.parse(DATA / "GM3.xml").getroot().iter("Residue") if r.get("name") == "GM3")
+        bonds = [(b.get("atomName1"), b.get("atomName2")) for b in gm3.iter("Bond")]
+        self.assertEqual(len(chirals), 19)
+        self.assertEqual(malformed_chirals(chirals, bonds), [])
+        reference = json.loads((Path(__file__).parent / "data/gm3_sugar_reference.json").read_text())["sugars"]
+        checked = 0
+        for target, centre, c, d, e in chirals:
+            sugar = next((m for m in reference.values() if all(n in m for n in (target, centre, c, d, e))), None)
+            if sugar is None:  # ceramide centres and the C22 methylene (prochiral H names) are not on the sugar models
+                continue
+            t, x, p, q, r = (np.array(sugar[n]) for n in (target, centre, c, d, e))
+            self.assertGreater((t - x) @ np.cross(q - p, r - q), 0, f"GM3 {centre} reads flipped on the reference")
+            checked += 1
+        self.assertEqual(checked, 16)  # 5 glucose, 5 galactose, 6 sialic acid centres
+        # GM3 carries the same ceramide as PSM: its C4=C5 double bond and amide need the same trans definitions
+        trans = lambda blk: sorted(tuple(l.split()) for l in blk.partition("[ trans ]")[2].split("[")[0].splitlines() if l.strip())
+        psm_block = (DATA / "map.dat").read_text().split("RESI PSM")[1].split("RESI ")[0]
+        self.assertEqual(trans(gm3_block), trans(psm_block))
+        for a, b, c, d in trans(gm3_block):
+            self.assertTrue({frozenset((a, b)), frozenset((b, c)), frozenset((c, d))} <= {frozenset(x) for x in bonds})
+
+    def test_gm3_linkage_beads_hold_the_linked_atoms(self):
+        """The Martini 3 DPG3 bonds between residues must join map.dat beads that contain the glycosidic bond."""
+        import re
+        import xml.etree.ElementTree as ET
+        block = (DATA / "map.dat").read_text().split("RESI GM3")[1].split("RESI ")[0].split("[ chiral ]")[0]
+        beads, current = {}, None
+        for line in block.splitlines():
+            found = re.match(r"\[\s*(\S+)\s*\]", line.strip())
+            if found:
+                current = beads.setdefault(found.group(1), [])
+            elif current is not None:
+                current += line.split()
+        gm3 = next(r for r in ET.parse(DATA / "GM3.xml").getroot().iter("Residue") if r.get("name") == "GM3")
+        bonds = {frozenset((b.get("atomName1"), b.get("atomName2"))) for b in gm3.iter("Bond")}
+        rename = {(res, cg): aa for res, names in mf.MARTINI3_GLYCOLIPIDS["GM3"] for cg, aa in names.items()}
+        # gm3_final.itp (DPG3, martini3001 v1.0): bonds GLC A-CER AM1, GLC B-GAL A, GAL B-NMC A
+        for (r1, b1), (r2, b2), link in ((("GLC", "A"), ("CER", "AM1"), ("O1", "C1S")),
+                                         (("GLC", "B"), ("GAL", "A"), ("O4", "C7")),
+                                         (("GAL", "B"), ("NMC", "A"), ("O10", "C15"))):
+            first, second = beads[rename[(r1, b1)]], beads[rename[(r2, b2)]]
+            self.assertIn(frozenset(link), bonds)
+            self.assertTrue(link[0] in first and link[1] in second, f"{r1} {b1}-{r2} {b2} does not hold {'-'.join(link)}")
+
     def test_worker_declares_tested_versions(self):
         self.assertIn("0.3.9", mf.backmapping.TESTED_MSTOOL)
 
@@ -162,6 +216,15 @@ class RingPiercing(unittest.TestCase):
         staged = {"rings": {"pierced": pierced}, "solute_atoms": 8,
                   "contact": {"distance_nm": contact, "atoms": ["POPS:H13Y(atom 20)", "ILE:CD(atom 3)"]}}
         return mf.backmap_verdict(staged, review or {}, mf.Settings(), last)
+
+    def test_backmap_verdict_counts_gm3_sugar_centres_as_wrong_configurations(self):
+        clean = self.verdict([], review={"gm3_sugar_centres_or_cis_bonds": 0})
+        self.assertTrue(clean["accept"])
+        verdict = self.verdict([], review={"gm3_sugar_centres_or_cis_bonds": 2})
+        self.assertFalse(verdict["accept"])
+        self.assertEqual(verdict["stage"], "backmap")
+        self.assertEqual(verdict["counts"]["wrong_stereocentres_or_double_bonds"], 2)
+        self.assertIn("wrong configuration", verdict["problem"])
 
     def test_backmap_verdict(self):
         poke = {"ring": ["PHE:CG(atom 5)"], "bond": ["DOPE:C25(atom 9)", "DOPE:H5R(atom 10)"], "ring_atoms": [5, 6], "bond_atoms": [9, 10]}
@@ -235,6 +298,213 @@ class AuditTopology(unittest.TestCase):
         self.assertEqual(len(atoms), 134)
         self.assertAlmostEqual(sum(q for _, q in atoms), 0.0, places=4)
         self.assertEqual(len(mf.itp_bonds([FORCEFIELD / "toppar/POPC.itp"])["POPC"]), 133)
+
+
+class AuditDihedralRestraints(unittest.TestCase):
+    """CHARMM-GUI dihedral restraints: configurations and double bonds fail the audit, rings out of their chair are reported."""
+
+    def test_glpa_restraints_are_parsed(self):
+        rows = mf.itp_dihedral_restraints([FORCEFIELD / "toppar/GLPA.itp"])["GLPA"]
+        targets = [t for _, t in rows]
+        self.assertEqual(len(rows), 23)
+        self.assertEqual(sum(abs(abs(t) - 120) < 1 for t in targets), 4)  # ceramide C2S, C3S; Neu5Ac C7, C8
+        self.assertEqual(sum(abs(abs(t) - 60) < 1 for t in targets), 18)  # three pyranose chairs
+        self.assertEqual(sum(abs(t) == 180 for t in targets), 1)  # sphingosine C4=C5 trans
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "toppar").mkdir()
+            (Path(tmp) / "toppar/POPC.itp").write_text((FORCEFIELD / "toppar/POPC.itp").read_text())
+            self.assertTrue(mf.has_dihedral_restraints(Path(tmp)))
+            (Path(tmp) / "toppar/POPC.itp").write_text("[ moleculetype ]\nX 1\n")
+            self.assertFalse(mf.has_dihedral_restraints(Path(tmp)))
+
+    def test_dihedrals_use_the_minimum_image(self):
+        quad = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 1.0, 1.0]]) + 2.0
+        cell = np.array([4.0, 4.0, 4.0])
+        wrapped = quad.copy()
+        wrapped[3] -= cell * np.array([0, 1, 0])  # written in another periodic image
+        for xyz in (quad, wrapped):
+            self.assertAlmostEqual(float(mf.dihedrals_pbc(xyz, cell, np.array([[0, 1, 2, 3]]))[0]), -90.0, places=6)
+
+    def test_wrong_configuration_fails_and_ring_is_reported(self):
+        itp = ("[ moleculetype ]\nX 1\n[ atoms ]\n" + "".join(f"{i} C 1 X C{i} {i} 0.0 12.0\n" for i in range(1, 5))
+               + "[ dihedral_restraints ]\n1 2 3 4 1 -120.0 2.5 1000\n1 2 3 4 1 60.0 2.5 1000\n")
+        good = [[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 1.0, 1.0]]  # -90: the side of the -120 target
+        bad = [[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 1.0, -1.0]]  # +90: the mirror image
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp)
+            (run / "x.itp").write_text(itp)
+            (run / "topol.top").write_text('#include "x.itp"\n[ system ]\nt\n[ molecules ]\nX 2\n')
+            lines = [f"{1 + k // 4:5d}X    {'C' + str(k % 4 + 1):>5s}{k + 1:5d}{x + 1:8.3f}{y + 1:8.3f}{z + 2 + 3 * (k // 4):8.3f}"
+                     for k, (x, y, z) in enumerate(good + bad)]
+            (run / "em.gro").write_text("t\n8\n" + "\n".join(lines) + "\n  10.0 10.0 10.0\n")
+            report, fails = mf.check_dihedral_restraints(run, "em.gro")
+        self.assertEqual(report["X"]["wrong_configurations"], 1)  # -120 row: only the mirror image is wrong
+        self.assertEqual(len(fails), 1)
+        self.assertIn("X: 1 configuration restraint(s) on the wrong side", fails[0])
+        self.assertEqual((report["X"]["rings"], report["X"]["rings_out_of_chair"]), (2, 1))  # +60 row: reported only
+
+
+class DisulfideAudit(unittest.TestCase):
+    def test_sg_sg_distances_are_measured_under_pbc_and_a_stretched_bond_fails(self):
+        itp = ("[ moleculetype ]\nP 1\n[ atoms ]\n1 S 1 CYS SG 1 0.0 32.0\n2 S 2 CYS SG 2 0.0 32.0\n3 C 3 ALA CA 3 0.0 12.0\n"
+               "[ bonds ]\n1 2\n2 3\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp)
+            (run / "p.itp").write_text(itp)
+            (run / "topol.top").write_text('#include "p.itp"\n[ system ]\nt\n[ molecules ]\nP 2\n')
+            rows = [(1, "CYS", "SG", 0.05, 1.0, 1.0), (2, "CYS", "SG", 3.95, 1.0, 1.0), (3, "ALA", "CA", 3.8, 1.0, 1.0),  # across the edge
+                    (4, "CYS", "SG", 2.0, 2.0, 2.0), (5, "CYS", "SG", 2.3, 2.0, 2.0), (6, "ALA", "CA", 2.4, 2.0, 2.0)]  # 3.0 A: broken
+            lines = [f"{r:5d}{n:<5s}{a:>5s}{k + 1:5d}{x:8.3f}{y:8.3f}{z:8.3f}" for k, (r, n, a, x, y, z) in enumerate(rows)]
+            (run / "em.gro").write_text("t\n6\n" + "\n".join(lines) + "\n   4.0 4.0 4.0\n")
+            report, fails = mf.check_disulfide_geometry(run, "em.gro")
+        self.assertEqual(report["disulfides"], 2)
+        self.assertAlmostEqual(report["bonds"][0]["sg_sg_A"], 1.0, places=3)      # 0.1 nm through the periodic boundary, not 3.9 nm
+        self.assertAlmostEqual(report["bonds"][1]["sg_sg_A"], 3.0, places=3)
+        self.assertEqual(report["outside_window"], 2)                              # 1.0 A is too short, 3.0 A too long
+        self.assertEqual(len(fails), 1)
+        self.assertIn("outside 1.8-2.2 A after EM", fails[0])
+
+
+class EnergyMinimizationFailure(unittest.TestCase):
+    """A finite Fmax above the target names the atom it sits on and the residues packed around it."""
+
+    def setUp(self):
+        self.out = Path(tempfile.mkdtemp())
+        atom = lambda resid, resname, name, x, y, z: {"resid": resid, "resname": resname, "atom": name, "x": x, "y": y, "z": z}
+        self.atoms = [atom(1, "LEU", "CA", 1.00, 1.00, 1.00), atom(1, "LEU", "CB", 1.10, 1.00, 1.00),
+                      atom(2, "POPC", "C22", 1.15, 1.05, 1.00), atom(3, "POPC", "C31", 1.30, 1.00, 1.00),
+                      atom(4, "TIP3", "OH2", 2.50, 2.50, 2.50)]
+        for name in ("em.unverified.gro", "solv_ions.gro"):
+            mf.write_gro(self.atoms, [3.0, 3.0, 3.0], self.out / name, "test")
+
+    def test_the_culprit_and_its_neighbours_are_named(self):
+        text = mf.minimization.force_culprit(self.out, 2)
+        self.assertIn("largest force on atom 2 LEU1:CB", text)
+        self.assertIn("POPC2:C22 0.71 A", text)
+        self.assertIn("POPC3:C31 2.00 A", text)
+        self.assertNotIn("TIP3", text)
+        self.assertIn("is not in", mf.minimization.force_culprit(self.out, 99))
+
+    def stages(self):
+        """membrane.pdb with DOPC487 clear of everything; from boxed.gro on, its C21 sits 0.8 A from POPC12:C3."""
+        atom = lambda resid, resname, name, x, y, z, chain="L": {"resid": resid, "resname": resname, "atom": name, "chain": chain,
+                                                                 "segid": "", "x": x, "y": y, "z": z}
+        clean = [atom(1, "LEU", "CA", 10.0, 10.0, 10.0, "X"), atom(487, "DOPC", "C21", 15.0, 10.0, 10.0),
+                 atom(487, "DOPC", "O22", 16.2, 10.0, 10.0), atom(12, "POPC", "C3", 19.5, 10.0, 10.0)]
+        mf.write_pdb(clean, self.out / "membrane.pdb", f"CRYST1{30.0:9.3f}{30.0:9.3f}{30.0:9.3f}  90.00  90.00  90.00 P 1           1")
+        clash = [dict(a, x=a["x"] / 10.0, y=a["y"] / 10.0, z=a["z"] / 10.0) for a in clean]
+        clash[3] = dict(clash[3], x=1.42)  # POPC12:C3 0.08 nm from DOPC487:C21
+        for name in ("boxed.gro", "solv_ions.gro", "em.unverified.gro"):
+            mf.write_gro(clash, [3.0, 3.0, 3.0], self.out / name, "test")
+        (self.out / "work").mkdir(exist_ok=True)
+        # backmapping wrote 486 other lipids first; membrane.pdb lipid 487 is slice lipid 9
+        rows = [f"L\t{n + 100}\tPOPC\tP\t0\t0\t0" for n in range(486)] + ["L\t9\tDOPC\tC21\t0\t0\t0", "L\t9\tDOPC\tO22\t0\t0\t0"]
+        (self.out / "work" / "membrane_aa.tsv").write_text("chain\tresid\tresname\tname\tx\ty\tz\n" + "\n".join(rows) + "\n")
+        mf.write_gro([{"resid": 9, "resname": "DOPC", "atom": "GL1", "x": 1.5, "y": 1.0, "z": 1.0},
+                      {"resid": 487, "resname": "POPC", "atom": "GL1", "x": 1.0, "y": 1.0, "z": 1.0}], [3.0, 3.0, 3.0],
+                     self.out / "work" / "cg_membrane.gro", "beads")
+        mf.write_pdb([clean[0]], self.out / "work" / "rock.pdb")
+        return clash
+
+    def test_the_trace_finds_the_first_stage_and_the_molecule_a_lipid_clashes_with(self):
+        self.stages()
+        trace = mf.minimization.trace_clash(self.out, "DOPC", 487, "C21")
+        stages = {row["stage"]: row for row in trace["stages"]}
+        cg = stages["coarse-grained slice (work/cg_membrane.gro)"]
+        self.assertEqual(cg["slice_residue"], 9)  # through the backmapped table, not slice lipid 487
+        self.assertAlmostEqual(cg["closest_protein_heavy_atom_to_a_bead_A"], 5.0, places=3)
+        self.assertIsNone(mf.minimization.slice_number(self.out / "work" / "membrane_aa.tsv", "POPC", 487))  # names differ
+        self.assertFalse(stages["backmapped membrane (membrane.pdb)"]["clash"])
+        clean = stages["backmapped membrane (membrane.pdb)"]["heavy"]  # O22 at 16.2 A, POPC12:C3 at 19.5 A: 3.3 A, no clash
+        self.assertEqual((clean["mine"], clean["partner"], clean["distance_A"]), ("DOPC487:O22", "POPC12:C3", 3.3))
+        self.assertTrue(stages["boxed (boxed.gro)"]["clash"])
+        self.assertAlmostEqual(stages["boxed (boxed.gro)"]["atom"]["distance_A"], 0.8, places=3)
+        self.assertEqual(trace["first_clash"], {"stage": "boxed (boxed.gro)", "partner": "POPC12:C3"})
+        self.assertIsNone(mf.minimization.trace_clash(self.out, "DOPC", 999)["first_clash"])
+
+    def test_validate_em_names_the_first_clash_of_a_lipid_culprit(self):
+        atoms = self.stages()
+        (self.out / "em.log").write_text("Potential Energy  = -1.0e+06\nMaximum force     =  1.59323e+04 on atom 2\n")
+        message = failure(mf.validate_em, {"out": self.out, "inputs": {}}, {"names": [a["atom"] for a in atoms]}, {})
+        self.assertIn("largest force on atom 2 DOPC487:C21", message)
+        self.assertIn("DOPC487 first clashes in the boxed (boxed.gro) stage, with POPC12:C3", message)
+        self.assertTrue((self.out / "em_clash_trace.json").is_file())
+
+    def test_validate_em_reports_the_culprit_of_a_finite_fmax(self):
+        (self.out / "em.log").write_text("   Energies (kJ/mol)\nPotential Energy  = -1.0e+06\n"
+                                         "Maximum force     =  1.59323e+04 on atom 2\nNorm of force     =  1.0e+02\n")
+        message = failure(mf.validate_em, {"out": self.out, "inputs": {}}, {"names": [a["atom"] for a in self.atoms]}, {})
+        self.assertIn("EM final Fmax 15932.3 >= 500 kJ/mol/nm", message)
+        self.assertIn("largest force on atom 2 LEU1:CB", message)
+        self.assertIn("POPC2:C22", message)
+        self.assertIn("before EM: atom 2 LEU1:CB starts", message)
+
+
+class GroStageMolecules(unittest.TestCase):
+    """The minimized .gro spells GM3 as four CHARMM residues and truncates SAPI25 to SAPI2; the report must still see them
+    as lipids, and must not count them, or anything else it cannot place, as protein."""
+
+    LEAFLET = ("DOPC", "DOPC", "SAPI25", "GLPA")  # per leaflet
+
+    def setUp(self):
+        self.out = Path(tempfile.mkdtemp())
+        toppar = REPO / "forcefield" / "toppar"
+        self.itps = {n: mf.read_itp(toppar / f"{n}.itp") for n in ("DOPC", "SAPI25", "GLPA", "TIP3", "SOD")}
+        atoms, resid = [], 0
+
+        def molecule(name, x, y, sign):
+            nonlocal resid
+            resid += 1
+            spec = self.itps[name]["atoms"]
+            anchor = {"DOPC": "P", "SAPI25": "P", "GLPA": "NF"}.get(name)
+            for k, a in enumerate(spec):
+                z = 5.0 + sign * (2.0 if a["atom"] == anchor else 1.0 + 0.004 * k) if anchor else 8.5
+                atoms.append({"resid": resid, "resname": a["residue"][:5], "atom": a["atom"][:5], "x": x, "y": y, "z": z})
+
+        for i, name in enumerate(("ALA", "LEU", "GLY")):  # a three-residue protein through the bilayer
+            resid += 1
+            atoms += [{"resid": resid, "resname": name, "atom": n, "x": 3.0, "y": 3.0, "z": 4.0 + i} for n in ("N", "CA", "C", "O")]
+        self.protein_atoms = 12
+        for sign in (-1, 1):
+            for j, name in enumerate(self.LEAFLET):
+                molecule(name, 0.5 + 1.2 * j, 1.0 + (sign > 0), sign)
+        molecule("TIP3", 1.0, 1.0, 0)
+        molecule("SOD", 2.0, 2.0, 0)
+        mf.write_gro(atoms, [6.0, 6.0, 10.0], self.out / "em.unverified.gro", "test")
+        self.atoms = atoms
+        (self.out / "PROX.itp").write_text("[ moleculetype ]\nPROX 3\n[ atoms ]\n" + "".join(
+            f"{k + 1} C {a['resid']} {a['resname']} {a['atom']} {k + 1} 0.0 12.0\n" for k, a in enumerate(atoms[:12])))
+        includes = "".join(f'#include "{toppar / n}.itp"\n' for n in ("DOPC", "SAPI25", "GLPA", "TIP3", "SOD"))
+        (self.out / "topol.top").write_text('#include "PROX.itp"\n' + includes + "[ system ]\ntest\n[ molecules ]\nPROX 1\n"
+                                            "DOPC 2\nSAPI25 1\nGLPA 1\nDOPC 2\nSAPI25 1\nGLPA 1\nTIP3 1\nSOD 1\n")
+
+    def check(self, stage, source):
+        self.assertEqual(stage["molecule_source"], source)
+        self.assertEqual(Counter(r["resname"] for r in stage["lipids"]), Counter({"DOPC": 4, "SAP6": 2, "GM3": 2}))  # report labels
+        self.assertEqual(Counter(r["leaflet"] for r in stage["lipids"]), Counter({"lower": 4, "upper": 4}))
+        self.assertEqual(len(stage["protein_nm"]), self.protein_atoms)  # GM3 and PIP2 atoms are not protein
+        glpa = [res for res in stage["residues"] if res[0]["resname"] == "GLPA"]
+        self.assertEqual([len(res) for res in glpa], [183, 183])  # one molecule each, all four parts
+        self.assertEqual(stage["unrecognized"], {})
+
+    def test_molecules_come_from_the_topology(self):
+        self.check(mf.stage_from_gro(self.out / "em.unverified.gro"), "topology topol.top")
+
+    def test_without_a_topology_the_gro_spellings_are_mapped_back(self):
+        (self.out / "topol.top").unlink()
+        self.check(mf.stage_from_gro(self.out / "em.unverified.gro"), "residue names")
+
+    def test_a_topology_for_other_atoms_is_not_trusted(self):
+        (self.out / "topol.top").write_text((self.out / "topol.top").read_text().replace("SOD 1", "SOD 2"))
+        self.check(mf.stage_from_gro(self.out / "em.unverified.gro"), "residue names")
+
+    def test_unknown_molecules_are_reported_not_counted_as_protein(self):
+        (self.out / "topol.top").unlink()
+        atoms = self.atoms + [{"resid": 900, "resname": "XYZ", "atom": "C1", "x": 4.0, "y": 4.0, "z": 5.0}]
+        mf.write_gro(atoms, [6.0, 6.0, 10.0], self.out / "em.unverified.gro", "test")
+        stage = mf.stage_from_gro(self.out / "em.unverified.gro")
+        self.assertEqual(stage["unrecognized"], {"XYZ": 1})
+        self.assertEqual(len(stage["protein_nm"]), self.protein_atoms)
 
 
 class StageRunner(unittest.TestCase):
@@ -445,6 +715,18 @@ class OutputProtection(unittest.TestCase):
             self.assertEqual(sorted(removed), ["em.gro", "toppar"])
             self.assertEqual([p.name for p in out.iterdir()], ["notes.txt"])
 
+    def test_membrane_kept_in_int_survives_the_stale_clear(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            (out / "int" / "work").mkdir(parents=True)
+            (out / "int" / "membrane.pdb").write_text("mine")
+            (out / "int" / "boxed.gro").write_text("old")
+            keep = out / "int" / "membrane.pdb"
+            mf.protect_inputs([keep], out, keep=keep)  # restart from the backmapped membrane an earlier build kept
+            self.assertIn("would be overwritten", failure(mf.protect_inputs, [out / "int" / "boxed.gro"], out))
+            mf.clear_stale_outputs(out, keep=keep)
+            self.assertEqual([p.name for p in (out / "int").iterdir()], ["membrane.pdb"])
+
     def test_changed_input_is_detected(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "a.pdb"
@@ -455,5 +737,83 @@ class OutputProtection(unittest.TestCase):
             self.assertIn("changed during the build", failure(mf.check_inputs_unchanged, hashes))
 
 
+class KeptIntermediates(unittest.TestCase):
+    """Nothing a build makes on the way to em.gro is deleted: the intermediates end up in <out>/int."""
+
+    def test_intermediates_move_into_int_and_inputs_stay(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            for name in ("boxed.gro", "solv_raw.gro", "em.log", "membrane.pdb", "em.gro", "topol.top", "notes.txt"):
+                (out / name).write_text(name)
+            moved = mf.pipeline.keep_intermediates(out, keep=(out / "membrane.pdb",))
+            self.assertEqual(sorted(moved), ["boxed.gro", "em.log", "solv_raw.gro"])
+            self.assertEqual((out / "int" / "boxed.gro").read_text(), "boxed.gro")
+            self.assertEqual(sorted(p.name for p in out.iterdir() if p.is_file()),
+                             ["em.gro", "membrane.pdb", "notes.txt", "topol.top"])  # final outputs and the input stay
+
+    def test_every_intermediate_is_a_generated_name(self):
+        self.assertTrue(set(mf.config.INTERMEDIATES) <= set(mf.config.GENERATED))
+        self.assertIn(mf.INT_DIR, mf.config.GENERATED)
+
+    def test_run_path_prefers_the_top_level_then_int(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            (out / "int").mkdir()
+            self.assertEqual(mf.run_path(out, "boxed.gro"), out / "boxed.gro")  # neither exists: the top-level path
+            (out / "int" / "boxed.gro").write_text("kept")
+            self.assertEqual(mf.run_path(out, "boxed.gro"), out / "int" / "boxed.gro")
+            (out / "boxed.gro").write_text("new")
+            self.assertEqual(mf.run_path(out, "boxed.gro"), out / "boxed.gro")
+
+    def test_a_retried_backmap_keeps_the_earlier_attempt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "mstool"
+            path.mkdir()
+            (path / "step.pdb").write_text("one")
+            first = mf.backmapping.keep_attempt(path, 2)
+            self.assertEqual(first.name, "mstool_before_seed2")
+            path.mkdir()
+            second = mf.backmapping.keep_attempt(path, 2)
+            self.assertNotEqual(second, first)
+            self.assertTrue((first / "step.pdb").is_file() and second.is_dir())
+            self.assertIsNone(mf.backmapping.keep_attempt(path, 3))
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class BundledMembranes(unittest.TestCase):
+    """--cg 1 | 2 | NAME resolve to files in examples/preeq_cg_cellmem/; anything else is the user's own file."""
+
+    def test_every_bundled_frame_has_a_name(self):
+        frames = mf.bundled_frames()
+        self.assertEqual(sorted(frames), [f"GPR{i}" for i in range(1, 10)] + [f"KOR{i}" for i in range(1, 10)])
+        self.assertTrue(all(p.is_file() for p in frames.values()))
+
+    def test_a_frame_name_resolves_in_any_spelling(self):
+        expected = REPO / "examples" / "preeq_cg_cellmem" / "KOR5_cg_cellmem.gro"
+        for spelling in ("KOR5", "kor5", "Kor5", "KOR5.gro", "KOR5_cg_cellmem.gro", " KOR5 "):
+            self.assertEqual(mf.bundled_membrane(spelling), expected, spelling)
+
+    def test_codes_1_and_2_pick_the_receptor_series(self):
+        for _ in range(5):
+            self.assertRegex(mf.bundled_membrane("1").name, r"^GPR[1-9]_cg_cellmem\.gro$")
+            self.assertRegex(mf.bundled_membrane("2").name, r"^KOR[1-9]_cg_cellmem\.gro$")
+
+    def test_runs_take_the_first_frames_of_the_series_in_a_fixed_order(self):
+        self.assertEqual([p.name for p in mf.bundled_series("1")[:5]], [f"GPR{i}_cg_cellmem.gro" for i in range(1, 6)])
+        self.assertEqual([p.name for p in mf.bundled_series("2")], [f"KOR{i}_cg_cellmem.gro" for i in range(1, 10)])
+        self.assertEqual(mf.MAX_RUNS, len(mf.bundled_series("1")))
+
+    def test_a_path_or_custom_file_is_not_bundled(self):
+        for value in ("custom=KOR5.gro", str(CG_GRO), "examples/preeq_cg_cellmem/KOR5_cg_cellmem.gro", "membrane.gro", "3"):
+            self.assertIsNone(mf.bundled_membrane(value), value)
+
+    def test_a_missing_frame_name_is_refused_by_name(self):
+        self.assertIn("no bundled membrane named GPR12", failure(mf.bundled_membrane, "GPR12"))
+
+    def test_listing_names_every_frame(self):
+        text = mf.describe_bundled_membranes()
+        for name in mf.bundled_frames():
+            self.assertIn(f"{name}_cg_cellmem.gro", text)

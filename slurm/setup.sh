@@ -34,7 +34,7 @@ if [ ! -x "$ENV_DIR/bin/python" ]; then
         "python=3.11" numpy scipy networkx "pandas<3" openmm "gromacs=*=nompi_*" gfortran make pip
 fi
 say "installing mstool"
-"$ENV_DIR/bin/python" -m pip install --disable-pip-version-check -q "mstool==0.3.9" "pandas<3"
+"$ENV_DIR/bin/python" -m pip install --disable-pip-version-check -q "mstool==0.3.9" "pandas<3" matplotlib
 
 # 3. check what the build needs
 "$ENV_DIR/bin/python" -c "import numpy, scipy, networkx, pandas, openmm, mstool" \
@@ -55,6 +55,6 @@ if [ -x "$PPM_SRC/immers" ] && [ ! -f "$PPM_SRC/res.lib" ]; then
     echo "WARNING: $PPM_SRC/res.lib is missing; PPM needs it next to immers"
 fi
 
-say "done. In run_membraneforger.sbatch set REPO=$REPO"
+say "done. In run_membraneforger.sbatch (block 2) set REPO=$REPO"
 [ -x "$PPM_SRC/immers" ] && say "and PPM=$PPM_SRC/immers"
 exit 0

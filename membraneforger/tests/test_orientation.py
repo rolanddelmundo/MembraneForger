@@ -161,6 +161,55 @@ class AnchorSelection(unittest.TestCase):
         self.assertEqual(mf.parse_chains(None, ""), ())
 
 
+class EmbeddedSegmentWithoutOrientation(unittest.TestCase):
+    """--orientation none with --orient-residues: the input is used as given and the named segment sets the bilayer centre."""
+
+    def run_none(self, **request):
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        out, work = Fixtures.session_dirs(tmp)
+        return mf.orient_complex(Fixtures.complex(), AA_PDB, mf.OrientationRequest(mode="none", **request), mf.Settings(), out, work), out
+
+    def test_bilayer_centre_is_the_midpoint_of_the_segment_and_nothing_moves(self):
+        result, out = self.run_none(chains=("R",), residues=((349, 376),))  # TM6 of the example receptor; no --nterm-side
+        z = [a["z"] for a in Fixtures.complex() if a["chain"] == "R" and 349 <= a["resid"] <= 376 and a["atom"] == "CA"]
+        report = result["report"]
+        self.assertFalse(report["enabled"])
+        self.assertAlmostEqual(report["segment_bilayer_centre_A"], 0.5 * (min(z) + max(z)), places=3)
+        self.assertEqual(report["anchor_chains"], ["R"])
+        self.assertEqual(report["segment"]["segment_ca_atoms"], 28)
+        centre = report["segment_bilayer_centre_A"]
+        self.assertEqual(report["segment"]["segment_ca_inside_slab"], sum(abs(v - centre) <= 15.0 for v in z))  # 33 A long: ends stick out
+        self.assertIs(result["oriented"], Fixtures.complex())  # used as given: no rotation, no translation
+        self.assertTrue(np.allclose(result["R"], np.eye(3)) and not result["t"].any())
+        self.assertIn("embedded segment 349-376 of chain(s) R", (out / mf.LOG_NAME).read_text())
+
+    def test_nterm_side_is_checked_on_the_chain_n_terminus(self):
+        # the example receptor's N terminus (Ser25, in the extracellular domain) is out
+        report = self.run_none(chains=("R",), residues=((349, 376),), nterm_side="out")[0]["report"]
+        self.assertEqual(report["nterm_check"]["status"], "PASS")
+        self.assertEqual(report["nterm_check"]["first_residue"], "SER25")
+        self.assertEqual(self.run_none(chains=("R",), residues=((349, 376),))[0]["report"]["nterm_check"]["status"], "not requested")
+        with self.assertRaises(mf.OrientationFailure) as caught:
+            self.run_none(chains=("R",), residues=((349, 376),), nterm_side="in")
+        self.assertIn("N terminus out", str(caught.exception))
+
+    def test_without_residues_nothing_changes(self):
+        report = self.run_none()[0]["report"]
+        self.assertNotIn("segment_bilayer_centre_A", report)
+        self.assertEqual(report["anchor_chains"], [])
+
+    def test_several_chains_need_the_anchor_named(self):
+        with self.assertRaises(mf.OrientationFailure) as caught:
+            self.run_none(residues=((349, 376),))
+        self.assertIn("Multiple protein chains were detected", str(caught.exception))
+
+    def test_a_segment_shorter_than_a_helix_is_refused(self):
+        with self.assertRaises(mf.OrientationFailure) as caught:
+            self.run_none(chains=("R",), residues=((349, 355),))
+        self.assertIn("selects too few residues", str(caught.exception))
+
+
 class OPMReferenceMode(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -378,6 +427,55 @@ class LocalPPMProvider(unittest.TestCase):
         self.assertEqual(report["ppm"]["chain_relabel"], {"R": "A", "P": "B"})
         self.assertEqual(report["ppm"]["input"].splitlines()[7], "A,B")
         self.assertEqual(len(report["ppm"]["chain_matches"]), 2)
+
+    def test_residue_selection_is_parsed(self):
+        self.assertEqual(mf.parse_residue_ranges("343-363"), ((343, 363),))
+        self.assertEqual(mf.parse_residue_ranges("343-363, 370-380,400"), ((343, 363), (370, 380), (400, 400)))
+        self.assertEqual(mf.parse_residue_ranges(""), ())
+        self.assertIn("ends before it starts", failure(mf.parse_residue_ranges, "363-343"))
+        self.assertIn("not a residue number", failure(mf.parse_residue_ranges, "TM1"))
+
+    def test_only_the_selected_residues_are_submitted_and_the_whole_complex_follows(self):
+        request = mf.OrientationRequest(mode="ppm", chains=("R",), ppm_exe=str(self.exe), nterm_side="out",
+                                        residues=((40, 70), (100, 110)))
+        result = mf.orient_complex(self.aa, AA_PDB, request, mf.Settings(), self.out, self.work)
+        report = result["report"]
+        submitted, _ = mf.read_pdb(Path(report["ppm"]["workdir"]) / "anchor.pdb")
+        self.assertEqual({a["resid"] for a in submitted}, set(range(40, 71)) | set(range(100, 111)))
+        self.assertEqual(report["ppm"]["residues_submitted"], 42)
+        self.assertEqual(report["anchor_segment"]["residues"], {"R": 42})
+        self.assertEqual(report["ppm"]["residue_ranges_submitted"], [[40, 70], [100, 110]])
+        self.assertTrue(np.allclose(result["R"], rotation([0.3, -0.5, 0.81], 33.0), atol=1e-4))  # the same rigid transform
+        self.assertEqual(len(result["oriented"]), len(self.aa))  # every atom moved, not only the segment
+        frame = report["validation"]["frame"]
+        self.assertEqual(frame["segment_ca_atoms"], 42)
+        self.assertEqual(frame["outside_segment_ca_inside_slab"], len(frame["outside_segment_residues_inside_slab"]))
+        self.assertEqual(report["validation"]["nterm"]["first_residue"][-2:], "40")
+
+    def test_residue_selection_without_reference_or_side_fails_before_ppm(self):
+        base = dict(chains=("R",), ppm_exe=str(self.exe), residues=((40, 70),))
+        message = failure(mf.orient_complex, self.aa, AA_PDB, mf.OrientationRequest(mode="ppm", **base),
+                          mf.Settings(), self.out, self.work)
+        self.assertIn("--orient-residues needs --nterm-side", message)
+        message = failure(mf.orient_complex, self.aa, AA_PDB, mf.OrientationRequest(mode="opm", nterm_side="out", **base),
+                          mf.Settings(), self.out, self.work)
+        self.assertIn("does not apply to --orientation opm", message)
+        short = dict(base, residues=((1, 30),))  # chain R starts at residue 25
+        message = failure(mf.orient_complex, self.aa, AA_PDB, mf.OrientationRequest(mode="ppm", nterm_side="out", **short),
+                          mf.Settings(), self.out, self.work)
+        self.assertIn("selects too few residues of anchor chain(s) R (6; residues 25-425 are present)", message)
+        self.assertFalse((self.work / "ppm").exists())  # nothing expensive ran
+
+    def test_residue_selection_ignores_a_pdb_id(self):
+        request = mf.OrientationRequest(mode="auto", chains=("R",), ppm_exe=str(self.exe), pdb_id="6WHC",
+                                        opm_cache=self.tmp / "no-download", nterm_side="out", residues=((40, 70),))
+        report = mf.orient_complex(self.aa, AA_PDB, request, mf.Settings(), self.out, self.work)["report"]
+        self.assertEqual((report["provider"], report["nterm_side_source"]), ("ppm", "command line"))
+        self.assertNotIn("reference", report)
+        self.assertFalse((self.tmp / "no-download").exists())  # the OPM entry was never fetched
+        request = mf.OrientationRequest(mode="auto", chains=("R",), ppm_exe=str(self.exe), opm_file=OPM_6WHC,
+                                        nterm_side="out", residues=((40, 70),))
+        self.assertIn("or --opm-file", failure(mf.orient_complex, self.aa, AA_PDB, request, mf.Settings(), self.out, self.work))
 
 
 class RigidTransformOfTheWholeComplex(unittest.TestCase):
@@ -605,6 +703,12 @@ class CommandLine(unittest.TestCase):
         self.assertIn("--bilayer-z applies with --orientation none",
                       self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--orient-chain", "R", "--bilayer-z", "5")[1])
         self.assertIn("do not apply", self.run_cli("--membrane", AA_PDB, "--orient-chain", "R")[1])
+        self.assertIn("give it or --bilayer-z, not both",
+                      self.run_cli("--all-atom", AA_PDB, "--orientation", "none", "--orient-chain", "R", "--orient-residues", "349-376",
+                                   "--bilayer-z", "0")[1])
+        self.assertIn("places an embedded protein",
+                      self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--orientation", "none", "--orient-chain", "R",
+                                   "--orient-residues", "349-376")[1])
 
     def test_multiple_chains_fail_early_with_instructions(self):
         if not shutil.which(self.gmx):

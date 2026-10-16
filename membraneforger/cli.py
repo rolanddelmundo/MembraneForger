@@ -6,31 +6,92 @@
 import argparse
 import os
 import random
+import re
 import shutil
 import sys
+from dataclasses import replace
 from pathlib import Path
 
-from .config import BOX, NSTEPS, NTERM_SIDE, ORIENT_CHAINS, ORIENTATION, PDB_ID, PPM_MEMBRANE, Settings
-from .embedding import CONVERTIBLE, LIPID_NAMES, lipid_name
-from .orientation import NTERM_SIDES, ORIENTATION_MODES, OrientationRequest
+from .config import BOX, NSTEPS, NTERM_SIDE, ORIENT_CHAINS, ORIENT_RESIDUES, ORIENTATION, PDB_ID, PPM_MEMBRANE, Settings
+from .embedding import CONVERTIBLE, EMBED_SITES, LIPID_NAMES, lipid_name
+from .orientation import NTERM_SIDES, ORIENTATION_MODES, OrientationRequest, parse_residue_ranges
 from .pipeline import Session, build
 from .runtools import find_gromacs
 
-__all__ = ['BUNDLED_MEMBRANES', 'bundled_membrane', 'make_parser', 'locate_forcefield', 'locate_data', 'parse_chains', 'parse_box',
-           'orientation_request', 'main']
+__all__ = ['BUNDLED_MEMBRANES', 'MAX_RUNS', 'bundled_frames', 'bundled_membrane', 'bundled_series', 'describe_bundled_membranes',
+           'make_parser', 'locate_forcefield', 'locate_data', 'parse_chains', 'parse_box', 'parse_disulfide_pair',
+           'orientation_request', 'run_sessions', 'main']
 
 REPOSITORY = Path(__file__).resolve().parents[1]
+BUNDLED_DIR = REPOSITORY / "examples" / "preeq_cg_cellmem"
 # --cg 1 / --cg 2: one frame drawn at random from the bundled pre-equilibrated membranes of that receptor
 # (examples/preeq_cg_cellmem/README.md lists all 18); the chosen file is logged and recorded in run_manifest.json.
 BUNDLED_MEMBRANES = {"1": "GPR*_cg_cellmem.gro", "2": "KOR*_cg_cellmem.gro"}
+# --cg NAME: one particular bundled frame by name (GPR1 ... GPR9, KOR1 ... KOR9), for a repeatable build.
+BUNDLED_FRAME_SUFFIX = "_cg_cellmem.gro"
+RECEPTORS = {"GPR": "GPR139", "KOR": "kappa opioid receptor"}
+# --runs N: the complex is built N times, each time in a different frame of the chosen series (the first N frames of
+# the series, so the set is the same from one invocation to the next); a series holds nine frames.
+MAX_RUNS = 9
 
 
-def bundled_membrane(code: str) -> Path:
-    """Pick one of the bundled frames for --cg 1 (GPR139 membranes) or --cg 2 (kappa opioid receptor membranes)."""
-    frames = sorted((REPOSITORY / "examples" / "preeq_cg_cellmem").glob(BUNDLED_MEMBRANES[code]))
+def bundled_frames() -> dict:
+    """The bundled frames by name (GPR1 ... KOR9), each mapped to its file in examples/preeq_cg_cellmem/."""
+    return {p.name[:-len(BUNDLED_FRAME_SUFFIX)].upper(): p for p in sorted(BUNDLED_DIR.glob("*" + BUNDLED_FRAME_SUFFIX))
+            if p.name[:-len(BUNDLED_FRAME_SUFFIX)][:3].upper() in RECEPTORS}
+
+
+def bundled_series(code: str) -> list:
+    """The bundled frames of --cg 1 (GPR139) or --cg 2 (kappa opioid receptor), in name order."""
+    frames = sorted(BUNDLED_DIR.glob(BUNDLED_MEMBRANES[code]))
     if not frames:
         raise SystemExit(f"no bundled membrane matches examples/preeq_cg_cellmem/{BUNDLED_MEMBRANES[code]}")
-    return random.choice(frames)
+    return frames
+
+
+def bundled_membrane(code: str) -> Path | None:
+    """Resolve a --cg value that names a bundled membrane; None when it is not one (a file path).
+
+    "1" picks one of the GPR139 frames at random and "2" one of the kappa opioid receptor frames; a frame name such as
+    "GPR1" or "KOR5" (any case, with or without the _cg_cellmem.gro suffix) picks that frame.
+    """
+    if code in BUNDLED_MEMBRANES:
+        return random.choice(bundled_series(code))
+    if Path(code).is_file() or "/" in code or os.sep in code:
+        return None  # a file of the user's own, or a path: --cg FILE
+    name = code.strip().upper()
+    for suffix in (BUNDLED_FRAME_SUFFIX.upper(), ".GRO"):
+        name = name[:-len(suffix)] if name.endswith(suffix) else name
+    frames = bundled_frames()
+    if name in frames:
+        return frames[name]
+    if name[:3] in RECEPTORS and name[3:].isdigit():  # looks like a frame name, but no such frame is bundled
+        raise SystemExit(f"no bundled membrane named {code}: --list-membranes shows the {len(frames)} bundled frames")
+    return None  # a file path
+
+
+def describe_bundled_membranes() -> str:
+    """The text of --list-membranes: every bundled frame by name."""
+    lines = ["bundled Martini 3 cell membranes (examples/preeq_cg_cellmem/, 30 us each; pass a name to --cg):"]
+    for name, path in bundled_frames().items():
+        lines.append(f"  {name:<5} {RECEPTORS[name[:3]]:<22} {path.name}")
+    lines.append("--cg 1 picks a GPR139 frame at random and --cg 2 a kappa opioid receptor frame; --runs N builds the complex in "
+                 "the first N frames of that series, one system each")
+    return "\n".join(lines)
+
+
+def run_sessions(session: Session, all_atom: Path, frames: list, command: list) -> int:
+    """--runs N: build the complex once per frame, each build in its own subdirectory of session.out, and sum up."""
+    results = []
+    for frame in frames:
+        tag = frame.name[:-len(BUNDLED_FRAME_SUFFIX)]
+        run = replace(session, out=session.out / tag, name=f"{session.name}_{tag}", work=None, timings={}, record={}, analysis=None)
+        print(f"[{session.name}] run {len(results) + 1} of {len(frames)}: membrane {frame.name} -> {run.out}")
+        results.append((tag, build(run, all_atom, frame.resolve(), None, command)))
+    failed = [tag for tag, code in results if code]
+    print(f"[{session.name}] {len(frames) - len(failed)} of {len(frames)} runs passed"
+          + (f"; failed: {', '.join(failed)}" if failed else "") + f" ({session.out})")
+    return int(bool(failed))
 
 
 def parse_chains(*values: str | None) -> tuple:
@@ -69,6 +130,8 @@ def orientation_request(args) -> OrientationRequest:
     return OrientationRequest(mode=mode, chains=chains, nterm_side=nterm, pdb_id=(args.pdb_id or PDB_ID or None),
                               ppm_exe=args.ppm_exe, ppm_membrane=(args.ppm_membrane if args.ppm_membrane is not None else PPM_MEMBRANE),
                               ppm_heteroatoms=bool(args.ppm_heteroatoms),
+                              residues=parse_residue_ranges(args.orient_residues if args.orient_residues is not None
+                                                            else ORIENT_RESIDUES),
                               opm_file=args.opm_file.resolve() if args.opm_file else None,
                               opm_cache=args.opm_cache.resolve() if args.opm_cache else None)
 
@@ -83,13 +146,21 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--aa", "--all-atom", dest="all_atom", type=Path, metavar="PDB",
                         help="all-atom protein (or protein/ligand) structure with its membrane normal along z; "
                              "the only source of protein and ligand chemistry")
-    parser.add_argument("--cg", "--coarse-grain", dest="coarse_grain", default="1", metavar="1|2|FILE",
-                        help="membrane: 1 = a random bundled GPR139 frame, 2 = a random bundled kappa opioid receptor frame "
-                             "(the protein is embedded into either), or a Martini 3 frame of your own complex, given as "
-                             "FILE or custom=FILE (default: 1)")
+    parser.add_argument("--cg", "--coarse-grain", dest="coarse_grain", default="1", metavar="1|2|NAME|FILE",
+                        help="membrane: 1 = a random bundled GPR139 frame, 2 = a random bundled kappa opioid receptor frame, "
+                             "NAME = one particular bundled frame (GPR1 ... GPR9, KOR1 ... KOR9; the protein is embedded into "
+                             "any of these), or a Martini 3 frame of your own complex, given as FILE or custom=FILE (default: 1)")
+    parser.add_argument("--runs", type=int, default=1, metavar="N",
+                        help=f"build the complex N times, each in a different bundled membrane of the --cg 1 or 2 series (its "
+                             f"first N frames, at most {MAX_RUNS}), one system per run in <out>/<frame>/ (default: %(default)s)")
+    parser.add_argument("--list-membranes", action="store_true", help="list the bundled membranes by name and exit")
     parser.add_argument("--embed", action="store_true",
                         help="embed the protein into the membrane of a --cg FILE instead of fitting it onto the frame's "
                              "protein (always the case for the bundled membranes)")
+    parser.add_argument("--embed-site", choices=EMBED_SITES, default="hole",
+                        help="where an embedded complex goes in the frame: hole = where the frame's own protein was; free = "
+                             "the stretch of membrane farthest from that protein, an unbroken bilayer, for a complex much smaller "
+                             "than the frame's receptor (e.g. one transmembrane helix) (default: %(default)s)")
     parser.add_argument("--box", nargs=3, type=float, metavar=("X", "Y", "Z"),
                         help=f"opt-in box edges in A (default: BOX = {BOX}: the membrane is sliced to the complex plus --xy-buffer "
                              "in x and y, and z is sized around the bilayer midplane); x and y may only be smaller than the "
@@ -100,6 +171,9 @@ def make_parser() -> argparse.ArgumentParser:
                         help=f"remove every molecule of this lipid (repeatable): {', '.join(LIPID_NAMES)}")
     parser.add_argument("--addlipid", metavar="LIPID",
                         help=f"turn the lipids removed by --dellipid into this lipid instead ({', '.join(CONVERTIBLE)})")
+    parser.add_argument("--exclude-disulfide", action="append", default=[], metavar="CHAIN:RESID-CHAIN:RESID",
+                        help="keep this cysteine pair reduced although its SG atoms are close enough to be bonded "
+                             "(repeatable), in the input's own numbering, e.g. A:860-A:1252")
     parser.add_argument("-o", "--out", type=Path, help="output directory (default: ./<coarse-grain stem>_membraneforger)")
     parser.add_argument("--name", help="system name for logs and [ system ] (default: output directory name)")
     parser.add_argument("--toppar", type=Path, default=os.environ.get("MEMBRANEFORGER_TOPPAR"),
@@ -125,6 +199,12 @@ def make_parser() -> argparse.ArgumentParser:
                              f"one provider; none: use the input coordinates as given (default: {ORIENTATION})")
     orient.add_argument("--orient-chain", metavar="CHAIN", help="the chain that spans or associates with the membrane")
     orient.add_argument("--orient-chains", metavar="A,B", help="several anchor chains (the first one sets the N-terminus side)")
+    orient.add_argument("--orient-residues", metavar="FIRST-LAST", default=None,
+                        help="orient on these residues of the anchor chain(s) only, e.g. the transmembrane helix 343-363 "
+                             "(several: 343-363,370-380; numbers as in the input). PPM is run on them alone and the whole "
+                             "complex follows rigidly; needs --nterm-side for the first selected residue. With --orientation "
+                             "none it names the membrane-embedded segment of an input already along z: nothing is rotated and "
+                             "the bilayer centre goes at the midpoint of that segment's CA z range")
     orient.add_argument("--nterm-side", choices=NTERM_SIDES, default=None,
                         help=f"side of the membrane the N terminus of the first anchor chain lies on; needed by PPM when no "
                              f"exact OPM entry gives it (default: {NTERM_SIDE})")
@@ -138,6 +218,15 @@ def make_parser() -> argparse.ArgumentParser:
     orient.add_argument("--opm-cache", type=Path, metavar="DIR", help="cache for downloaded OPM files (default: ~/.cache/membraneforger/opm)")
     parser.add_argument("--xy-buffer", type=float, default=defaults.box_xy_buffer_nm, metavar="NM",
                         help="membrane kept around the complex on each side in x and y when the box is auto (default: %(default)s nm)")
+    check = parser.add_argument_group("slice validation (the sliced membrane against the embedded membrane it was cut from)")
+    check.add_argument("--apl-validate", choices=("yes", "no"), default="yes" if defaults.apl_validate else "no",
+                       help="stop before backmapping when a leaflet's Voronoi APL changes by more than --apl-tolerance (default: %(default)s)")
+    check.add_argument("--apl-tolerance", type=float, default=defaults.apl_slice_tolerance_percent, metavar="PERCENT",
+                       help="largest accepted change of the leaflet APL across slicing, in percent (default: %(default)s)")
+    check.add_argument("--rdf-validate", choices=("yes", "no"), default="yes" if defaults.rdf_validate else "no",
+                       help="compare the lateral headgroup RDF of the slice with the embedded membrane (warns only; default: %(default)s)")
+    check.add_argument("--no-slice-offset", action="store_true",
+                       help="keep the slice window centred on the complex instead of choosing the offset that best preserves lipid density")
     return parser
 
 
@@ -160,21 +249,42 @@ def locate_data(requested: Path | None) -> Path:
     return Path(requested or next((p for p in candidates if p.is_dir()), candidates[0])).resolve()
 
 
+def parse_disulfide_pair(spec: str) -> tuple[str, int, int]:
+    """Read one --exclude-disulfide CHAIN:RESID-CHAIN:RESID into (chain, lower resid, higher resid)."""
+    match = re.fullmatch(r"\s*(\S):(\d+)\s*-\s*(\S):(\d+)\s*", spec)
+    if not match:
+        raise SystemExit(f"--exclude-disulfide {spec}: expected CHAIN:RESID-CHAIN:RESID, e.g. A:860-A:1252")
+    left, a, right, b = match.group(1), int(match.group(2)), match.group(3), int(match.group(4))
+    if left != right:
+        raise SystemExit(f"--exclude-disulfide {spec}: both cysteines must be in the same chain")
+    if a == b:
+        raise SystemExit(f"--exclude-disulfide {spec}: names one residue twice")
+    return (left, min(a, b), max(a, b))
+
+
 def main(argv: list | None = None) -> int:
     """Run one build from command-line arguments and return its exit code."""
     parser = make_parser()
     args = parser.parse_args(argv)
+    if args.list_membranes:
+        print(describe_bundled_membranes())
+        return 0
     given_cg = "--cg" in sys.argv or "--coarse-grain" in sys.argv
     if args.membrane and (args.all_atom or given_cg):
         parser.error("--membrane replaces --aa and --cg; give one or the other")
     if not args.membrane and not args.all_atom:
         parser.error("--aa is required")
-    embed, cg = args.embed, str(args.coarse_grain)
-    if cg in BUNDLED_MEMBRANES:
-        try:
-            args.coarse_grain, embed = bundled_membrane(cg), True
-        except SystemExit as exc:
-            parser.error(str(exc))
+    embed, cg, frames = args.embed, str(args.coarse_grain), []
+    if not 1 <= args.runs <= MAX_RUNS:
+        parser.error(f"--runs must be between 1 and {MAX_RUNS}, the number of frames in a bundled series")
+    if args.runs > 1 and (args.membrane or cg not in BUNDLED_MEMBRANES):
+        parser.error("--runs builds in several bundled membranes of one series: use it with --cg 1 or --cg 2 (--aa, no --membrane)")
+    try:
+        bundled = bundled_series(cg)[:args.runs] if args.runs > 1 else [bundled_membrane(cg)]
+    except SystemExit as exc:
+        parser.error(str(exc))
+    if bundled[0] is not None:
+        args.coarse_grain, embed, frames = bundled[0], True, bundled
     else:
         args.coarse_grain = Path(cg[len("custom="):] if cg.lower().startswith("custom=") else cg)
     if args.membrane:
@@ -184,11 +294,17 @@ def main(argv: list | None = None) -> int:
             parser.error(f"missing input file {path}")
     if args.box and (len(args.box) != 3 or min(args.box) <= 0):
         parser.error("--box needs three positive edge lengths in A")
-    if args.membrane and (args.box or args.dellipid or args.addlipid or args.embed):
-        parser.error("--box, --dellipid, --addlipid and --embed need --aa and --cg, not --membrane")
+    if args.membrane and (args.box or args.dellipid or args.addlipid or args.embed or args.embed_site != "hole"):
+        parser.error("--box, --dellipid, --addlipid, --embed and --embed-site need --aa and --cg, not --membrane")
+    if args.embed_site != "hole" and not embed:
+        parser.error("--embed-site applies when the protein is embedded: a bundled membrane (--cg 1, 2 or a frame name) or --embed")
     try:
         for name in args.dellipid + ([args.addlipid] if args.addlipid else []):
             lipid_name(name)
+    except SystemExit as exc:
+        parser.error(str(exc))
+    try:
+        exclude_disulfides = tuple(parse_disulfide_pair(spec) for spec in args.exclude_disulfide)
     except SystemExit as exc:
         parser.error(str(exc))
     try:
@@ -208,25 +324,36 @@ def main(argv: list | None = None) -> int:
         box = tuple(args.box) if args.box else (None if args.membrane else parse_box(BOX))
     except SystemExit as exc:
         parser.error(str(exc))
+    if orientation.mode == "none" and orientation.residues and not args.membrane:
+        if args.bilayer_z is not None:
+            parser.error("--orient-residues with --orientation none sets the bilayer centre from that segment; give it or --bilayer-z, not both")
+        if not embed:
+            parser.error("--orient-residues with --orientation none places an embedded protein (a bundled membrane or --embed); "
+                         "a fitted frame takes the coarse-grained protein's own pose")
     if orientation.mode != "none" and args.bilayer_z is not None and not args.membrane:
         parser.error("--bilayer-z applies with --orientation none; an oriented complex has its bilayer centre at z = 0")
-    if args.membrane and (orientation.mode != "none" and (orientation.chains or args.orientation or args.pdb_id)):
+    if args.membrane and (orientation.mode != "none" and (orientation.chains or orientation.residues or args.orientation or args.pdb_id)):
         parser.error("--membrane starts from an assembled system; membrane orientation options do not apply to it")
     if args.membrane:
         orientation = OrientationRequest(mode="none")
     if orientation.opm_file and not orientation.opm_file.is_file():
         parser.error(f"missing --opm-file {orientation.opm_file}")
-    source = args.membrane or args.coarse_grain
+    source = args.all_atom if args.runs > 1 else (args.membrane or args.coarse_grain)
     out = (args.out or Path.cwd() / f"{source.stem}_membraneforger").resolve()
     if not args.xy_buffer > 0:
         parser.error("--xy-buffer must be positive")
+    if not args.apl_tolerance > 0:
+        parser.error("--apl-tolerance must be positive")
     settings = Settings(fit_max_core_rmsd_a=args.fit_max_core_rmsd, fit_min_core_fraction=args.fit_min_core_fraction,
-                        box_xy_buffer_nm=args.xy_buffer)
+                        box_xy_buffer_nm=args.xy_buffer, apl_validate=args.apl_validate == "yes", apl_slice_tolerance_percent=args.apl_tolerance,
+                        rdf_validate=args.rdf_validate == "yes", slice_optimize_offset=not args.no_slice_offset)
     session = Session(out=out, name=args.name or out.name, gmx=gmx, forcefield=forcefield, data=data, python=python,
-                      ntomp=args.ntomp, nsteps=args.nsteps, settings=settings, embed=embed,
+                      ntomp=args.ntomp, nsteps=args.nsteps, settings=settings, embed=embed, embed_site=args.embed_site,
                       box_a=box, bilayer_z_a=args.bilayer_z, delete_lipids=list(args.dellipid), add_lipid=args.addlipid,
-                      orientation=orientation)
+                      exclude_disulfides=exclude_disulfides, orientation=orientation)
     resolved = [p.resolve() if p else None for p in (args.all_atom, args.coarse_grain, args.membrane)]
+    if args.runs > 1:
+        return run_sessions(session, resolved[0], frames, [sys.executable] + sys.argv)
     return build(session, resolved[0], resolved[1], resolved[2], [sys.executable] + sys.argv)
 
 

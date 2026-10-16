@@ -28,6 +28,12 @@ __all__ = ['RenderMode', 'MODES', 'RENDER', 'LIGHTS', 'MATERIALS', 'PALETTE', 'C
            'verify_png', 'stage_scenes', 'render_run', 'main']
 
 
+
+def run_path(run: Path, name: str) -> Path:
+    """A file of a build directory: at the top level, else in int/ (runtools.run_path; this module runs standalone under VMD)."""
+    top, kept = Path(run) / name, Path(run) / "int" / name
+    return kept if not top.exists() and kept.exists() else top
+
 @dataclass(frozen=True)
 class RenderMode:
     """Pixel size, sampling and geometry detail of one render quality level."""
@@ -598,24 +604,24 @@ def stage_scenes(run: Path, all_atom: Path | None, coarse_grain: Path | None, so
          "shows": "all-atom input complex in its own coordinate frame"},
         {"stage": "input_cg", "file": coarse_grain, "view": "side", "frame": "membrane", "draw": ["cg_slab", "box"],
          "shows": "Martini 3 input: protein BB beads and a 2.4 nm lipid cross-section, beads coloured by lipid type"},
-        {"stage": "aligned_complex", "file": run / "membrane.pdb", "view": "side", "frame": "membrane",
+        {"stage": "aligned_complex", "file": run_path(run, "membrane.pdb"), "view": "side", "frame": "membrane",
          "draw": ["protein", "ligands_pdb", "cg_protein_overlay"],
          "shows": "all-atom complex after the rigid fit, over the CG backbone beads it was fitted to (lipids hidden)"},
-        {"stage": "backmapped_membrane", "file": run / "membrane.pdb", "view": "side", "frame": "membrane",
+        {"stage": "backmapped_membrane", "file": run_path(run, "membrane.pdb"), "view": "side", "frame": "membrane",
          "draw": ["protein", "lipid_slab"], "shows": "backmapped all-atom lipids (2.4 nm cross-section) around the placed complex"},
-        {"stage": "backmapped_membrane_top", "file": run / "membrane.pdb", "view": "top", "frame": "membrane",
+        {"stage": "backmapped_membrane_top", "file": run_path(run, "membrane.pdb"), "view": "top", "frame": "membrane",
          "draw": ["protein", "lipids_all", "box"], "shows": "all backmapped lipids seen along the membrane normal"},
-        {"stage": "backmapping_overlay", "file": run / "membrane.pdb", "view": "side", "frame": "patch",
+        {"stage": "backmapping_overlay", "file": run_path(run, "membrane.pdb"), "view": "side", "frame": "patch",
          "draw": ["lipid_patch", "cg_patch_overlay"],
          "shows": "close-up of a lipid patch: all-atom lipids with the Martini beads they were built from (translucent)"},
-        {"stage": "boxed", "file": run / "boxed.gro", "view": "side", "frame": "membrane", "draw": ["protein", "lipid_slab", "box"],
+        {"stage": "boxed", "file": run_path(run, "boxed.gro"), "view": "side", "frame": "membrane", "draw": ["protein", "lipid_slab", "box"],
          "shows": "topology-ordered system in the rebuilt box"},
-        {"stage": "solvated", "file": run / "solv.gro", "view": "side", "frame": "membrane",
+        {"stage": "solvated", "file": run_path(run, "solv.gro"), "view": "side", "frame": "membrane",
          "draw": ["protein", "lipid_slab", "water_slab", "box"],
          "shows": "water added (2.4 nm cross-section): the lipid core holds no water except cavity waters within 1.0 nm of the protein"},
-        {"stage": "ionized", "file": run / "solv_ions.gro", "view": "side", "frame": "membrane",
+        {"stage": "ionized", "file": run_path(run, "solv_ions.gro"), "view": "side", "frame": "membrane",
          "draw": ["protein", "lipid_slab", "ions", "box"], "shows": "0.15 M NaCl plus neutralizing ions (all ions shown)"},
-        {"stage": "pre_em", "file": run / "solv_ions.gro", "view": "side", "frame": "membrane", "draw": ["protein", "lipid_slab"],
+        {"stage": "pre_em", "file": run_path(run, "solv_ions.gro"), "view": "side", "frame": "membrane", "draw": ["protein", "lipid_slab"],
          "shows": "lipid cross-section before energy minimization"},
         {"stage": "post_em", "file": run / "em.gro", "view": "side", "frame": "membrane", "draw": ["protein", "lipid_slab"],
          "shows": "the same cross-section after energy minimization"},
@@ -723,8 +729,8 @@ def render_run(run: Path, out: Path, tachyon: str, mode: RenderMode, all_atom: P
     # the reference for each camera is the last (largest) stage that uses it, so no earlier stage can be clipped;
     # it is taken from the full stage list so a partial re-render keeps the same camera and file numbers
     reference = {(i["view"], i["frame"]): i for i in everything}
-    if (run / "membrane.pdb").is_file():  # its chain order fixes which chain gets which colour in every stage
-        scene.reference_chains = [c["sequence"] for c in protein_chains(scene, scene.load(run / "membrane.pdb"))]
+    if run_path(run, "membrane.pdb").is_file():  # its chain order fixes which chain gets which colour in every stage
+        scene.reference_chains = [c["sequence"] for c in protein_chains(scene, scene.load(run_path(run, "membrane.pdb")))]
         scene.clear()
     for number, item in enumerate(everything, 1):
         if (only and item["stage"] not in only) or (index is not None and number - 1 != index):

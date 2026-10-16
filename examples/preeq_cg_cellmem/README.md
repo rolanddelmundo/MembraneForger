@@ -2,7 +2,9 @@
 
 Eighteen frames of a single GPCR in an asymmetric, ten-species cell-membrane model, each taken at 30 µs of a
 Martini 3 simulation. They are the bundled membranes of MembraneForger: `--cg 1` picks one of the GPR139 frames at random, `--cg 2`
-one of the kappa opioid receptor frames, and a particular frame can be given as `--cg custom=FILE --embed`.
+one of the kappa opioid receptor frames, and `--cg NAME` (for example `--cg KOR5`) a particular frame.
+`python -m membraneforger --list-membranes` lists them, and `--runs N` builds one complex in the first N frames of a
+series, giving N replicate systems that differ in their lipid arrangement.
 
 | Files | Receptor | Replicates |
 |---|---|---|
@@ -25,5 +27,13 @@ in the same membrane model, 11.2 × 11.2 nm) used by the tests:
 
 ```bash
 python -m membraneforger --aa examples/preeq_cg_cellmem/6WHC_MTZP_prot-lig.pdb \
-    --cg examples/preeq_cg_cellmem/6WHC_MTZP_cg_cellmem.gro --out example_out
+    --cg examples/preeq_cg_cellmem/6WHC_MTZP_cg_cellmem.gro --orientation none --out example_out
 ```
+
+History of the 18 KOR/GPR frames: as first committed, their coordinates were rotated about z relative to the box line
+(by 3 to 83 degrees, a different angle per frame, from a rotational fit saved without its box), so they were not
+periodic in their box and rendered as a "diamond" inside it. They were rotated back about the box centre in place,
+coordinates and velocities, with `python examples/align_frames.py examples/preeq_cg_cellmem/*_cg_cellmem.gro`, which
+reports every file as periodic (no bead pairs of different lipids within 0.30 nm once wrapped). MembraneForger runs
+the same check on every frame it reads (`align_frame_to_box`) and corrects a rotated frame with a warning that names
+the angle. `6WHC_MTZP_cg_cellmem.gro` was never affected.

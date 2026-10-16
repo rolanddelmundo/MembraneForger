@@ -55,16 +55,41 @@ class WindowAndMolecules(unittest.TestCase):
         self.assertEqual([w["cropped"] for w in windows["axes"]], [False, True])
         self.assertEqual(windows["size"].tolist(), [20.0, 4.0])
 
-    def test_only_whole_molecules_inside_the_window_are_kept(self):
+    def test_a_lipid_is_kept_by_its_headgroup_anchor_even_when_a_tail_bead_crosses_the_window(self):
         inside = [lipid("POPC", 9.0, 10.0, MIDPLANE + 3), lipid("POPC", 10.0, 10.0, MIDPLANE - 3)]
-        straddling = lipid("DOPC", 12.9, 10.0, spread=0.3)       # one bead beyond x = 13
+        straddling = lipid("DOPC", 12.9, 10.0, spread=0.3)       # PO4 anchor at x = 12.9 inside, the tail bead at 13.2 outside
         far = lipid("POPE", 2.0, 10.0)
-        above = lipid("POPS", 9.0, 12.5)                          # outside the y window 8..12
+        above = lipid("POPS", 9.0, 12.5)                          # anchor outside the y window 8..12
         cut = mf.slice_membrane_cg(inside + [straddling, far, above] + fill(), solute((8, 12), (9, 11)), CELL, MIDPLANE, SMALL)
-        self.assertEqual(cut["composition"]["POPC"], 2)  # the fill lipids sit at y = 0.5, outside the y window
-        self.assertEqual({m["cg"] for m in cut["membrane"]}, {"POPC"})
-        self.assertEqual(cut["report"]["lipids_outside_window"], len(fill()) + 3)
-        self.assertEqual(cut["report"]["composition_after"], {"POPC": 2})
+        self.assertEqual(cut["report"]["composition_after"], {"DOPC": 1, "POPC": 2})  # the fill lipids sit at y = 0.5, outside
+        self.assertEqual(cut["report"]["lipids_outside_window"], len(fill()) + 2)
+        dopc = next(m for m in cut["membrane"] if m["cg"] == "DOPC")
+        self.assertEqual(len(dopc["beads"]), 2)                                       # the complete residue, tail bead included
+        self.assertAlmostEqual(dopc["beads"][1]["x"], 13.2 - 7.0)                     # the tail still crosses the new cell edge
+        selection = cut["report"]["selection"]
+        self.assertEqual((selection["kept_by_anchor_rule"], selection["kept_by_all_beads_inside_rule"]), (3, 2))
+        self.assertEqual(selection["rejected_by_old_rule_with_anchor_inside_by_species"], {"DOPC": 1})
+
+    def test_a_lipid_whose_anchor_is_outside_is_not_kept_even_when_a_tail_bead_is_inside(self):
+        outside_head = lipid("DOPE", 13.1, 10.0, spread=-0.4)    # anchor at 13.1 beyond x = 13, tail bead at 12.7 inside
+        cut = mf.slice_membrane_cg([outside_head, lipid("POPC", 9.0, 10.0, MIDPLANE + 3), lipid("POPE", 10.0, 10.0, MIDPLANE - 3)],
+                                   solute((8, 12), (9, 11)), CELL, MIDPLANE, SMALL)
+        self.assertEqual(cut["report"]["composition_after"], {"POPC": 1, "POPE": 1})
+
+    def test_half_open_window_counts_a_boundary_lipid_once(self):
+        on_edge = lipid("DOPC", 7.0, 10.0, MIDPLANE + 3)          # anchor exactly on the lower edge: inside (lower <= a)
+        on_far_edge = lipid("DOPE", 13.0, 10.0, MIDPLANE - 3)     # anchor exactly on the upper edge: outside (a < lower + width)
+        cut = mf.slice_membrane_cg([on_edge, on_far_edge, lipid("POPC", 9.0, 10.0, MIDPLANE + 3), lipid("POPE", 10.0, 10.0, MIDPLANE - 3)],
+                                   solute((8, 12), (9, 11)), CELL, MIDPLANE, SMALL)
+        self.assertEqual(cut["report"]["composition_after"], {"DOPC": 1, "POPC": 1, "POPE": 1})
+        self.assertEqual(len(cut["membrane"]), 3)                                     # no duplicate from the periodic image
+
+    def test_the_crop_is_deterministic(self):
+        members = [lipid("POPC", 9.0 + 0.3 * k, 10.0 + 0.1 * (k % 3), MIDPLANE + (3 if k % 2 else -3)) for k in range(12)]
+        first = mf.slice_membrane_cg(members, solute((8, 12), (9, 11)), CELL, MIDPLANE, SMALL)
+        second = mf.slice_membrane_cg(copy.deepcopy(members), solute((8, 12), (9, 11)), CELL, MIDPLANE, SMALL)
+        self.assertEqual(first["report"]["composition_after"], second["report"]["composition_after"])
+        self.assertTrue(all(np.allclose(a["xyz"], b["xyz"]) for a, b in zip(first["membrane"], second["membrane"])))
 
     def test_window_origin_new_cell_and_complex_shift(self):
         placed = solute((8, 12), (9, 11))
@@ -125,22 +150,35 @@ class WindowAndMolecules(unittest.TestCase):
 
 
 class Seam(unittest.TestCase):
-    def test_overlaps_created_only_by_the_new_periodicity_are_removed(self):
+    def test_overlaps_created_only_by_the_new_periodicity_are_relaxed_not_deleted(self):
         # window x 7..13: heads at x = 7.05 and 12.95 are 0.1 nm apart across the NEW boundary, 5.9 nm apart in the source
         members = [lipid("POPC", 7.05, 10.0, MIDPLANE + 3), lipid("POPE", 12.95, 10.0, MIDPLANE + 3),
                    lipid("DOPC", 9.0, 9.0, MIDPLANE - 3), lipid("DOPE", 10.0, 11.0, MIDPLANE - 3)]
         cut = mf.slice_membrane_cg(members, solute((8, 12), (9, 11)), CELL, MIDPLANE, SMALL)
         seam = cut["report"]["seam"]
-        # both beads of the two lipids (head and tail) are 0.1 nm apart across the new boundary: two bead pairs, one lipid removed
-        self.assertEqual((seam["pairs_created_by_new_periodicity"], seam["lipids_removed"]), (2, 1))
-        self.assertEqual(sum(seam["removed_by_species"].values()), 1)
-        self.assertEqual(len(cut["membrane"]), 3)
+        self.assertEqual(seam["lipids_removed"], 0)                                   # nothing is deleted
+        self.assertEqual(len(cut["membrane"]), 4)
+        self.assertTrue(seam["relaxation"]["converged"])
+        self.assertEqual(seam["pairs_created_by_new_periodicity"], 0)                 # no pair closer than the threshold is left
+        self.assertEqual(seam["relaxation"]["lipids_moved"], 2)                        # only the two seam lipids moved
+        self.assertLess(seam["relaxation"]["max_bead_displacement_nm"], 0.3)
         points = np.vstack([m["xyz"] for m in cut["membrane"]])
         owners = np.concatenate([np.full(len(m["xyz"]), i) for i, m in enumerate(cut["membrane"])])
         from scipy.spatial import cKDTree
         box = np.array(cut["box"])
         pairs = cKDTree(np.mod(points - points.min(axis=0), box), boxsize=box).query_pairs(SETTINGS.seam_min_bead_nm, output_type="ndarray")
         self.assertFalse((owners[pairs[:, 0]] != owners[pairs[:, 1]]).any())          # no seam clash remains
+        for mol, before in zip(cut["membrane"], members):                               # every lipid kept its shape
+            length = lambda m: float(np.linalg.norm(m["xyz"][0] - m["xyz"][1]))
+            self.assertAlmostEqual(length(mol), length(before), places=1)
+
+    def test_a_hard_core_overlap_that_cannot_be_relaxed_costs_one_lipid(self):
+        members = [lipid("POPC", 7.05, 10.0, MIDPLANE + 3), lipid("POPE", 12.95, 10.0, MIDPLANE + 3),
+                   lipid("DOPC", 9.0, 9.0, MIDPLANE - 3), lipid("DOPE", 10.0, 11.0, MIDPLANE - 3)]
+        cut = mf.slice_membrane_cg(members, solute((8, 12), (9, 11)), CELL, MIDPLANE, mf.Settings(slice_min_lipids=2, seam_relax_steps=0))
+        seam = cut["report"]["seam"]
+        self.assertEqual((seam["pairs_created_by_new_periodicity"], seam["lipids_removed"]), (2, 1))
+        self.assertEqual(len(cut["membrane"]), 3)
 
     def test_contacts_that_were_already_close_in_the_source_are_left_alone(self):
         members = [lipid("POPC", 9.0, 10.0, MIDPLANE + 3), lipid("POPE", 9.1, 10.0, MIDPLANE + 3),   # 0.1 nm apart in the source
@@ -198,10 +236,13 @@ class RealFrames(unittest.TestCase):
             self.assertEqual(len(mol["beads"]), beads[mol["cg"]])                 # no lipid lost a bead
         for axis, window in enumerate(cut["report"]["axes"]):
             if window["cropped"]:
+                anchors = np.array([mf.anchor_xyz(m["xyz"], [b["atom"] for b in m["beads"]], mf.anchor_bead(m["cg"])) for m in cut["membrane"]])
+                self.assertGreaterEqual(anchors[:, axis].min(), 0.0)                 # every anchor inside the half-open cell
+                self.assertLess(anchors[:, axis].max(), cut["box"][axis])
                 low = min(m["xyz"][:, axis].min() for m in cut["membrane"])
                 high = max(m["xyz"][:, axis].max() for m in cut["membrane"])
-                self.assertGreaterEqual(low, 0.0)
-                self.assertLessEqual(high, cut["box"][axis])
+                self.assertGreater(low, -2.0)                                          # tails cross the edge by less than a lipid length
+                self.assertLess(high, cut["box"][axis] + 2.0)
 
     def test_6whc_example(self):
         cut = mf.slice_membrane_cg(self.membrane, self.placed, self.box, self.midplane, self.settings)
@@ -212,6 +253,7 @@ class RealFrames(unittest.TestCase):
         self.assertEqual(report["lipids_before"], len(self.membrane))
         self.assertEqual(report["lipids_before"] - report["lipids_after"],
                          report["lipids_outside_window"] + report["seam"]["lipids_removed"])
+        self.assertGreater(report["selection"]["rejected_by_old_rule_with_anchor_inside"], 0)   # the old rule would have lost lipids
         self.assertEqual(sum(report["composition_after"].values()), report["lipids_after"])
         self.assertTrue(set(report["composition_after"]) <= set(report["composition_before"]))
         self.assertTrue(all(report["composition_after"][k] <= v for k, v in report["composition_before"].items() if k in report["composition_after"]))
@@ -237,6 +279,9 @@ class RealFrames(unittest.TestCase):
     def test_18_nm_gpcr_frames_are_cut_to_a_fraction_of_their_area(self):
         for frame in (KOR_FRAME, GPR139_FRAME):
             raw, box = mf.read_cg(frame)
+            raw, alignment = mf.align_frame_to_box(raw, box)                 # the bundled frames are periodic in their box as shipped
+            self.assertEqual(alignment["rotation_about_z_deg"], 0.0)
+            self.assertEqual(alignment["overlapping_pairs_as_read"], 0)
             cg = mf.classify_cg(raw, MAPPING)
             slab = mf.make_membrane_whole(cg["membrane"], box)
             midplane = mf.bilayer_midplane(cg["membrane"], slab)[0]
@@ -255,20 +300,30 @@ class RealFrames(unittest.TestCase):
                 self.assertTrue(report["leaflets_after"]["lower"] and report["leaflets_after"]["upper"])
                 self.assertEqual(cut["box"][2], box[2])
                 self.check_whole_for(cg["membrane"], cut)
-                # no seam clash survives in the new periodic cell
+                # no hard-core seam overlap survives in the new periodic cell, and few contacts at all are left to backmapping
                 from scipy.spatial import cKDTree
                 pts = np.vstack([m["xyz"] for m in cut["membrane"]])
                 own = np.concatenate([np.full(len(m["xyz"]), i) for i, m in enumerate(cut["membrane"])])
                 new_box = np.array(cut["box"])
-                limit = self.settings.seam_min_bead_nm
-                pairs = cKDTree(np.mod(pts - pts.min(axis=0), new_box), boxsize=new_box).query_pairs(limit, output_type="ndarray")
-                flat = cKDTree(pts).query_pairs(limit, output_type="ndarray")
-                created = {tuple(p) for p in pairs.tolist() if own[p[0]] != own[p[1]]} - {tuple(p) for p in flat.tolist()}
-                self.assertEqual(len(created), 0)
+                tree = cKDTree(np.mod(pts - pts.min(axis=0), new_box), boxsize=new_box)
+                for limit, allowed in ((self.settings.seam_hard_core_nm, 0), (self.settings.seam_min_bead_nm, 5)):
+                    pairs = tree.query_pairs(limit, output_type="ndarray")
+                    flat = cKDTree(pts).query_pairs(limit, output_type="ndarray")
+                    created = {tuple(p) for p in pairs.tolist() if own[p[0]] != own[p[1]]} - {tuple(p) for p in flat.tolist()}
+                    self.assertLessEqual(len(created), allowed)
 
     def check_whole_for(self, membrane, cut):
         beads = {m["cg"]: len(m["beads"]) for m in membrane}
         self.assertTrue(all(len(m["beads"]) == beads[m["cg"]] for m in cut["membrane"]))
+
+
+class OffsetSlack(unittest.TestCase):
+    def test_slack_is_the_search_range_clamped_to_the_minimum_margin(self):
+        self.assertAlmostEqual(mf.offset_slack(mf.Settings()), 0.5)                              # 1.0 buffer, 0.5 margin
+        self.assertAlmostEqual(mf.offset_slack(mf.Settings(box_xy_buffer_nm=0.7)), 0.2)
+        self.assertEqual(mf.offset_slack(mf.Settings(box_xy_buffer_nm=0.5)), 0.0)                # cannot shift at all
+        self.assertEqual(mf.offset_slack(mf.Settings(box_xy_buffer_nm=0.3)), 0.0)
+        self.assertEqual(mf.offset_slack(mf.Settings(slice_optimize_offset=False)), 0.0)
 
 
 class Integration(unittest.TestCase):
@@ -279,7 +334,7 @@ class Integration(unittest.TestCase):
         if subprocess.run([sys.executable, "-c", "import mstool"], capture_output=True).returncode:
             raise unittest.SkipTest("mstool is not importable in this interpreter")
 
-    def prepare(self, cg=CG_GRO, **kwargs):
+    def prepare(self, cg=CG_GRO, aa=AA_PDB, **kwargs):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp, True)
         out = tmp / "out"
@@ -288,7 +343,7 @@ class Integration(unittest.TestCase):
         request = kwargs.pop("orientation", mf.OrientationRequest(mode="none"))
         session = mf.Session(out=out, name="t", gmx="gmx", forcefield=FORCEFIELD, data=mf.locate_data(None), python=sys.executable,
                              ntomp=1, nsteps=1, orientation=request, work=out / "work", **kwargs)
-        return session, mf.prepare_inputs(session, AA_PDB, cg)
+        return session, mf.prepare_inputs(session, aa, cg)
 
     def test_auto_box_slices_before_backmapping_and_records_it(self):
         session, prepared = self.prepare()
@@ -299,8 +354,13 @@ class Integration(unittest.TestCase):
         self.assertEqual(sum(prepared["composition"].values()), report["lipids_after"])
         self.assertEqual(len(prepared["membrane"]), report["lipids_after"])
         moved = mf.xyz_nm(prepared["placed"]) / 10.0
-        self.assertGreaterEqual(moved[:, 0].min(), 1.0 - 1e-6)
-        self.assertLessEqual(moved[:, 0].max(), prepared["box"][0] - 1.0 + 1e-6)
+        # the window may be shifted by the density/composition search, never below the minimum margin; both margins add up to 2 x buffer
+        margins = (float(moved[:, 0].min()), float(prepared["box"][0] - moved[:, 0].max()))
+        self.assertGreaterEqual(min(margins), session.settings.box_xy_min_buffer_nm - 1e-6)
+        self.assertAlmostEqual(sum(margins), 2.0 * session.settings.box_xy_buffer_nm, places=5)
+        self.assertEqual(report["crop_offset"]["offset_nm"][0], round(1.0 - margins[0], 3))
+        self.assertTrue(session.record["slice_check"]["pass"])
+        self.assertTrue((Path(session.out) / "membrane_validation.md").is_file())
 
     def test_oriented_complex_slices_and_keeps_its_orientation(self):
         request = mf.OrientationRequest(mode="opm", chains=("R",), pdb_id="6WHC", opm_file=OPM_6WHC)
@@ -333,6 +393,38 @@ class Integration(unittest.TestCase):
         self.assertLess(float(np.ptp(z_shift)), 1e-2)                                         # embedding only translated the complex
         self.assertAlmostEqual(float(z_shift.mean()) / 10.0, session.record["coarse_grain"]["bilayer_midplane_nm"], places=2)
         self.assertEqual(sum(prepared["composition"].values()), report["lipids_after"])
+
+    def test_single_pass_protein_embeds_away_from_the_frames_receptor_hole(self):
+        # TM6 of the example receptor alone stands in for a single-pass protein; the GPR139 frame's receptor hole is
+        # far larger than one helix, so it goes on the unbroken bilayer away from that hole ("free" site)
+        aa = mf.read_all_atom(AA_PDB, FORCEFIELD)[0]
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
+        helix = tmp / "tm6.pdb"
+        mf.write_pdb([a for a in aa if a["chain"] == "R" and 349 <= a["resid"] <= 376], helix)
+        # one helix plus the default 1 nm buffer is a ~4 nm cell, where the cut edges alone move the APL past the gate
+        settings = mf.Settings(box_xy_buffer_nm=3.0)
+        session, prepared = self.prepare(cg=GPR139_FRAME, aa=helix, embed=True, embed_site="free", settings=settings)
+        embedding, report = session.record["embedding"], session.record["slice"]
+        self.assertEqual(embedding["site"], "free")
+        self.assertGreater(embedding["distance_to_frame_protein_nm"], 6.0)
+        self.assertLess(sum(embedding["removed_lipids"].values()), 15)
+        self.assertLessEqual(embedding["voids"]["largest_pocket_nm3"], mf.MAX_VOID_NM3)
+        self.assertTrue(report["cropped"])
+        self.assertEqual(report["frame_protein_beads_in_window"], 0)
+        self.assertTrue(session.record["slice_check"]["pass"])
+        self.assertEqual(sum(prepared["composition"].values()), report["lipids_after"])
+        self.assertGreater(min(prepared["box"][:2]), 7.0)
+        # the segment named with --orientation none sets the bilayer centre the embedding uses
+        z = [a["z"] for a in aa if a["chain"] == "R" and 349 <= a["resid"] <= 376 and a["atom"] == "CA"]
+        session, _ = self.prepare(cg=GPR139_FRAME, aa=helix, embed=True, embed_site="free", settings=settings,
+                                  orientation=mf.OrientationRequest(mode="none", residues=((349, 376),)))
+        self.assertAlmostEqual(session.record["embedding"]["bilayer_centre_input_A"], round(0.5 * (min(z) + max(z)), 3), places=3)
+        self.assertTrue(session.record["embedding"]["hydrophobic_belt"]["given"])
+        with self.assertRaises(mf.StageFailure) as caught:  # the same helix in the receptor's hole leaves a pocket
+            self.prepare(cg=GPR139_FRAME, aa=helix, embed=True, settings=settings)
+        self.assertEqual(caught.exception.stage, "mapping")
+        self.assertIn("--embed-site free", caught.exception.what)
 
     def test_user_box_is_validated_against_the_cell_and_cuts_the_membrane(self):
         session, prepared = self.prepare(box_a=(96.0, 111.8, 250.0))

@@ -5,22 +5,22 @@
 """Re-derive what a build claims from its files alone, with parsers that share no code with the builder."""
 import json
 import re
-import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 import networkx as nx
 import numpy as np
 from scipy.spatial import cKDTree
 
-from .config import Settings
+from .config import DISULFIDE_OK_A, Settings
+from .runtools import INT_DIR, run_path
+from .stereo import check_gm3_stereo
 
 __all__ = ['gro_table', 'topology_includes', 'topology_molecules', 'itp_atoms', 'gromacs', 'check_topology',
            'check_grompp', 'check_energy', 'same_image', 'superposed_rmsd', 'check_structure', 'closest_contact_between', 'itp_bonds',
-           'molecule_rings',
-           'ring_piercings', 'check_ring_piercing', 'audit_run']
+           'itp_dihedral_restraints', 'dihedrals_pbc', 'check_dihedral_restraints', 'molecule_rings',
+           'ring_piercings', 'check_ring_piercing', 'check_disulfide_geometry', 'audit_run']
 
 PROTEIN = {"ALA", "ARG", "ASN", "ASP", "CYS", "CYS2", "CYSG", "CYSP", "GLN", "GLU", "GLY", "HIS", "HSD", "HSE", "HSP",
            "ILE", "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL", "AIB", "LEM", "KTZ", "KRT", "KSM"}
@@ -127,23 +127,27 @@ def check_topology(run: Path, names: list) -> tuple[dict, list]:
             "include_files": len(reached), "stray_toppar_files": strays}, fails
 
 
+def audit_scratch(run: Path) -> Path:
+    """Where the audit writes its own grompp and gmx energy files: int/audit/ of the build, kept like every intermediate."""
+    scratch = run / INT_DIR / "audit"
+    scratch.mkdir(parents=True, exist_ok=True)
+    return scratch
+
+
 def check_grompp(run: Path, gmx: str, structure: str) -> tuple[dict, list]:
     """Rebuild the run input with -maxwarn 0, as built and with position restraints defined."""
     fails, report = [], {}
-    scratch = Path(tempfile.mkdtemp(prefix="membraneforger_audit_"))
-    try:
-        for label, mdp_extra, extra in (("as_built", "", []), ("posres", "define = -DPOSRES\n", ["-r", str(run / structure)])):
-            mdp = scratch / f"{label}.mdp"
-            mdp.write_text(mdp_extra + (run / "em.mdp").read_text())
-            code, output = gromacs(gmx, ["grompp", "-f", str(mdp), "-c", str(run / structure), "-p", str(run / "topol.top"),
-                                         "-n", str(run / "index_ini.ndx"), "-o", str(scratch / f"{label}.tpr"),
-                                         "-po", str(scratch / f"{label}_out.mdp"), "-maxwarn", "0"] + extra, run)
-            warnings, notes = len(re.findall(r"(?m)^WARNING \d+", output)), len(re.findall(r"(?m)^NOTE \d+", output))
-            report[label] = {"exit": code, "warnings": warnings, "notes": notes}
-            if code or warnings or not (scratch / f"{label}.tpr").is_file():
-                fails.append(f"grompp -maxwarn 0 ({label}) exit {code}, {warnings} warnings")
-    finally:
-        shutil.rmtree(scratch, ignore_errors=True)
+    scratch = audit_scratch(run)
+    for label, mdp_extra, extra in (("as_built", "", []), ("posres", "define = -DPOSRES\n", ["-r", str(run_path(run, structure))])):
+        mdp = scratch / f"{label}.mdp"
+        mdp.write_text(mdp_extra + run_path(run, "em.mdp").read_text())
+        code, output = gromacs(gmx, ["grompp", "-f", str(mdp), "-c", str(run_path(run, structure)), "-p", str(run / "topol.top"),
+                                     "-n", str(run / "index_ini.ndx"), "-o", str(scratch / f"{label}.tpr"),
+                                     "-po", str(scratch / f"{label}_out.mdp"), "-maxwarn", "0"] + extra, run)
+        warnings, notes = len(re.findall(r"(?m)^WARNING \d+", output)), len(re.findall(r"(?m)^NOTE \d+", output))
+        report[label] = {"exit": code, "warnings": warnings, "notes": notes}
+        if code or warnings or not (scratch / f"{label}.tpr").is_file():
+            fails.append(f"grompp -maxwarn 0 ({label}) exit {code}, {warnings} warnings")
     return report, fails
 
 
@@ -151,19 +155,16 @@ def check_energy(run: Path, gmx: str) -> tuple[dict, list]:
     """Check the energy and trajectory files with gmx check and compare gmx energy with em.log."""
     fails, report = [], {}
     for flag, name in (("-e", "em.edr"), ("-f", "em.trr")):
-        code, output = gromacs(gmx, ["check", flag, name], run)
+        code, output = gromacs(gmx, ["check", flag, str(run_path(run, name))], run)
         frames = re.findall(r"(?m)^(?:Last energy frame read|Last frame)\s+(\d+)", output)
         report[f"gmx_check_{name}"] = {"exit": code, "last_frame": int(frames[-1]) if frames else None}
         if code or not frames:  # a truncated file can still exit 0, so a complete read must be reported
             fails.append(f"gmx check {flag} {name}: exit {code}, {'no' if not frames else 'a'} complete read reported")
-    scratch = Path(tempfile.mkdtemp(prefix="membraneforger_audit_"))
-    try:
-        code, output = gromacs(gmx, ["energy", "-f", str(run / "em.edr"), "-o", str(scratch / "e.xvg")], run, "Potential\n\n")
-        series = [float(l.split()[1]) for l in (scratch / "e.xvg").read_text().splitlines()
-                  if l and l[0] not in "#@"] if code == 0 and (scratch / "e.xvg").is_file() else []
-    finally:
-        shutil.rmtree(scratch, ignore_errors=True)
-    log_text = (run / "em.log").read_text(errors="replace")
+    scratch = audit_scratch(run)
+    code, output = gromacs(gmx, ["energy", "-f", str(run_path(run, "em.edr")), "-o", str(scratch / "e.xvg")], run, "Potential\n\n")
+    series = [float(l.split()[1]) for l in (scratch / "e.xvg").read_text().splitlines()
+              if l and l[0] not in "#@"] if code == 0 and (scratch / "e.xvg").is_file() else []
+    log_text = run_path(run, "em.log").read_text(errors="replace")
     logged = re.findall(r"Potential Energy\s*=\s*(\S+)", log_text)
     fmax = re.findall(r"Maximum force\s*=\s*(\S+)", log_text)
     steps = re.findall(r"converged to Fmax < \S+ in (\d+) steps", log_text)
@@ -197,9 +198,9 @@ def superposed_rmsd(P: np.ndarray, Q: np.ndarray) -> float:
 def check_structure(run: Path, structure: str, settings: Settings) -> tuple[dict, list]:
     """Measure what EM did to the system: solute drift, lipid contacts, leaflets, box, solvent and ions."""
     fails = []
-    resn, names, xyz, box = gro_table(run / structure)
-    resn0, names0, xyz0, box0 = gro_table(run / "solv_ions.gro")
-    boxed = gro_table(run / "boxed.gro")[3]
+    resn, names, xyz, box = gro_table(run_path(run, structure))
+    resn0, names0, xyz0, box0 = gro_table(run_path(run, "solv_ions.gro"))
+    boxed = gro_table(run_path(run, "boxed.gro"))[3]
     if not np.isfinite(xyz).all():
         return {}, ["non-finite coordinates"]
     if names != names0:
@@ -278,7 +279,7 @@ def check_structure(run: Path, structure: str, settings: Settings) -> tuple[dict
 
 def closest_contact_between(run: Path, structure: str, first_group_atoms: int) -> dict:
     """Find the closest pair between the first N atoms (the solute) and the rest, hydrogens included, with periodic images."""
-    resn, names, xyz, box = gro_table(run / structure)
+    resn, names, xyz, box = gro_table(run_path(run, structure))
     cell = box[:3]
     wrapped = np.mod(xyz, cell)
     wrapped[wrapped >= cell] = 0.0
@@ -306,6 +307,85 @@ def itp_bonds(paths: list[Path]) -> dict:
             elif section == "bonds" and current and len(f) >= 2 and f[0].isdigit() and f[1].isdigit():
                 molecules[current].append((int(f[0]) - 1, int(f[1]) - 1))
     return molecules
+
+
+def itp_dihedral_restraints(paths: list[Path]) -> dict:
+    """Map each moleculetype to its [ dihedral_restraints ] rows: (zero-based atom quadruple, target angle in degrees)."""
+    molecules, current, section, fresh = {}, None, "", False
+    for path in paths:
+        for raw in path.read_text(errors="replace").splitlines():
+            s = raw.split(";", 1)[0].strip()
+            if not s or s.startswith("#"):  # rows inside #ifdef DIHRES are read: the check needs them either way
+                continue
+            if s.startswith("["):
+                section, fresh = s.strip("[] \t").lower(), True
+                continue
+            f = s.split()
+            if section == "moleculetype" and fresh:
+                current, fresh = f[0], False
+                molecules[current] = []
+            elif section == "dihedral_restraints" and current and len(f) >= 6 and all(v.isdigit() for v in f[:5]):
+                molecules[current].append((tuple(int(v) - 1 for v in f[:4]), float(f[5])))
+    return molecules
+
+
+def dihedrals_pbc(xyz: np.ndarray, cell: np.ndarray, quads: np.ndarray) -> np.ndarray:
+    """Dihedral angles (degrees) of atom quadruples, with minimum-image bond vectors in a rectangular cell."""
+    image = lambda v: v - cell * np.round(v / cell)
+    b0 = image(xyz[quads[:, 0]] - xyz[quads[:, 1]])
+    b1 = image(xyz[quads[:, 2]] - xyz[quads[:, 1]])
+    b2 = image(xyz[quads[:, 3]] - xyz[quads[:, 2]])
+    b1 = b1 / np.linalg.norm(b1, axis=1)[:, None]
+    v = b0 - (b0 * b1).sum(axis=1)[:, None] * b1
+    w = b2 - (b2 * b1).sum(axis=1)[:, None] * b1
+    return np.degrees(np.arctan2((np.cross(b1, v) * w).sum(axis=1), (v * w).sum(axis=1)))
+
+
+def check_dihedral_restraints(run: Path, structure: str) -> tuple[dict, list]:
+    """Evaluate every CHARMM-GUI dihedral restraint of the lipid topologies on the structure.
+
+    The +-120 rows fix stereocentres and the 0/180 rows fix double bonds: a structure on the wrong side has the wrong
+    molecule, which no MD run corrects, so it fails. The +-60 rows hold sugar and inositol rings in their chair;
+    a ring outside it is a conformation MD can repair, so it is reported, not failed."""
+    _, _, xyz, box = gro_table(run_path(run, structure))
+    cell = box[:3]
+    top = run / "topol.top"
+    includes = topology_includes(top, set())
+    atoms, rows = itp_atoms(includes), itp_dihedral_restraints(includes)
+    offset, report, fails = 0, {}, []
+    for mol, count in topology_molecules(top):
+        n, restraints = len(atoms[mol]), rows.get(mol, [])
+        if restraints and count:
+            quads = np.array([q for q, _ in restraints])
+            target = np.array([t for _, t in restraints])
+            starts = offset + n * np.arange(count)
+            phi = dihedrals_pbc(xyz, cell, (starts[:, None, None] + quads[None]).reshape(-1, 4)).reshape(count, -1)
+            kind = np.where(np.abs(np.abs(target) - 120) < 30, "configuration",
+                            np.where(np.abs(np.abs(target) - 60) < 30, "ring", "double_bond"))
+            wrong = np.where(kind == "double_bond", (np.abs(phi) < 90) != (np.abs(target) < 90),
+                             np.sign(phi) != np.sign(target))
+            names = [a for a, _ in atoms[mol]]
+            entry = {"molecules": int(count), "restraints": int(len(restraints))}
+            for label in ("configuration", "double_bond"):
+                bad = wrong[:, kind == label]
+                entry[f"wrong_{label}s"] = int(bad.sum())
+                if bad.any():
+                    k, r = np.argwhere(bad)[0]
+                    q = quads[kind == label][r]
+                    fails.append(f"{mol}: {int(bad.sum())} {label.replace('_', ' ')} restraint(s) on the wrong side, e.g. molecule "
+                                 f"{k + 1} {'-'.join(names[i] for i in q)} = {phi[k, kind == label][r]:+.0f} (target "
+                                 f"{target[kind == label][r]:+.0f})")
+            ring_rows = np.flatnonzero(kind == "ring")
+            if len(ring_rows):
+                graph = nx.Graph()
+                for r in ring_rows:  # the rows of one ring share its atoms
+                    graph.add_edges_from((r, ("atom", int(a))) for a in quads[r])
+                rings = [sorted(x for x in c if not isinstance(x, tuple)) for c in nx.connected_components(graph)]
+                out_of_chair = sum(int(wrong[:, ring].any(axis=1).sum()) for ring in rings)
+                entry.update({"rings": len(rings) * int(count), "rings_out_of_chair": out_of_chair})
+            report[mol] = entry
+        offset += n * count
+    return report, fails
 
 
 def molecule_rings(bonds: list) -> list[tuple]:
@@ -370,7 +450,7 @@ def ring_piercings(xyz: np.ndarray, cell: np.ndarray, rings: np.ndarray, sizes: 
 
 def check_ring_piercing(run: Path, structure: str) -> tuple[dict, list]:
     """Fail if any covalent bond threads a 5- or 6-membered ring (lipid tails through aromatic, sterol or sugar rings)."""
-    resn, names, xyz, box = gro_table(run / structure)
+    resn, names, xyz, box = gro_table(run_path(run, structure))
     top = run / "topol.top"
     files = topology_includes(top, set())
     bonds_of = itp_bonds(files)
@@ -405,14 +485,53 @@ def check_ring_piercing(run: Path, structure: str) -> tuple[dict, list]:
     return report, fails
 
 
-def audit_run(run: Path, gmx: str, structure: str = "em.gro", settings: Settings = Settings()) -> dict:
+def check_disulfide_geometry(run: Path, structure: str) -> tuple[dict, list]:
+    """Measure every SG-SG bond of the topology on the structure: a disulfide outside DISULFIDE_OK_A after EM has come apart."""
+    # The topology guarantees the bond exists; this closes the loop on the coordinates minimization left behind
+    # (CHARMM36 S-S equilibrium 2.03 A; the same window the builder accepts in the input).
+    resn, names, xyz, box = gro_table(run_path(run, structure))
+    top = run / "topol.top"
+    files = topology_includes(top, set())
+    bonds_of, atoms_of = itp_bonds(files), itp_atoms(files)
+    cell = box[:3]
+    measured, offset = [], 0
+    for mol, count in topology_molecules(top):
+        n = len(atoms_of[mol])
+        sg = {i for i, (name, _) in enumerate(atoms_of[mol]) if name == "SG"}
+        pairs = [(a, b) for a, b in bonds_of.get(mol, []) if a in sg and b in sg]
+        for k in range(count if pairs else 0):
+            start = offset + n * k
+            for a, b in pairs:
+                i, j = start + a, start + b
+                delta = xyz[j] - xyz[i]
+                delta -= cell * np.round(delta / cell)
+                label = lambda q: f"{resn[q]}:{names[q]}(atom {q + 1})"
+                measured.append({"molecule": mol, "copy": k + 1, "atoms": [label(i), label(j)],
+                                 "sg_sg_A": round(10.0 * float(np.linalg.norm(delta)), 3)})
+        offset += n * count
+    low, high = DISULFIDE_OK_A
+    broken = [m for m in measured if not low <= m["sg_sg_A"] <= high]
+    report = {"disulfides": len(measured), "accepted_sg_sg_A": list(DISULFIDE_OK_A), "bonds": measured, "outside_window": len(broken)}
+    fails = [f"{len(broken)} disulfide(s) outside {low}-{high} A after EM, e.g. {broken[0]['atoms'][0]}-{broken[0]['atoms'][1]} "
+             f"= {broken[0]['sg_sg_A']} A"] if broken else []
+    return report, fails
+
+
+DEFAULT_DATA = Path(__file__).resolve().parents[1] / "backmap_data"  # map.dat: the GM3 chirality definitions the stereo check uses
+
+
+def audit_run(run: Path, gmx: str, structure: str = "em.gro", settings: Settings = Settings(), data: Path | None = None) -> dict:
     """Audit one build directory and write audit.json; raises if any check fails."""
     run = run.resolve()
-    names = gro_table(run / structure)[1]
+    names = gro_table(run_path(run, structure))[1]
     report, failures = {"structure": structure}, []
+    data = Path(data) if data else DEFAULT_DATA
     for key, (part, fails) in (("topology", check_topology(run, names)), ("grompp", check_grompp(run, gmx, structure)),
                                ("energy", check_energy(run, gmx)), ("geometry", check_structure(run, structure, settings)),
-                               ("ring_piercing", check_ring_piercing(run, structure))):
+                               ("ring_piercing", check_ring_piercing(run, structure)),
+                               ("dihedral_restraints", check_dihedral_restraints(run, structure)),
+                               ("gm3_stereochemistry", check_gm3_stereo(run_path(run, structure), data)),
+                               ("disulfides", check_disulfide_geometry(run, structure))):
         report[key] = part
         failures += fails
     report["checks"] = ["atom names and count match topol.top", "net charge is zero", "no stray toppar files",
@@ -420,7 +539,10 @@ def audit_run(run: Path, gmx: str, structure: str = "em.gro", settings: Settings
                         "gmx energy agrees with em.log", "EM converged and lowered the potential",
                         "index groups partition the system", "protein CA RMSD across EM", "lipid-solute contacts",
                         "two flat phosphate leaflets", "no water in the bilayer core", "membrane XY cell preserved",
-                        "no covalent bond threads a 5- or 6-membered ring"]
+                        "no covalent bond threads a 5- or 6-membered ring",
+                        "lipid stereocentres and double bonds satisfy their CHARMM-GUI dihedral restraints",
+                        "every GM3 has its 16 sugar stereocentres and 2 ceramide trans bonds in the configuration of map.dat",
+                        "every disulfide of the topology measures 1.8-2.2 A after EM"]
     report["failures"] = failures
     report["result"] = "FAIL" if failures else "PASS"
     (run / "audit.json").write_text(json.dumps(report, indent=2) + "\n")
