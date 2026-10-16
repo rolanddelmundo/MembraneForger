@@ -55,6 +55,6 @@ if [ -x "$PPM_SRC/immers" ] && [ ! -f "$PPM_SRC/res.lib" ]; then
     echo "WARNING: $PPM_SRC/res.lib is missing; PPM needs it next to immers"
 fi
 
-say "done. In run_membraneforger.sbatch set REPO=$REPO"
+say "done. In run_membraneforger.sbatch (block 2) set REPO=$REPO"
 [ -x "$PPM_SRC/immers" ] && say "and PPM=$PPM_SRC/immers"
 exit 0
