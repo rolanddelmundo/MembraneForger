@@ -1,93 +1,57 @@
 # Troubleshooting
 
-## Missing GROMACS
+When a build stops, `membranebuilder.log` ends with `FAIL`, and the first `ERROR:` line names the stage that failed.
+Read the `WARN:` lines just before it too. Nothing is deleted on failure: the intermediates are in `<out>/int/` and
+the stage is recorded in `run_manifest.json` (`error.stage`).
 
-`doctor` reports a GROMACS failure when no usable `gmx` executable is found.
-Install GROMACS or set `GMX_BIN=/path/to/gmx`.
+## Log-line prefixes
 
-## Missing CHARMM36
+| Prefix | Meaning |
+|---|---|
+| `CHECK:` | a stage starts and its checks run |
+| `PASS:` | a check succeeded |
+| `WARN:` | something to review; the build continues |
+| `ERROR:` | a check failed; the build stopped |
+| `INFO:` | a measurement or a count |
 
-Stage 4 needs a local CHARMM36 GROMACS force-field directory containing
-`forcefield.itp`, `ffbonded.itp`, `ffnonbonded.itp`, residue and terminal
-databases, water, and ion parameters. This resource is not bundled. Set:
+## Common failures
+
+| Symptom | Likely cause | What to do |
+|---|---|---|
+| `ERROR` in stage `inputs` | water, bulk ions, an insertion code, duplicate atoms, or a residue with no topology | Remove the offending records. A ligand needs its `.itp` in `forcefield/toppar/`. |
+| `Multiple protein chains were detected` (stage `orient`) | several protein chains and no anchor chain named | Add `--orient-chain` with the chain the error suggests. |
+| The build asks for `--nterm-side` | PPM is orienting the protein and no OPM entry gives the side | Add `--nterm-side in` or `out` for residue 1 of that chain as it is in your file. |
+| Protein upside down in `int/oriented.pdb` | `--nterm-side` wrong for this file, often because a signal peptide is still attached | Rerun with the other side. The extracellular domain must end up at +z. |
+| PPM fails or is not found | wrong path, or `res.lib` missing next to `immers` | Check `--ppm-exe` or `MEMBRANEFORGER_PPM`. See [Advanced options](advanced.md#ppm-30). Already-oriented inputs can use `--orientation none`. |
+| Empty pocket stops the build after embedding | the protein is much smaller than the frame's receptor hole | Use `--embed-site free` with a larger `--xy-buffer`, or your own membrane frame. |
+| `ERROR` in stage `slice_check` | the cut changed the lipid packing beyond `--apl-tolerance` | Read `membrane_validation.md`. Rerun with a larger `--xy-buffer` (2.0 or more). |
+| `ERROR` in stage `mstool` | the interpreter cannot import mstool | Install mstool 0.3.9 or 0.3.10, or point `--mstool-python` at a Python that has it. |
+| Backmapping fails after all seeds | ring threading or a clash that every seed reproduces | Read the `backmap` lines of the log and `int/work/mstool/`. |
+| `ERROR` in stage `validate` after minimization | the largest force stayed above the target, or a clash remained | The log names the atom and its neighbours. `em_clash_trace.json` traces a lipid culprit back to the first stage it clashes. |
+| GROMACS error | `gmx` not found, or a topology problem | Pass `--gmx`. Read the GROMACS message in the log. |
+| `input ... would be overwritten by the build` | the input file lives in the output directory under a generated name | Choose another `--out`. |
+
+## Where to look for each stage
+
+| Stage | Look at |
+|---|---|
+| `inputs` | the input file named in the message |
+| `orient` | `orientation_report.json`, the chains of your input, and the PPM transcript in the log |
+| `slice`, `slice_check`, `membrane_check` | `membrane_validation.md`, `membrane_validation.json`, the slice report in `run_manifest.json` |
+| `mstool`, `backmap` | the mstool transcript at the end of the log and `int/work/mstool/` |
+| `topology` | the `pdb2gmx` transcript in the log |
+| `solvate`, `ions` | `int/boxed.gro` or `int/solv.gro`, and the GROMACS transcript in the log |
+| `minimize`, `validate` | `int/em.log`, `int/em.unverified.gro`, `em_clash_trace.json` |
+| `audit` | `audit.json` |
+
+## Checking a finished build
+
+Before equilibration, confirm that `audit.json` reports `"result": "PASS"` and that GROMACS accepts the files
+without warnings. From the output directory:
 
 ```bash
-export MEMBRANEFORGER_CHARMM36_ROOT=/path/to/charmm36.ff
+gmx grompp -f int/em.mdp -c em.gro -p topol.top -n index_ini.ndx -o test.tpr -maxwarn 0
 ```
 
-or configure `stage4.resources.charmm36_forcefield`.
-
-## Missing Membrane Parameters
-
-Stage 4 also needs membrane topology/parameter files for the all-atom membrane
-molecules, including compatible CHARMM protein topology/parameter files with
-`PRES ACE` and `PRES CT3`. Set:
-
-```bash
-export MEMBRANEFORGER_MEMBRANE_TOPPAR=/path/to/charmm36_membrane
-```
-
-or configure `stage4.resources.membrane_toppar`.
-
-## Unsupported Molecular Component
-
-Selected unsupported `HETATM` or nonprotein components fail instead of being
-removed. Remove the component from the selected system, provide explicit
-validated parameters, or choose a supported chemistry path.
-
-## Unknown Config Key
-
-Unknown keys fail because misspelled scientific options are dangerous. Compare
-the key with `config/workflow.yaml` or regenerate a run config with
-`./run_pipeline.sh init`.
-
-## Conflicting Config Values
-
-Public config sections are authoritative. If a public value conflicts with an
-explicit legacy `stage1` through `stage4` duplicate, validation fails. Keep one
-value and remove the conflicting duplicate.
-
-## Ambiguous Stage 4 Atom Matching
-
-Stage 4 matches protein atoms by chain, residue number, insertion code, and atom
-name. If `pdb2gmx` output lacks chain identifiers and residue numbers are
-duplicated across chains, Stage 4 fails rather than guessing.
-
-## `run_cg_production: true`
-
-CG production is not implemented in this public workflow. Set:
-
-```yaml
-simulation:
-  run_cg_production: false
-```
-
-## Cleanup Refusal
-
-`clean --confirm` only removes marked MembraneForger run directories beneath
-`runs/`. It refuses the repository root, parent directories, arbitrary paths,
-unmarked directories, and symlinks.
-
-## CHARMM Terminal Capping
-
-MembraneForger uses CHARMM's native terminal-patch system. An acetylated
-N-terminus uses the `ACE` patch, while an N-methylamide C-terminus uses the
-`CT3` patch. These modify the terminal amino acid in the CHARMM topology rather
-than being treated as ordinary extra protein residues. Do not manually add an
-`NME` residue for the CHARMM36 workflow.
-
-In the current implementation, `gmx pdb2gmx -ter` applies these terminal patch
-choices. If Stage 4 reports that `n_terminal_patch=ACE` or
-`c_terminal_patch=CT3` is not available in the selected `charmm36.ff` terminal
-database, use a CHARMM36 GROMACS force-field directory that actually provides
-those `pdb2gmx` terminal options. A directory containing `forcefield.itp` alone
-is not enough to prove terminal patch compatibility. A standalone `[ NME ]`
-residue definition inside a force-field file is not itself an error.
-
-## CHARMM Resource Pair Not Compatible
-
-If preflight reports that resource compatibility is not established, the
-configured GROMACS CHARMM36 tree and toppar tree do not expose a shared
-release/date marker. Provide a paired CHARMM36 GROMACS force-field directory and
-matching toppar resources from an established distribution, or perform and
-document a local scientific compatibility audit before using them.
+The [tutorial](membraneforger_tutorial.md) explains every check and threshold, and its
+[limitations section](membraneforger_tutorial.md#7-limitations-and-assumptions) lists what the build does not do.
