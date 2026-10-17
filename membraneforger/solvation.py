@@ -200,8 +200,8 @@ def salt_summary(nwater: int, n_pos: int, n_neg: int) -> dict:
 def shortfall_warning(basis: str, volume: float, box: list[float], charge: int, target: int, short: int) -> str:
     """The warning for a system whose charge leaves no room for the requested salt: the shortfall and the box that fixes it."""
     needed = water_volume_for_salt(charge)
-    return (f"WARNING: {SALT_M} M NaCl needs {needed:.0f} nm^3 of {basis} volume to hold the {abs(charge)} neutralizing ions plus the "
-            f"salt, there are {volume:.0f} nm^3 ({short} ions short of the {target} requested): only the neutralizing ions are added; "
+    return (f"WARNING: {SALT_M} M NaCl is {abs(charge)} ions of each kind only in {needed:.0f} nm^3 of {basis} volume; there are "
+            f"{volume:.0f} nm^3 ({short} ions short of the {target} requested), so only the {abs(charge)} neutralizing ions are added; "
             f"a box {(needed - volume) / (box[0] * box[1]):.2f} nm taller at fixed xy (z = {box[2]:.2f} nm now) reaches the target")
 
 
@@ -274,10 +274,10 @@ def add_ions(system: dict, topology: dict, gmx: str, box: list[float], settings:
     if problems:
         raise SystemExit("solv_ions.gro and topol.top disagree after genion: " + "; ".join(problems))
     salt = salt_summary(kept, n_pos, n_neg)
-    log(out, f"ions: {SALT_M} M NaCl target {target} ({settings.salt_volume} volume {volume:.1f} nm^3; box {box[0] * box[1] * box[2]:.1f} nm^3, "
-             f"water {salt['aqueous_nm3']:.1f} nm^3; counterion_mode {settings.counterion_mode}) -> {n_pos} SOD + {n_neg} CLA neutralize "
-             f"{charge:+d} e; in the water {salt['na_M']:.3f} M Na+, {salt['cl_M']:.3f} M Cl-, {salt['nacl_added_M']:.3f} M NaCl "
-             f"as NaCl pairs, ionic strength {salt['ionic_strength_M']:.3f} M; {nwater} TIP3 remain")
+    log(out, f"ions: {SALT_M} M NaCl target {target} ions of each kind ({settings.salt_volume} volume {volume:.1f} nm^3; box "
+             f"{box[0] * box[1] * box[2]:.1f} nm^3, water {salt['aqueous_nm3']:.1f} nm^3; counterion_mode {settings.counterion_mode}) "
+             f"-> {n_pos} SOD + {n_neg} CLA, which neutralize {charge:+d} e; in the water {salt['na_M']:.3f} M Na+, "
+             f"{salt['cl_M']:.3f} M Cl-, ionic strength {salt['ionic_strength_M']:.3f} M; {nwater} TIP3 remain")
 
 
 def make_index(out: Path, topology: dict) -> dict:
