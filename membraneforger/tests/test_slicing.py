@@ -387,7 +387,7 @@ class Integration(unittest.TestCase):
         self.assertEqual(registration["check"]["status"], "PASS")
         self.assertLess(registration["check"]["normal_tilt_deg"], 1e-4)
         self.assertEqual(session.record["embedding"]["bilayer_centre_input_A"], 0.0)          # the oriented frame: bilayer centre at z = 0
-        self.assertAlmostEqual(session.record["embedding"]["midplane_nm"], session.record["coarse_grain"]["bilayer_midplane_nm"], places=3)
+        self.assertAlmostEqual(session.record["embedding"]["midplane_nm"], session.record["coarse_grain"]["bilayer_midplane_nm"], delta=1e-3)  # recorded to 3 and 4 decimals
         oriented, _ = mf.read_pdb(Path(session.out) / "oriented.pdb")
         z_shift = mf.xyz_nm(prepared["placed"])[:, 2] - mf.xyz_nm(oriented)[:, 2]
         self.assertLess(float(np.ptp(z_shift)), 1e-2)                                         # embedding only translated the complex
