@@ -24,7 +24,9 @@ REPO="${MFORGER_REPO:-$HOME/MembraneForger}" # the cloned repository (where slur
 BRANCH="fix/contact-gates"                  # the branch to test
 PREVIOUS="${SLURM_SUBMIT_DIR:-$PWD}/test_out"   # the failed build: its run_manifest.json gives the command to repeat
 OUT="${PREVIOUS}_gates"                     # where the repeated build goes (removed first if it exists)
-GMX_MODULE="Gromacs/2026.3-Container"       # GROMACS on Gemini; "" to use $REPO/env/bin/gmx instead
+GMX_MODULE=""                               # "" = $REPO/env/bin/gmx from setup.sh (works in a batch script anywhere); a module name
+                                            # only if it puts a real gmx executable on PATH: on Gemini "Gromacs/2026.3-Container"
+                                            # defines gmx as a shell alias, which a batch script cannot see
 RUN_UNIT_TESTS=1                            # 1 = run the unit tests first (about 5 minutes), 0 = skip
 # ----------------------------------------------------------------------------
 die() { echo "ERROR: $*"; exit 1; }
