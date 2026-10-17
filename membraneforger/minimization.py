@@ -14,20 +14,22 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial import cKDTree
 
-from .config import AMINO, DIHRES_EM_FC, EM_MDP, FMAX_TARGET
+from .config import AMINO, DIHRES_EM_FC, EM_MDP, FMAX_TARGET, Settings
+from .contacts import check_contacts, describe_contacts
 from .runtools import run_command, run_path
 from .structio import element, read_gro, read_pdb, wrap, xyz_nm
 from .validation import check_inputs_unchanged
 
 __all__ = ['has_dihedral_restraints', 'run_em', 'closest_contact', 'force_culprit', 'stage_files', 'read_structure',
-           'closest_partner', 'slice_number', 'trace_clash', 'validate_em']
+           'closest_partner', 'slice_number', 'trace_clash', 'overlaps_of_molecule', 'validate_em']
 
 # On an Fmax failure, the residues within this distance of the atom with the largest force are named.
 FORCE_NEIGHBOUR_NM = 0.3
 # trace_clash: a heavy-atom pair closer than CLASH_HEAVY_A, or any pair closer than CLASH_ANY_A, between two molecules is
-# a clash (heavy-atom contacts in a relaxed CHARMM membrane are about 3 A, H...H about 2 A); pairs are searched within
-# CLASH_SEARCH_NM.
-CLASH_HEAVY_A, CLASH_ANY_A, CLASH_SEARCH_NM = 2.0, 1.0, 0.5
+# a clash; pairs are searched within CLASH_SEARCH_NM. Heavy-atom contacts in a relaxed CHARMM membrane are about 3 A
+# (LJ Rmin 3.7-4.0 A) and H...H about 2 A (Rmin 2.7 A), so 2.5 A and 1.5 A are about 0.6 of the Rmin, the same measure
+# as the force-field contact gate (contacts.check_contacts), which is used wherever a topology is available.
+CLASH_HEAVY_A, CLASH_ANY_A, CLASH_SEARCH_NM = 2.5, 1.5, 0.5
 
 def has_dihedral_restraints(out: Path) -> bool:
     """Whether any molecule topology in toppar/ carries [ dihedral_restraints ] rows."""
@@ -73,7 +75,8 @@ def closest_contact(out: Path, number: int) -> str:
     xyz, target = wrap(xyz_nm(atoms), box), atoms[number - 1]
     others = [i for i, a in enumerate(atoms) if (a["resid"], a["resname"]) != (target["resid"], target["resname"])]
     d, k = cKDTree(xyz[others], boxsize=box[:3]).query(xyz[number - 1])
-    return f"atom {number} {label(target)} starts {10 * d:.2f} A from {label(atoms[others[k]])} before EM"
+    partner = atoms[others[k]]
+    return f"atom {number} {label(target)} starts {10 * d:.2f} A from {label(partner)}({element(partner['atom'])}) before EM"
 
 
 def force_culprit(out: Path, number: int, structure: str = "em.unverified.gro", radius_nm: float = FORCE_NEIGHBOUR_NM) -> str:
@@ -96,10 +99,10 @@ def force_culprit(out: Path, number: int, structure: str = "em.unverified.gro", 
             d = float(np.linalg.norm((xyz[i] - xyz[number - 1] + 0.5 * np.array(box[:3])) % np.array(box[:3]) - 0.5 * np.array(box[:3])))
             key = f"{atoms[i]['resname']}{atoms[i]['resid']}"
             if key not in closest or d < closest[key][0]:
-                closest[key] = (d, label(atoms[i]))
+                closest[key] = (d, f"{label(atoms[i])}({element(atoms[i]['atom'])})")
     neighbours = ", ".join(f"{atom} {10 * d:.2f} A" for d, atom in sorted(closest.values())[:8])
-    return (f"largest force on atom {number} {label(target)} in {structure}; other residues within {10 * radius_nm:.1f} A: "
-            + (neighbours or "none"))
+    return (f"largest force on atom {number} {label(target)} ({element(target['atom'])}) in {structure}; other residues within "
+            f"{10 * radius_nm:.1f} A: " + (neighbours or "none"))
 
 
 def stage_files(out: Path) -> list[tuple[str, Path]]:
@@ -191,16 +194,30 @@ def trace_clash(out: Path, resname: str, resid: int, atom: str | None = None) ->
         if contact is None:
             rows.append({"stage": label, "absent": True})
             continue
-        clash = (contact.get("heavy", {}).get("distance_A", 99.0) < CLASH_HEAVY_A
-                 or contact.get("any", {}).get("distance_A", 99.0) < CLASH_ANY_A)
-        rows.append({"stage": label, **contact, "clash": bool(clash)})
+        heavy_clash = contact.get("heavy", {}).get("distance_A", 99.0) < CLASH_HEAVY_A
+        any_clash = contact.get("any", {}).get("distance_A", 99.0) < CLASH_ANY_A
+        rows.append({"stage": label, **contact, "clash": bool(heavy_clash or any_clash),
+                     "clash_pair": "heavy" if heavy_clash else "any" if any_clash else None})
     first = next((r for r in rows if r.get("clash")), None)
     return {"residue": f"{resname}{resid}", "atom": atom, "stages": rows,
-            "first_clash": {"stage": first["stage"], "partner": (first.get("heavy") or first["any"])["partner"]} if first else None}
+            "first_clash": {"stage": first["stage"], "partner": first[first["clash_pair"]]["partner"],
+                            "mine": first[first["clash_pair"]]["mine"], "distance_A": first[first["clash_pair"]]["distance_A"]}
+            if first else None}
 
 
-def validate_em(system: dict, topology: dict, index: dict) -> dict:
-    """Check EM converged and that the minimized structure, topology, index and box are all consistent."""
+def overlaps_of_molecule(out: Path, structure: str, solute_atoms: int, resname: str, resid: int, settings: Settings) -> str:
+    """The force-field contact violations and bond crossings of one residue in a structure, as one phrase ('' when none)."""
+    if not run_path(out, "topol.top").is_file() or not run_path(out, structure).is_file():
+        return "not checked (no topol.top)" if run_path(out, structure).is_file() else f"not checked (no {structure})"
+    report = check_contacts(out, structure, solute_atoms, settings)
+    mine = f"{resname}{resid}:"
+    report = dict(report, contacts=[c for c in report["contacts"] if any(a.startswith(mine) for a in c["atoms"])],
+                  crossings=[c for c in report["crossings"] if any(a.startswith(mine) for b in c["bonds"] for a in b)])
+    return describe_contacts(report, limit=2)
+
+
+def validate_em(system: dict, topology: dict, index: dict, settings: Settings = Settings()) -> dict:
+    """Check EM converged, left no force-field overlap or bond crossing, and that structure, topology, index and box agree."""
     out = system["out"]
     check_inputs_unchanged(system["inputs"])
     text = (run_path(out, "em.log")).read_text(errors="replace")
@@ -220,10 +237,18 @@ def validate_em(system: dict, topology: dict, index: dict) -> dict:
                 trace = trace_clash(out, a["resname"], a["resid"], a["atom"])
                 (out / "em_clash_trace.json").write_text(json.dumps(trace, indent=2) + "\n")
                 first = trace["first_clash"]
-                where += (f"; {trace['residue']} first clashes in the {first['stage']} stage, with {first['partner']} "
-                          "(every stage: em_clash_trace.json)" if first else
+                where += (f"; {trace['residue']} first clashes in the {first['stage']} stage, {first['mine']} {first['distance_A']:.2f} A "
+                          f"from {first['partner']} (every stage: em_clash_trace.json)" if first else
                           f"; {trace['residue']} clashes with no molecule at any saved stage (em_clash_trace.json)")
+                solute_atoms = index.get("Protein_LIG", 0) if isinstance(index, dict) else 0
+                for structure, when in (("em.unverified.gro", "after EM"), ("solv_ions.gro", "before EM")):
+                    found = overlaps_of_molecule(out, structure, solute_atoms, a["resname"], a["resid"], settings)
+                    where += f"; force-field overlaps of {trace['residue']} {when}: {found or 'none found'}"
         raise SystemExit(f"EM final Fmax {float(fmax[-1]):.1f} >= {FMAX_TARGET:.0f} kJ/mol/nm{where}")
+    if run_path(out, "topol.top").is_file():  # EM may not leave two atoms inside their LJ contact limit, nor a bond crossing
+        report = check_contacts(out, "em.unverified.gro", index.get("Protein_LIG", 0), settings)
+        if report["contacts"] or report["crossings"]:
+            raise SystemExit(f"EM reached Fmax {float(fmax[-1]):.1f} but left {describe_contacts(report)}")
     gro = (run_path(out, "em.unverified.gro")).read_text().splitlines()
     atoms = gro[2:2 + int(gro[1])]
     xyz = np.array([[float(line[20:28]), float(line[28:36]), float(line[36:44])] for line in atoms])

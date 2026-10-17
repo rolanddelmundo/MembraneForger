@@ -2,7 +2,12 @@
 #// MembraneForger - (c) 2026 Roland Del Mundo
 #// Box construction, solvation, ions and index groups.
 #//=============================================================
-"""Resize the box in z, add water and 0.15 M NaCl, and write the index groups."""
+"""Resize the box in z, add water and 0.15 M NaCl, and write the index groups.
+
+Water and ions are placed by the force field's own measure (contacts.overlapping): a water is dropped, and an ion
+placement retried, when any of its atoms sits inside Settings.contact_rmin_fraction of its Lennard-Jones Rmin with an
+atom of the protein, ligands or membrane, hydrogens included on both sides. Solvent against solvent is not judged: an
+ion takes a water's site and keeps that water's neighbours at water-water distances, which EM relaxes at once."""
 import math
 import shutil
 from pathlib import Path
@@ -10,6 +15,7 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial import cKDTree
 
+from .audit import topology_includes
 from .config import (
     EM_MDP,
     FMAX_TARGET,
@@ -19,13 +25,14 @@ from .config import (
     MIN_Z_PAD_TOTAL_NM,
     SALT_M,
     SLAB_Z_PAD_NM,
-    WATER_CLASH_NM,
     WATER_PROTECT_NM,
+    Settings,
 )
+from .contacts import lj_table, overlapping
 from .runtools import log, run_command
 from .structio import element, read_gro, wrap, write_gro, xyz_nm
 
-__all__ = ['rebox_system', 'solute_geometry', 'solvate_system', 'add_ions', 'make_index']
+__all__ = ['rebox_system', 'solute_geometry', 'solute_types', 'solvate_system', 'add_ions', 'make_index']
 
 def rebox_system(system: dict, topology: dict, requested_z_nm: float | None = None, z_pad_nm: float = SLAB_Z_PAD_NM) -> list[float]:
     """Keep the membrane XY cell and size z around the bilayer midplane so water covers everything above and below."""
@@ -95,8 +102,13 @@ def solute_geometry(topology: dict, solute: list[dict], box: list[float]) -> dic
             "planes": (float(np.median(z[z < mid])), float(np.median(z[z >= mid])))}
 
 
-def solvate_system(system: dict, topology: dict, gmx: str, box: list[float]) -> None:
-    """Solvate, then drop waters inside the bilayer core (except cavity waters) or touching the solute."""
+def solute_types(topology: dict) -> list[str]:
+    """The atom type of every atom of the current topology, in order."""
+    return [a["type"] for _, n, atoms, _ in topology["molecules"] for _ in range(n) for a in atoms]
+
+
+def solvate_system(system: dict, topology: dict, gmx: str, box: list[float], settings: Settings = Settings()) -> None:
+    """Solvate, then drop waters inside the bilayer core (except cavity waters) or overlapping the solute."""
     out = system["out"]
     run_command(out, gmx.split() + ["solvate", "-cp", "boxed.gro", "-cs", "spc216.gro", "-o", "solv_raw.gro"],
             produces=("solv_raw.gro",))
@@ -112,7 +124,13 @@ def solvate_system(system: dict, topology: dict, gmx: str, box: list[float]) -> 
     lower, upper = geo["planes"]
     in_core = (oxygen[:, 2] >= lower) & (oxygen[:, 2] <= upper)
     cavity = np.array([bool(hits) for hits in geo["protected"].query_ball_point(oxygen, WATER_PROTECT_NM)])
-    clash = np.array([bool(hits) for hits in geo["heavy"].query_ball_point(oxygen, WATER_CLASH_NM)])
+    lj = lj_table(topology_includes(out / "topol.top", set()))
+    water_types = [a["type"] for a in topology["solvent_itps"]["TIP3"]["atoms"]]
+    if len(water_types) != 3:
+        raise SystemExit(f"TIP3 topology has {len(water_types)} atoms, not 3")
+    overlap, worst = overlapping(xyz_nm(water), water_types * (len(water) // 3), xyz_nm(solute), solute_types(topology), box, lj,
+                                 settings.contact_rmin_fraction)
+    clash = overlap.reshape(-1, 3).any(axis=1)  # a water goes when any of its three atoms overlaps
     keep = ~((in_core & ~cavity) | clash)
     kept = [dict(a, resname="TIP3", atom=name, resid=nsolute + i + 1)
             for i in np.flatnonzero(keep) for a, name in zip(water[3 * i:3 * i + 3], ("OH2", "H1", "H2"))]
@@ -122,13 +140,16 @@ def solvate_system(system: dict, topology: dict, gmx: str, box: list[float]) -> 
     topology["names"] += ["OH2", "H1", "H2"] * nwater
     with (out / "topol.top").open("a") as fh:
         fh.write(f"{'TIP3':<12s} {nwater}\n")
+    deepest = (f" (deepest: water atom {10 * worst[2]:.2f} A from {solute[worst[1]]['resname']}{solute[worst[1]]['resid']}:"
+               f"{solute[worst[1]]['atom']}, limit {10 * worst[3]:.2f} A)" if worst else "")
     log(out, f"solvate: {len(oxygen)} waters added, {int((in_core & ~cavity).sum())} removed from the bilayer core "
-             f"(phosphate planes {lower:.2f}/{upper:.2f} nm), {int(clash.sum())} within {WATER_CLASH_NM} nm of solute; "
+             f"(phosphate planes {lower:.2f}/{upper:.2f} nm), {int(clash.sum())} overlapping the solute by the force-field contact "
+             f"limit ({settings.contact_rmin_fraction:g} of the LJ Rmin, hydrogens included){deepest}; "
              f"{nwater} kept ({int((in_core & cavity & keep).sum())} cavity waters near protein/ligand)")
 
 
-def add_ions(system: dict, topology: dict, gmx: str, box: list[float]) -> None:
-    """Add 0.15 M NaCl plus counterions, retrying genion until no ion lands in the bilayer or on the solute."""
+def add_ions(system: dict, topology: dict, gmx: str, box: list[float], settings: Settings = Settings()) -> None:
+    """Add 0.15 M NaCl plus counterions, retrying genion until no ion lands in the bilayer or on the solute or a lipid."""
     out, charge = system["out"], round(topology["charge"])
     if abs(topology["charge"] - charge) > 1e-3:
         raise SystemExit(f"non-integer system charge {topology['charge']:.4f}")
@@ -143,6 +164,10 @@ def add_ions(system: dict, topology: dict, gmx: str, box: list[float]) -> None:
                                                            for i in range(0, len(water_ids), 15)))
     nwater = topology["molecules"][-1][1] - n_pos - n_neg
     expected = topology["names"][:nsolute] + ["OH2", "H1", "H2"] * nwater + ["SOD"] * n_pos + ["CLA"] * n_neg
+    ion_types = ([a["type"] for a in topology["solvent_itps"]["SOD"]["atoms"]] * n_pos
+                 + [a["type"] for a in topology["solvent_itps"]["CLA"]["atoms"]] * n_neg)
+    other_types = solute_types(topology)[:nsolute]
+    lj = lj_table(topology_includes(out / "topol.top", set()))
     shutil.copy(out / "topol.top", out / "topol.pre_genion.top")
     for attempt in range(1, GENION_ATTEMPTS + 1):
         shutil.copy(out / "topol.pre_genion.top", out / "topol.top")
@@ -156,10 +181,12 @@ def add_ions(system: dict, topology: dict, gmx: str, box: list[float]) -> None:
         geo = solute_geometry(topology, atoms[:nsolute], box)
         ions = wrap(xyz_nm(atoms[len(expected) - n_pos - n_neg:]), box)
         embedded = int(((ions[:, 2] >= geo["planes"][0]) & (ions[:, 2] <= geo["planes"][1])).sum())
-        clashing = sum(bool(h) for h in geo["heavy"].query_ball_point(ions, WATER_CLASH_NM))
+        overlap, _ = overlapping(ions, ion_types, xyz_nm(atoms[:nsolute]), other_types, box, lj, settings.contact_rmin_fraction)
+        clashing = int(overlap.sum())
         if not embedded and not clashing:
             break
-        log(out, f"genion attempt {attempt}: {embedded} ions inside the bilayer, {clashing} touching solute; retrying", "WARN")
+        log(out, f"genion attempt {attempt}: {embedded} ions inside the bilayer, {clashing} inside the force-field contact limit of "
+                 "a protein, ligand or lipid atom; retrying", "WARN")
     else:
         raise SystemExit(f"no valid ion placement after {GENION_ATTEMPTS} genion attempts")
     mol, _, water_atoms, group = topology["molecules"].pop()
