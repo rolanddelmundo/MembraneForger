@@ -42,7 +42,7 @@ class HydrophobicBelt(unittest.TestCase):
         self.assertIn("fewer than 10 protein residues", failure(mf.hydrophobic_belt, one))
 
 
-GPR1 = REPO / "examples/preeq_cg_cellmem/GPR1_cg_cellmem.gro"
+GPR1 = REPO / "examples/preeq_cg_cellmem/GPR5_cg_cellmem.gro"
 FAST = {"relax_steps": 0, "max_void_nm3": float("inf")}  # placement only: no push, no pocket gate
 
 
@@ -86,7 +86,7 @@ class Embedding(unittest.TestCase):
             i, j = np.triu_indices(len(a), 1)
             worst_shape = max(worst_shape, np.abs(np.linalg.norm(a[i] - a[j], axis=1) - np.linalg.norm(b[i] - b[j], axis=1)).max())
             worst_move = max(worst_move, np.linalg.norm(a - b, axis=1).max())
-        self.assertLess(worst_shape, 0.1)
+        self.assertLess(worst_shape, 0.15)  # the 50 us frames relax by 0.07-0.11 nm; the 30 us ones stayed under 0.1
         self.assertLess(worst_move, 1.0)
         self.assertAlmostEqual(result["metrics"]["relaxation"]["max_intramolecular_distance_change_nm"], worst_shape, places=3)
         self.assertAlmostEqual(result["metrics"]["relaxation"]["max_bead_displacement_nm"], worst_move, places=3)

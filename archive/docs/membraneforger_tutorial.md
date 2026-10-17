@@ -1,5 +1,10 @@
 # MembraneForger tutorial: building and validating an all-atom membrane system
 
+> The bundled membranes are now eight 50 us frames (`KOR1`, `KOR2`, `KOR3`, `KOR5`, `KOR6`, `KOR7`, `KOR9`, `GPR5`). The
+> measurements below that name `KOR1`, `GPR1` or `GPR3`, or count "18 frames", were made on the earlier 30 us frames of
+> the same simulations and have not been repeated on the 50 us frames; they illustrate the method and are labelled as
+> 30 us where they appear.
+
 MembraneForger takes an all-atom protein (or protein-ligand) structure and a pre-equilibrated Martini 3 membrane
 and returns a validated, energy-minimized CHARMM36/GROMACS system. This document explains what each stage does,
 how the build is validated, and how to read the validation report (`membrane_validation.md`, `.json`, the figures)
@@ -24,8 +29,8 @@ limitations; section 8 the settings.
 ## 1. Inputs
 
 - `--aa complex.pdb`: the all-atom complex, the only source of protein and ligand chemistry.
-- `--cg 1 | 2 | NAME | FILE`: a bundled GPR139 or kappa opioid receptor frame, random (`1`, `2`) or by name (`GPR1` ... `KOR9`) (18.3 x 18.3 nm, about 1,300 lipids, ten
-  species, 30 us of Martini 3), or your own Martini 3 frame.
+- `--cg 1 | 2 | NAME | FILE`: a bundled GPR139 or kappa opioid receptor frame, random (`1`, `2`) or by name (`--list-membranes` lists them) (18.3 x 18.3 nm, about 1,300 lipids, ten
+  species, 50 us of Martini 3), or your own Martini 3 frame.
 - `--orient-chain R` names the chain that spans the membrane; `--nterm-side in|out` is needed by PPM when no OPM
   entry exists. The complete complex moves as one rigid body.
 
@@ -36,10 +41,10 @@ cell on the frame's box line. A frame whose coordinates were rotated about z aft
 a rotational fit, `gmx trjconv -fit rotxy+transxy` or similar, written without transforming the box) is no longer
 periodic in that box: wrapping folds the corners of the rotated square onto its edges, beads of different molecules
 land on top of each other there, the opposite corners stay empty, and the "diamond" one sees when rendering the file
-is real data, not drift. The 18 bundled KOR and GPR139 frames were shipped like that, each with its own angle (3 to
-83 degrees; the 6WHC example frame was not), and have been rotated back onto their boxes in place with
-`examples/align_frames.py` (coordinates and velocities, same names, same formatting), so the files in the repository
-are periodic now.
+is real data, not drift. The 18 KOR and GPR139 frames first bundled (30 us) were shipped like that, each with its own angle (3 to
+83 degrees; the 6WHC example frame was not), and were rotated back onto their boxes with
+`examples/align_frames.py` (coordinates and velocities, same names, same formatting). The bundled frames are the 50 us
+frames of the simulations as written by GROMACS; `examples/align_frames.py` finds no rotation in any of them.
 
 MembraneForger detects this when it reads a frame (`validation.align_frame_to_box`): it counts bead pairs of
 different lipids closer than 0.30 nm after wrapping (an equilibrated Martini membrane has none; a rotated frame has
@@ -48,8 +53,8 @@ hundreds to thousands), scans the 90 degrees a square box allows for the rotatio
 overlap counts before and after are logged (`WARN`) and recorded in `run_manifest.json` (`coarse_grain.frame_alignment`).
 A frame that no rotation makes periodic (a non-square box, or coordinates that simply do not belong to the box line)
 stops the build with a message saying so. The check stays on for every frame, so a user frame with the same
-artefact is corrected the same way (on the original KOR1 file the correction was 48.0 degrees, 2610 overlapping
-pairs becoming 0; on GPR3 8.4 degrees). All numbers in this document come from corrected frames.
+artefact is corrected the same way (on the original 30 us KOR1 file the correction was 48.0 degrees, 2610 overlapping
+pairs becoming 0; on the original 30 us GPR3 8.4 degrees). All numbers in this document come from corrected frames.
 
 ## 2. Placement and embedding
 
@@ -75,23 +80,23 @@ geranylgeranyl chain, the Galpha N-terminus) reach into the inner leaflet, and w
 that rule deleted 88-110 lipids per bundled frame, 32-43 of them only for touching those anchors. Each deleted lipid
 took its whole tail with it, leaving an empty column in the inner leaflet that solvation does not fill (water is
 removed between the phosphate planes) and that the area-per-lipid gate cannot see (the Voronoi cells of the anchor
-atoms absorb it). The current rule removes 24-41 lipids on the same 18 frames. Removing only lipids whose headgroup
+atoms absorb it). The current rule removes 24-41 lipids on the same 18 (30 us) frames. Removing only lipids whose headgroup
 anchor the complex occupies was also tried and rejected: next to a thin anchor it still deletes lipids whose volume
-nothing replaces (a 3 nm^3 pocket on GPR1).
+nothing replaces (a 3 nm^3 pocket on the 30 us GPR1 frame).
 
 **Empty-pocket gate.** After embedding, the acyl region of each leaflet (0.3 nm off the midplane to 0.3 nm inside
 its PO4 plane) is sampled on a 0.1 nm grid; a point farther than 0.60 nm from every lipid bead and every heavy atom
 of the complex is empty, and touching empty points form a pocket (`membrane_voids`, periodic in x and y). A pocket
 larger than 1.0 nm^3, less than the volume of one phospholipid, stops the build before slicing, naming the leaflet and
-the position. On the 18 bundled frames with the 6WHC complex: uncut frames 0.00-0.20 nm^3, this embedding
+the position. On the 18 earlier (30 us) bundled frames with the 6WHC complex: uncut frames 0.00-0.20 nm^3, this embedding
 0.02-0.76 nm^3, the earlier rule 1.2-6.8 nm^3. If the gate stops a build, the frame's cavity cannot be adapted to the
 complex by moving lipids; use a coarse-grained frame of the complex itself (`--cg FILE`) or another frame.
 
 **Embedding site (`--embed-site`).** A bundled frame was equilibrated around a receptor, and where the receptor was
 it has a hole of the receptor's shape: about 5-6 nm^3 of empty acyl volume per leaflet once the receptor is taken
 out. The default site, `hole`, puts the complex there, which suits another receptor of similar size. A much smaller
-complex cannot fill it: a single-pass protein (one transmembrane helix) left a 3.5 nm^3 pocket in the GPR1 frame and
-2.8 nm^3 in KOR1 even after the push, and the empty-pocket gate stops the build with a message naming the other site.
+complex cannot fill it: a single-pass protein (one transmembrane helix) left a 3.5 nm^3 pocket in the 30 us GPR1 frame and
+2.8 nm^3 in the 30 us KOR1 even after the push, and the empty-pocket gate stops the build with a message naming the other site.
 With `--embed-site free` the complex goes on unbroken membrane instead, and the push makes room for it. The site is
 chosen for the membrane that will be cut around the complex, not for its helix alone: the slice window (the
 complex's x/y extent plus `--xy-buffer`, or `--box`, plus the 0.5 nm crop offset the slicer may take;
@@ -138,13 +143,13 @@ the cell is not cut. The cut is made lipid by lipid:
 5. the window may be shifted on a cropped axis by up to 0.5 nm (never past the 0.5 nm minimum margin) in steps of
    0.1 nm; the offset whose lipid counts best match the reference leaflet density and composition is used
    (`--no-slice-offset` keeps the centred window). On the bundled frames the gain is small: the spread of the
-   whole-cell deviation over 18 frames changed from 3.7 / 3.4 % (lower / upper, standard deviation) to 2.8 / 2.9 %,
+   whole-cell deviation over the 18 earlier (30 us) frames changed from 3.7 / 3.4 % (lower / upper, standard deviation) to 2.8 / 2.9 %,
    and the worst case from 11.3 to 9.0 %;
 6. the new periodic seam is relaxed in place at the coarse-grained level: a short steepest descent pushes apart
    beads of different lipids that only the cut brought within 0.30 nm of each other, with the complex as a fixed
    repulsive wall, every bead held near its position and every lipid held in shape by intramolecular distance
    restraints. Pairs that were already that close in the source frame are data and are left alone. Only a lipid
-   still in a hard-core overlap (< 0.15 nm) afterwards is removed; on the 18 bundled frames none was. The
+   still in a hard-core overlap (< 0.15 nm) afterwards is removed; on the 18 earlier (30 us) frames none was. The
    relaxation moves about 40 % of the lipids by 0.02 nm on average and 0.3 nm at most.
 
 ### Why the previous rule was wrong
@@ -264,7 +269,7 @@ crossed the edge. The new slice keeps them; the seam relaxation moved 165 lipids
 most) and removed none. The same build on the 11.2 nm `6WHC` frame (fit, not embedded; one axis cut): old rule
 +11.5 / +13.6 %, new slice +1.8 / -0.7 % against the whole cell and -0.1 / +2.5 % against the same lipids uncut.
 
-Over all 18 bundled frames (36 leaflets, frames aligned to their boxes first, section 1.1) the construction
+Over all 18 earlier (30 us) bundled frames (36 leaflets, frames aligned to their boxes first, section 1.1) the construction
 deviation of the new slice has a median of 0.9 %, a 95th percentile of 2.7 % and a largest value of 4.0 %, so the
 3 / 5 % ceilings pass every correct crop tested and fail the old rule (+12 to +32 % on the same frames) by a wide
 margin. The whole-cell deviation of a correct crop scatters more (standard deviation about 3 %, up to 9 %; the upper

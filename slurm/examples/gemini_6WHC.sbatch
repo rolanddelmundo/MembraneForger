@@ -1,6 +1,6 @@
 #!/bin/bash
 # MembraneForger on Gemini (City of Hope): slurm/run_membraneforger.sbatch with blocks 1 to 3 filled in for that
-# cluster. It builds the bundled example complex (6WHC) in the first five GPR139 membrane frames, as a check of the
+# cluster. It builds the bundled example complex (6WHC) in the first five kappa opioid receptor membrane frames (KOR1, KOR2, KOR3, KOR5, KOR6), as a check of the
 # installation and a worked example of RUNS > 1.
 #
 #   bash ~/MembraneForger/slurm/setup.sh            # once, on a login node (Python, OpenMM, mstool; GROMACS is a module)
@@ -8,8 +8,8 @@
 #   cp ~/MembraneForger/slurm/examples/gemini_6WHC.sbatch .
 #   sbatch gemini_6WHC.sbatch
 #
-# Expected: mforger_gemini_<job>_0.log ends with "[6WHC] 5 of 5 runs passed", one "GPR<n>: ... PASS ..." line per
-# membrane and "exit 0"; the systems are ~/mforger_test/6WHC/GPR1/em.gro to GPR5/em.gro.
+# Expected: mforger_gemini_<job>_0.log ends with "[6WHC] 5 of 5 runs passed", one "KOR<n>: ... PASS ..." line per
+# membrane and "exit 0"; the systems are ~/mforger_test/6WHC/KOR1/em.gro, KOR2, KOR3, KOR5 and KOR6/em.gro.
 # For your own structures, change NAMES and ORIENT in block 3 and RUNS back to 1 (or keep it, with a longer --time).
 #
 # ============================ 1. SCHEDULER: your cluster's queue ==============================================
@@ -48,9 +48,9 @@ ORIENT="--orientation none"                    # already oriented (OPM, CHARMM-G
                                                # a model or any structure not yet in a membrane: name the chain
                                                # that crosses the membrane and the side of its N terminus, e.g.
                                                # "--orient-chain R --nterm-side out" (GPCRs: out); uses PPM
-MEMBRANE=1                                     # 1 = a random bundled GPR139 frame, 2 = a random KOR frame, or
-                                               # one frame by name for every model (GPR1 ... GPR9, KOR1 ... KOR9)
-RUNS=5                                         # build 6WHC once in each of GPR1 ... GPR5
+MEMBRANE=2                                     # 1 = a random bundled GPR139 frame, 2 = a random KOR frame, or
+                                               # one frame by name for every model (python -m membraneforger --list-membranes)
+RUNS=5                                         # build 6WHC once in each of KOR1, KOR2, KOR3, KOR5, KOR6
 EXTRA=""                                       # other options, e.g. "--xy-buffer 2.0" for production systems
 # ==============================================================================================================
 

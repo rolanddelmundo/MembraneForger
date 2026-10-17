@@ -2,10 +2,17 @@
 
 ## Unreleased
 
+- **Bundled membranes are now 50 µs frames.** The 18 frames at 30 µs are replaced by the 50 µs frame of every
+  simulation that reached 50 µs: `KOR1`, `KOR2`, `KOR3`, `KOR5`, `KOR6`, `KOR7`, `KOR9` and `GPR5` (the number is the
+  simulation run, so the numbering has gaps). `KOR4`, `KOR8` and `GPR1` to `GPR4`, `GPR6` to `GPR9` are gone: the
+  GPR139 series now holds one frame, so `--cg 1 --runs N` accepts N = 1 only. The earlier frames stay in the git
+  history. The leaflet composition is unchanged at the precision of the table.
+- **Series and `--runs` limit come from the frames present.** The nine-frame limit is gone: `--runs` is bounded by
+  the number of frames the series holds, and the error message names them; `--list-membranes` and the unknown-name
+  error list the names that exist.
 - **`--runs N`** builds the complex in N different bundled membranes, the first N frames of the `--cg 1` or `--cg 2`
-  series, one validated system per run in `<out>/<frame>/`. `RUNS` in `slurm/run_membraneforger.sbatch` passes it.
-- **Bundled frames by name.** `--cg NAME` builds in one particular bundled membrane (`GPR1` … `GPR9`,
-  `KOR1` … `KOR9`) instead of a random one, and `--list-membranes` lists them. `--cg 1`, `--cg 2` and `--cg FILE`
+  series (at most the number of frames the series holds), one validated system per run in `<out>/<frame>/`. `RUNS` in `slurm/run_membraneforger.sbatch` passes it.
+- **Bundled frames by name.** `--cg NAME` builds in one particular bundled membrane (`--list-membranes` lists the names) instead of a random one. `--cg 1`, `--cg 2` and `--cg FILE`
   are unchanged.
 - **Portable Slurm script.** `slurm/run_membraneforger.sbatch` keeps every cluster-specific value in three marked
   blocks (scheduler, software, this run) with working defaults, so only those are edited; submitted as is it builds

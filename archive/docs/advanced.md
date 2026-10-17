@@ -51,12 +51,12 @@ PPM 3.0 is not bundled. Compile its Fortran source (distributed by the OPM team,
 
 | You have | Use |
 |---|---|
-| Only an all-atom structure | `--cg 1` (GPR139 frames, default) or `--cg 2` (kappa opioid receptor frames). The complex is embedded where the frame's receptor was. |
+| Only an all-atom structure | `--cg 1` (GPR139 frame, default) or `--cg 2` (kappa opioid receptor frames). The complex is embedded where the frame's receptor was. |
 | A protein much smaller than a GPCR (one transmembrane helix) | add `--embed-site free` and a larger `--xy-buffer`, e.g. 3 |
 | A Martini 3 frame of your own complex | `--cg FILE`: the all-atom structure is fitted onto the frame's coarse-grained protein and no lipid is removed |
 | A Martini 3 membrane you want to use with a different protein | `--cg FILE --embed` |
-| A specific bundled frame, for a repeatable build | `--cg GPR1` (any of `GPR1` … `GPR9`, `KOR1` … `KOR9`; `--list-membranes` lists them) |
-| The same complex in five distinct membranes | `--runs 5`: one build per frame, GPR1 to GPR5 (or KOR1 to KOR5 with `--cg 2`), see [several membranes for one complex](#several-membranes-for-one-complex) |
+| A specific bundled frame, for a repeatable build | `--cg GPR5` (or `KOR1`, …; `--list-membranes` lists the names that exist) |
+| The same complex in five distinct membranes | `--runs 5` with `--cg 2`: one build per frame, KOR1, KOR2, KOR3, KOR5, KOR6 (the GPR139 series holds one frame), see [several membranes for one complex](#several-membranes-for-one-complex) |
 
 A bundled membrane is a patch equilibrated around a GPCR. Orientation makes the all-atom side general, but a membrane
 frame of your own complex is a patch around that protein and fits only that protein.
@@ -75,9 +75,10 @@ how `--embed-site free` chooses its spot.
 
 ### Bundled membranes
 
-Eighteen frames (30 µs, Martini 3) of a GPCR in an asymmetric ten-species cell-membrane model, in
-`examples/preeq_cg_cellmem/`: `KOR1`–`KOR9` (kappa opioid receptor) and `GPR1`–`GPR9` (GPR139), about
-18.3 × 18.3 × 19.2 nm each. Leaflet composition in mole percent, averaged over the 18 frames
+Eight frames (50 µs, Martini 3) of a GPCR in an asymmetric ten-species cell-membrane model, in
+`examples/preeq_cg_cellmem/`: `KOR1`, `KOR2`, `KOR3`, `KOR5`, `KOR6`, `KOR7`, `KOR9` (kappa opioid receptor) and `GPR5`
+(GPR139), about 18.3 × 18.3 × 19.2 nm each (the number is the simulation run the frame comes from). Leaflet
+composition in mole percent, averaged over the 8 frames
 (`examples/leaflet_composition.py`):
 
 | Leaflet | CHOL | POPC | DOPC | POPE | DOPE | PSM | DPG3 | POPS | DOPS | SAP6 |
@@ -91,15 +92,15 @@ ANE5A merged into one molecule) and PIP2 is `SAP6` there and `SAPI25` in the all
 
 ### Several membranes for one complex
 
-The bundled frames are independent 30 µs replicates of one cell-membrane model, so building the same complex in
+The bundled frames are independent 50 µs replicates of one cell-membrane model, so building the same complex in
 several of them gives replicate systems that differ in their lipid arrangement, not in composition (each frame is
 within 1–2 mole percent of the averages above). `--runs N` does that in one command: the complex is built N times,
-each time in the next frame of the chosen series (GPR1, GPR2, … for `--cg 1`; KOR1, KOR2, … for `--cg 2`), one
+each time in the next frame of the chosen series (`--cg 2`: KOR1, KOR2, KOR3, KOR5, … ; the GPR139 series holds one frame, so `--runs` above 1 needs `--cg 2`), one
 complete, validated system per run in `<out>/<frame>/`, and the command's last line counts the runs that passed.
 
 ```bash
-python -m membraneforger --aa complex.pdb --orient-chain R --nterm-side out --runs 5 --out complex_runs
-# complex_runs/GPR1/em.gro ... complex_runs/GPR5/em.gro
+python -m membraneforger --aa complex.pdb --orient-chain R --nterm-side out --cg 2 --runs 5 --out complex_runs
+# complex_runs/KOR1/em.gro ... complex_runs/KOR6/em.gro (KOR1, KOR2, KOR3, KOR5, KOR6)
 ```
 
 The runs are sequential, so five runs take about five times as long as one (`RUNS=5` in

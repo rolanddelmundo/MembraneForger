@@ -64,13 +64,13 @@ Typical setups:
 |---|---|
 | `NAMES` | the PDB files in the submit folder, without `.pdb`: `(receptor_A receptor_B)`. Keep `--array` in block 1 in step |
 | `ORIENT` | `"--orientation none"` for a structure already placed in a membrane (OPM, CHARMM-GUI). Otherwise the chain that crosses the membrane and the side of its N terminus, `"--orient-chain R --nterm-side out"` (GPCRs: out); this uses PPM |
-| `MEMBRANE` | `1` for a random GPR139 frame, `2` for a random KOR frame, or one frame by name (`GPR1` ... `GPR9`, `KOR1` ... `KOR9`) |
-| `RUNS` | build each structure this many times, once in each of the first `RUNS` frames of the series: `<name>/GPR1/em.gro` ... Sequential, about 1 hour each |
+| `MEMBRANE` | `1` for a random GPR139 frame, `2` for a random KOR frame, or one frame by name (`python -m membraneforger --list-membranes` lists them) |
+| `RUNS` | build each structure this many times, once in each of the first `RUNS` frames of the series (`MEMBRANE=2`: `<name>/KOR1/em.gro`, `KOR2`, `KOR3`, `KOR5`, `KOR6`; the GPR139 series has one frame, so `RUNS` above 1 needs `MEMBRANE=2`). Sequential, about 1 hour each |
 | `EXTRA` | any other option from the [command-line reference](../docs/cli_reference.md), for example `"--xy-buffer 2.0"` for production box sizes |
 
 `RUNS=5` gives five replicate systems that differ in their lipid arrangement. To build them in parallel instead,
-give each array task its own frame by name (`MEMBRANE=GPR1`, `GPR2`, ...; `python -m membraneforger --list-membranes`
-lists the 18).
+give each array task its own frame by name (`MEMBRANE=KOR1`, `KOR2`, ...; `python -m membraneforger --list-membranes`
+lists the 8).
 
 ## PPM 3.0
 
