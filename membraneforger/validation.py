@@ -148,7 +148,9 @@ FRAME_SOLVENT = {"W", "SW", "TW", "ION", "NA", "CL", "CA", "K", "MG"}
 
 def frame_overlaps(xyz: np.ndarray, owner: np.ndarray, box: np.ndarray, radius: float = FRAME_OVERLAP_NM) -> int:
     """Number of bead pairs of different residues closer than radius (3D) once the coordinates are wrapped into the box."""
-    pairs = cKDTree(np.mod(xyz, box), boxsize=box).query_pairs(radius, output_type="ndarray")
+    wrapped = np.mod(xyz, box)
+    wrapped[wrapped >= box] = 0.0  # np.mod of a tiny negative coordinate rounds up to exactly the box edge, which cKDTree refuses
+    pairs = cKDTree(wrapped, boxsize=box).query_pairs(radius, output_type="ndarray")
     return int((owner[pairs[:, 0]] != owner[pairs[:, 1]]).sum()) if len(pairs) else 0
 
 

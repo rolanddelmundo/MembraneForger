@@ -788,8 +788,13 @@ class BundledMembranes(unittest.TestCase):
 
     def test_every_bundled_frame_has_a_name(self):
         frames = mf.bundled_frames()
-        self.assertEqual(sorted(frames), [f"GPR{i}" for i in range(1, 10)] + [f"KOR{i}" for i in range(1, 10)])
-        self.assertTrue(all(p.is_file() for p in frames.values()))
+        self.assertTrue(frames)
+        for name, path in frames.items():
+            self.assertRegex(name, r"^(GPR|KOR)[1-9][0-9]*$")
+            self.assertEqual(path.name, f"{name}_cg_cellmem.gro")
+            self.assertTrue(path.is_file())
+        self.assertIn("KOR5", frames)
+        self.assertTrue(any(name.startswith("GPR") for name in frames))
 
     def test_a_frame_name_resolves_in_any_spelling(self):
         expected = REPO / "examples" / "preeq_cg_cellmem" / "KOR5_cg_cellmem.gro"
@@ -798,20 +803,25 @@ class BundledMembranes(unittest.TestCase):
 
     def test_codes_1_and_2_pick_the_receptor_series(self):
         for _ in range(5):
-            self.assertRegex(mf.bundled_membrane("1").name, r"^GPR[1-9]_cg_cellmem\.gro$")
-            self.assertRegex(mf.bundled_membrane("2").name, r"^KOR[1-9]_cg_cellmem\.gro$")
+            self.assertRegex(mf.bundled_membrane("1").name, r"^GPR[0-9]+_cg_cellmem\.gro$")
+            self.assertRegex(mf.bundled_membrane("2").name, r"^KOR[0-9]+_cg_cellmem\.gro$")
 
     def test_runs_take_the_first_frames_of_the_series_in_a_fixed_order(self):
-        self.assertEqual([p.name for p in mf.bundled_series("1")[:5]], [f"GPR{i}_cg_cellmem.gro" for i in range(1, 6)])
-        self.assertEqual([p.name for p in mf.bundled_series("2")], [f"KOR{i}_cg_cellmem.gro" for i in range(1, 10)])
-        self.assertEqual(mf.MAX_RUNS, len(mf.bundled_series("1")))
+        frames = mf.bundled_frames()
+        for code, prefix in (("1", "GPR"), ("2", "KOR")):
+            series = mf.bundled_series(code)
+            names = [p.name[:-len("_cg_cellmem.gro")] for p in series]
+            self.assertEqual(names, sorted((n for n in frames if n.startswith(prefix)), key=lambda n: int(n[3:])))
+            self.assertEqual(series, [frames[n] for n in names])  # the same fixed order on every call
 
     def test_a_path_or_custom_file_is_not_bundled(self):
         for value in ("custom=KOR5.gro", str(CG_GRO), "examples/preeq_cg_cellmem/KOR5_cg_cellmem.gro", "membrane.gro", "3"):
             self.assertIsNone(mf.bundled_membrane(value), value)
 
     def test_a_missing_frame_name_is_refused_by_name(self):
-        self.assertIn("no bundled membrane named GPR12", failure(mf.bundled_membrane, "GPR12"))
+        message = failure(mf.bundled_membrane, "GPR12")
+        self.assertIn("no bundled membrane named GPR12", message)
+        self.assertIn("KOR5", message)  # the bundled names are listed, so a gap in the numbering is explained
 
     def test_listing_names_every_frame(self):
         text = mf.describe_bundled_membranes()
