@@ -27,6 +27,25 @@ leaflet). Composition at 50 µs, mole percent of each leaflet averaged over the 
 | Upper | 28 | 19 | 19 | 5 | 5 | 14 | 10 | 0 | 0 | 0 |
 | Lower | 22 | 5 | 5 | 21 | 21 | 0 | 0 | 8 | 7 | 10 |
 
+## Lipid contacts around the receptor
+
+Number of lipids in contact with the receptor over the 50 µs of the simulation the frame comes from, per lipid species
+and leaflet (the leaflet is assigned from the lipid's position relative to the bilayer midplane). A lipid counts when
+any of its beads is within 5 Å (shell 0-5 Å) or 5-10 Å of any receptor bead, averaged over 501 frames (every 10th) of
+each 5 µs segment; the first column, 0 µs, is the energy-minimized start. DPG3 counts as one molecule. A white cell
+means no lipid of that species contacted the receptor in that leaflet.
+
+| Simulation | Figure |
+|---|---|
+| 8F7W (kappa opioid receptor), run 5, the run of `KOR5` | [KOR5_lipid_contacts_0-50us.svg](figures/KOR5_lipid_contacts_0-50us.svg) |
+| 7F6G (GPR139), run 5, the run of `GPR5` | [GPR5_lipid_contacts_0-50us.svg](figures/GPR5_lipid_contacts_0-50us.svg) |
+
+Each is a single replicate, so differences between species are not averaged over runs.
+
+The figures come from the simulation trajectories, which are not part of the repository, with a MDAnalysis script (a
+residue counts once per frame when any of its beads is within the cutoff of any receptor bead; segments `run5` to `run50`
+at 5 µs each, every 10th frame). The text in the SVGs is editable Arial, 12 pt and larger.
+
 `6WHC_MTZP_cg_cellmem.gro` and `6WHC_MTZP_prot-lig.pdb` are a complete input pair (glucagon receptor–tirzepatide–Gs
 in the same membrane model, 11.2 × 11.2 nm) used by the tests:
 
