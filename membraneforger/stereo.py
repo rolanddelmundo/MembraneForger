@@ -12,6 +12,10 @@ geometrically, with the chirality definitions of backmap_data/map.dat (the ones 
 a centre is wrong when (target - centre) . ((D - C) x (E - D)) < 0 and a trans bond is wrong when its dihedral is
 within 90 degrees of 0. Neither can change in a classical MD run, so one frame decides.
 
+Coordinates in a .gro or a PDB with a CRYST1 record may be wrapped into the cell atom by atom (mdrun's wrapping differs
+between builds), so every molecule is first made whole: each atom is moved to the periodic image nearest the previous
+atom of the molecule. A test on raw wrapped coordinates reads a split molecule as inverted - a false positive.
+
 GLPA is read by atom order (its three sugars reuse the names C1..C6), GM3 by atom name; in a .gro the molecule is
 four consecutive CHARMM residues (CER160, BGLC, BGAL, ANE5AC).
 """
@@ -23,7 +27,8 @@ import numpy as np
 from .config import GM3_XML_TO_GLPA
 
 __all__ = ['GM3_POSITIONS', 'GM3_TRANS_NAMES', 'GLPA_PARTS', 'map_section', 'gm3_chiral_definitions', 'gm3_trans_definitions',
-           'dihedral', 'read_structure_atoms', 'read_gm3_molecules', 'gm3_named', 'wrong_gm3_centres', 'check_gm3_stereo']
+           'dihedral', 'read_structure_atoms', 'make_whole', 'read_gm3_molecules', 'gm3_named', 'wrong_gm3_centres',
+           'check_gm3_stereo']
 
 # GM3 centre name -> sugar position, for the report (the 16 sugar stereocentres).
 GM3_POSITIONS = {"C1": "Glc C1", "C2": "Glc C2", "C3": "Glc C3", "C4": "Glc C4", "C5": "Glc C5",
@@ -63,32 +68,56 @@ def dihedral(p0, p1, p2, p3) -> float:
     return float(np.degrees(np.arctan2(np.cross(b1, v) @ w, v @ w)))
 
 
-def read_structure_atoms(path: Path) -> list:
-    """(residue key, residue name, atom name, xyz in A) for every atom of a .gro or .pdb, in file order."""
+def read_structure_atoms(path: Path) -> tuple[list, np.ndarray | None]:
+    """(residue key, residue name, atom name, xyz in A) for every atom of a .gro or .pdb, in file order, and the cell.
+
+    The cell is the rectangular box diagonal in A (the .gro box line or the PDB CRYST1 record), or None without one."""
     lines = path.read_text(errors="replace").splitlines()
     if path.suffix == ".gro":
+        count = int(lines[1])
+        box = np.array([float(x) for x in lines[2 + count].split()[:3]]) * 10.0
         return [((int(l[0:5]), l[5:10].strip()), l[5:10].strip(), l[10:15].strip(),
-                 np.array([float(l[20:28]), float(l[28:36]), float(l[36:44])]) * 10.0) for l in lines[2:2 + int(lines[1])]]
+                 np.array([float(l[20:28]), float(l[28:36]), float(l[36:44])]) * 10.0) for l in lines[2:2 + count]], \
+            box if (box > 0).all() else None
+    cryst1 = next((l for l in lines if l.startswith("CRYST1")), None)
+    box = np.array([float(cryst1[6:15]), float(cryst1[15:24]), float(cryst1[24:33])]) if cryst1 else None
     return [((l[21], int(l[22:26]), l[17:21].strip()), l[17:21].strip(), l[12:16].strip(),
              np.array([float(l[30:38]), float(l[38:46]), float(l[46:54])]))
-            for l in lines if l.startswith(("ATOM", "HETATM"))]
+            for l in lines if l.startswith(("ATOM", "HETATM"))], box if box is not None and (box > 0).all() else None
+
+
+def make_whole(atoms: list, box: np.ndarray | None) -> list:
+    """One molecule's [(atom name, xyz)] with every atom moved to the periodic image nearest the previous atom.
+
+    Consecutive atoms of a lipid topology sit within a few bonds of each other, far under half the cell, so chaining
+    the minimum image from atom to atom reassembles a molecule that mdrun wrapped across the boundary. Without a box
+    the atoms are returned as they are."""
+    if box is None:
+        return atoms
+    whole, previous = [], None
+    for name, xyz in atoms:
+        if previous is not None:
+            xyz = xyz - box * np.round((xyz - previous) / box)
+        whole.append((name, xyz))
+        previous = xyz
+    return whole
 
 
 def read_gm3_molecules(path: Path) -> dict:
-    """(molecule number, first residue number, resname) -> [(atom name, xyz in A)] for every GM3 / GLPA molecule."""
-    atoms, molecules, k = read_structure_atoms(path), {}, 0
+    """(molecule number, first residue number, resname) -> [(atom name, xyz in A)] for every GM3 / GLPA molecule, made whole."""
+    (atoms, box), molecules, k = read_structure_atoms(path), {}, 0
     while k < len(atoms):
         key, resname = atoms[k][0], atoms[k][1]
         if resname in ("GLPA", "GM3"):
             run = [a for a in atoms[k:k + len(GM3_XML_TO_GLPA) + 1] if a[0] == key]
-            molecules[(len(molecules) + 1, key[-2], resname)] = [(a[2], a[3]) for a in run]
+            molecules[(len(molecules) + 1, key[-2], resname)] = make_whole([(a[2], a[3]) for a in run], box)
             k += len(run)
         elif resname.startswith(GLPA_PARTS[0]):
             run = atoms[k:k + len(GM3_XML_TO_GLPA)]
             parts = list(dict.fromkeys(a[1] for a in run))
             if len(parts) != 4 or not all(n.startswith(part) for n, part in zip(parts, GLPA_PARTS)):
                 raise SystemExit(f"{path}: the GLPA molecule starting at {resname} {key} is not CER160, BGLC, BGAL, ANE5AC")
-            molecules[(len(molecules) + 1, key[-2], "GLPA")] = [(a[2], a[3]) for a in run]
+            molecules[(len(molecules) + 1, key[-2], "GLPA")] = make_whole([(a[2], a[3]) for a in run], box)
             k += len(run)
         else:
             k += 1
