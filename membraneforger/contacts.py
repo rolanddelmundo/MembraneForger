@@ -18,6 +18,11 @@ gmx genion puts an ion on a water's site, so its neighbours sit at water-water d
 oxygen is 0.6-0.7 of their LJ Rmin (a 2.4-2.8 A neighbour against a 4.0 A Rmin), and a free water or ion relaxes in
 the first steps of EM; what EM cannot undo is a solvent molecule caught in the solute or the membrane, which is tested.
 
+Known limitation: pairs within nrexcl bonds of each other are all treated as excluded, but force-field topologies bring some
+of them back as explicit 1-4 interactions ([ pairs ], with [ pairtypes ] or the fudge factors). A badly overlapping
+intramolecular 1-4 pair is therefore not examined here. No validated build has shown one, and a universal cutoff would
+misjudge normal 1-4 distances, so a fix needs a topology-aware check benchmarked against valid and distorted lipids.
+
 A bond crossing is a pair of bonds of two different molecules whose closest approach is below bond_crossing_nm with
 the closest points inside both bonds (not at an atom): one chain passes through the other. Endpoint-to-endpoint
 distances can miss this; the segment test does not.

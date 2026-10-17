@@ -162,7 +162,7 @@ wrong. The Voronoi measurement below replaces them.)
 
 mstool backmaps the sliced membrane around the complex held as a rigid obstacle, the structure is checked for ring
 threading, stereochemistry and clashes (another seed is tried when needed), the topology is built, the box is set in
-z, water and 0.15 M NaCl are added, the system is minimized with and then without the lipid dihedral restraints, and
+z, water and 0.15 M NaCl (in the water, see below) are added, the system is minimized with and then without the lipid dihedral restraints, and
 an independent audit must pass before `em.gro` appears. Every intermediate is kept: at the end of each build, passed
 or failed, the steps on the way to `em.gro` (`config.INTERMEDIATES`) are moved into `<out>/int/`, beside the working
 files (`int/work`) and the audit's scratch runs (`int/audit`); the top level holds the final outputs and the reports.
@@ -377,6 +377,25 @@ atom), `solv_ions.gro` before EM (a lipid or solvent finding, or any crossing, s
 after EM (nothing may remain). Every gate's findings are written to `contacts.json`,
 by stage, and an Fmax failure names the culprit's element, its force-field overlaps before and after EM and the stage a
 lipid first clashed in (`em_clash_trace.json`).
+
+Known limitation of the gate: atoms within `nrexcl` bonds of each other are all treated as excluded, but force-field
+topologies reintroduce some of them as explicit 1-4 interactions (`[ pairs ]`, `[ pairtypes ]`). A badly overlapping
+intramolecular 1-4 pair is therefore not examined, and the gate relies on backmapping and EM for it. No validated build
+has shown such a case. A follow-up would audit real 1-4 distances and energies on validated builds, and only if that shows a
+gap add a topology-aware check, benchmarked on valid and deliberately distorted lipids rather than a fixed cutoff.
+
+The salt is counted in the water, not in the box. A membrane system is about 30 % protein and lipid by volume, so 0.15 M of
+the whole cell would be about 0.21 M in the water. `gmx solvate` fills the box from `spc216.gro` (33.46 waters per nm^3), so
+the number of waters that survive solvation gives the aqueous volume, and the target is N = round(0.15 M x N_A x V)
+(`Settings.salt_volume` = "water"; "box" restores the cell-volume rule). Neutralization follows
+`Settings.counterion_mode`. "inclusive" (default, the CHARMM-GUI 2017 convention) makes the counterion species equal N
+and the other ion N - |Q|, so a Q = -217 system at N = 176 would need a negative Cl-: it is set to 0, only the 217 Na+
+are added, and a WARN line states the shortfall and how much taller the box must be (at fixed xy) to reach the target.
+"additive" adds N pairs and then |Q| counterions on top (Na+ = N + |Q|). The `ions:` log line states the volumes, the
+mode, the counts and the Na+, Cl- and NaCl-pair concentrations and the ionic strength in the water, which counts both
+ions and is larger than the added salt whenever the system carries charge. The ions are placed once, by `gmx genion -np
+-nn` with these counts (`-conc` would measure the whole cell); they equilibrate with the membrane afterwards, which
+pulls counterions to the surface and leaves the bulk below the nominal value.
 
 The GIPR data that motivated this work
 (backmap 57 / 59, minimized 57 / 59 against a slice at 56 / 59 A^2) are consistent with what the report measures:

@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial import cKDTree
 
-from .audit import topology_includes
+from .audit import topology_includes, topology_molecules
 from .config import (
     EM_MDP,
     FMAX_TARGET,
@@ -23,16 +23,20 @@ from .config import (
     INDEX_GROUPS,
     ION_RMIN_NM,
     MIN_Z_PAD_TOTAL_NM,
+    MOLAR_PER_NM3,
     SALT_M,
     SLAB_Z_PAD_NM,
     WATER_PROTECT_NM,
+    WATERS_PER_NM3,
     Settings,
 )
 from .contacts import lj_table, overlapping
 from .runtools import log, run_command
 from .structio import element, read_gro, wrap, write_gro, xyz_nm
 
-__all__ = ['rebox_system', 'solute_geometry', 'solute_types', 'solvate_system', 'add_ions', 'make_index']
+__all__ = ['rebox_system', 'solute_geometry', 'solute_types', 'solvate_system', 'salt_volume', 'ion_counts',
+           'water_volume_for_salt', 'shortfall_warning', 'salt_summary', 'ion_census', 'check_ion_counts', 'add_ions',
+           'make_index']
 
 def rebox_system(system: dict, topology: dict, requested_z_nm: float | None = None, z_pad_nm: float = SLAB_Z_PAD_NM) -> list[float]:
     """Keep the membrane XY cell and size z around the bilayer midplane so water covers everything above and below."""
@@ -148,13 +152,83 @@ def solvate_system(system: dict, topology: dict, gmx: str, box: list[float], set
              f"{nwater} kept ({int((in_core & cavity & keep).sum())} cavity waters near protein/ligand)")
 
 
+def salt_volume(basis: str, box: list[float], nwater: int) -> float:
+    """The volume (nm^3) the added NaCl concentration refers to: the aqueous phase ("water") or the whole cell ("box")."""
+    if basis == "water":
+        return nwater / WATERS_PER_NM3
+    if basis == "box":
+        return box[0] * box[1] * box[2]
+    raise SystemExit(f'Settings.salt_volume must be "water" or "box", not {basis!r}')
+
+
+def ion_counts(volume_nm3: float, charge: int, salt_m: float = SALT_M, mode: str = "inclusive") -> tuple:
+    """(target, Na+, Cl-, shortfall): the ions for salt_m NaCl in volume_nm3 and a system of the given charge.
+
+    target = round(salt_m * N_A * volume). "additive" adds target pairs and then |charge| counterions on top, so the
+    counterion species ends at target + |charge|. "inclusive" (the CHARMM-GUI 2017 convention) makes the counterion
+    species equal target and the other species target - |charge|. When |charge| exceeds target the reduced species would be
+    negative: it is set to 0, only the neutralizing ions are added, and shortfall = |charge| - target tells the caller
+    the water cannot hold the requested concentration (0 otherwise).
+    """
+    target = int(math.floor(salt_m * volume_nm3 * MOLAR_PER_NM3 + 0.5))
+    if mode == "additive":
+        return target, target + max(0, -charge), target + max(0, charge), 0
+    if mode != "inclusive":
+        raise SystemExit(f'Settings.counterion_mode must be "inclusive" or "additive", not {mode!r}')
+    short = max(0, abs(charge) - target)
+    counter, other = (max(target, abs(charge)), max(0, target - abs(charge)))
+    return (target, counter, other, short) if charge <= 0 else (target, other, counter, short)
+
+
+def water_volume_for_salt(charge: int, salt_m: float = SALT_M) -> float:
+    """The smallest volume (nm^3) in which inclusive mode reaches salt_m with a system of the given charge."""
+    return abs(charge) / (salt_m * MOLAR_PER_NM3)
+
+
+def salt_summary(nwater: int, n_pos: int, n_neg: int) -> dict:
+    """Concentrations (mol/L) in the aqueous phase of a system with nwater waters before the ions replace some of them.
+
+    "nacl_added" counts the pairs beyond neutralization; "ionic_strength" is the monovalent sum over both ions and is
+    larger than the added salt whenever the system carries charge.
+    """
+    aqueous = nwater / WATERS_PER_NM3
+    conc = lambda n: n / (aqueous * MOLAR_PER_NM3)
+    return {"aqueous_nm3": aqueous, "na_M": conc(n_pos), "cl_M": conc(n_neg), "nacl_added_M": conc(min(n_pos, n_neg)),
+            "ionic_strength_M": 0.5 * (conc(n_pos) + conc(n_neg))}
+
+
+def shortfall_warning(basis: str, volume: float, box: list[float], charge: int, target: int, short: int) -> str:
+    """The warning for a system whose charge leaves no room for the requested salt: the shortfall and the box that fixes it."""
+    needed = water_volume_for_salt(charge)
+    return (f"WARNING: {SALT_M} M NaCl needs {needed:.0f} nm^3 of {basis} volume to hold the {abs(charge)} neutralizing ions plus the "
+            f"salt, there are {volume:.0f} nm^3 ({short} ions short of the {target} requested): only the neutralizing ions are added; "
+            f"a box {(needed - volume) / (box[0] * box[1]):.2f} nm taller at fixed xy (z = {box[2]:.2f} nm now) reaches the target")
+
+
+def ion_census(names: list[str]) -> dict:
+    """Waters, Na+ and Cl- of a structure from its atom names (water OH2, SOD, CLA)."""
+    return {"water": sum(n == "OH2" for n in names), "na": sum(n == "SOD" for n in names), "cl": sum(n == "CLA" for n in names)}
+
+
+def check_ion_counts(census: dict, molecules: list) -> list[str]:
+    """Disagreements between a structure's census and the [ molecules ] rows (SOD, CLA, and the water row's name)."""
+    rows = dict(molecules)
+    water = next((name for name in rows if name not in ("SOD", "CLA") and name.upper().startswith(("TIP", "SOL", "WAT"))), None)
+    found = {"SOD": census["na"], "CLA": census["cl"], water: census["water"]}
+    return [f"{name}: {count} in the structure, {rows.get(name, 0)} in the topology" for name, count in found.items()
+            if name is not None and rows.get(name, 0) != count] + ([] if water else ["no water row in [ molecules ]"])
+
+
 def add_ions(system: dict, topology: dict, gmx: str, box: list[float], settings: Settings = Settings()) -> None:
     """Add 0.15 M NaCl plus counterions, retrying genion until no ion lands in the bilayer or on the solute or a lipid."""
     out, charge = system["out"], round(topology["charge"])
     if abs(topology["charge"] - charge) > 1e-3:
         raise SystemExit(f"non-integer system charge {topology['charge']:.4f}")
-    pairs = int(math.floor(SALT_M * box[0] * box[1] * box[2] * 0.602214076 + 0.5))
-    n_pos, n_neg = pairs + max(0, -charge), pairs + max(0, charge)
+    kept = topology["molecules"][-1][1]  # waters kept by solvate: each ion replaces one
+    volume = salt_volume(settings.salt_volume, box, kept)
+    target, n_pos, n_neg, short = ion_counts(volume, charge, mode=settings.counterion_mode)
+    if short:
+        log(out, shortfall_warning(settings.salt_volume, volume, box, charge, target, short), "WARN")
     (out / "ions.mdp").write_text(EM_MDP.format(emtol=FMAX_TARGET, nsteps=0, coulombtype="Cut-off", define=""))
     run_command(out, gmx.split() + ["grompp", "-f", "ions.mdp", "-c", "solv.gro", "-p", "topol.top",
                                 "-o", "ions.tpr", "-po", "ions_mdout.mdp", "-maxwarn", "0"], produces=("ions.tpr",))
@@ -190,15 +264,20 @@ def add_ions(system: dict, topology: dict, gmx: str, box: list[float], settings:
     else:
         raise SystemExit(f"no valid ion placement after {GENION_ATTEMPTS} genion attempts")
     mol, _, water_atoms, group = topology["molecules"].pop()
-    topology["molecules"] += [(mol, nwater, water_atoms, group),
-                              ("SOD", n_pos, topology["solvent_itps"]["SOD"]["atoms"], "SOL_ION"),
-                              ("CLA", n_neg, topology["solvent_itps"]["CLA"]["atoms"], "SOL_ION")]
+    topology["molecules"] += [(mol, nwater, water_atoms, group)] + [
+        (ion, n, topology["solvent_itps"][ion]["atoms"], "SOL_ION") for ion, n in (("SOD", n_pos), ("CLA", n_neg)) if n]
     topology["names"] = expected
     topology["charge"] = sum(n * sum(a["charge"] for a in atoms) for _, n, atoms, _ in topology["molecules"])
     if abs(topology["charge"]) > 1e-3:
         raise SystemExit(f"system not neutral after genion: {topology['charge']:+.4f}")
-    log(out, f"ions: {SALT_M} M NaCl in {box[0] * box[1] * box[2]:.1f} nm^3 -> {pairs} pairs; "
-             f"{n_pos} SOD + {n_neg} CLA neutralize {charge:+d} e; {nwater} TIP3 remain")
+    problems = check_ion_counts(ion_census([a["atom"] for a in atoms]), topology_molecules(out / "topol.top"))
+    if problems:
+        raise SystemExit("solv_ions.gro and topol.top disagree after genion: " + "; ".join(problems))
+    salt = salt_summary(kept, n_pos, n_neg)
+    log(out, f"ions: {SALT_M} M NaCl target {target} ({settings.salt_volume} volume {volume:.1f} nm^3; box {box[0] * box[1] * box[2]:.1f} nm^3, "
+             f"water {salt['aqueous_nm3']:.1f} nm^3; counterion_mode {settings.counterion_mode}) -> {n_pos} SOD + {n_neg} CLA neutralize "
+             f"{charge:+d} e; in the water {salt['na_M']:.3f} M Na+, {salt['cl_M']:.3f} M Cl-, {salt['nacl_added_M']:.3f} M NaCl "
+             f"as NaCl pairs, ionic strength {salt['ionic_strength_M']:.3f} M; {nwater} TIP3 remain")
 
 
 def make_index(out: Path, topology: dict) -> dict:

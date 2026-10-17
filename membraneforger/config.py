@@ -8,7 +8,7 @@ from dataclasses import dataclass
 __all__ = ['ORIENTATION', 'ORIENT_CHAINS', 'ORIENT_RESIDUES', 'NTERM_SIDE', 'PDB_ID', 'PPM_MEMBRANE', 'BOX',
            'AMINO', 'SOLVENT', 'N_CAP', 'C_CAP', 'RENAME_RESIDUE', 'RENAME_ATOM', 'RENAME_MOLECULE', 'TERMINUS_MENU',
            'DEFAULT_LIGANDS', 'NSTEPS', 'DISULFIDE_MAX_A', 'DISULFIDE_OK_A', 'SLAB_Z_PAD_NM', 'MIN_Z_PAD_TOTAL_NM',
-           'SALT_M', 'ION_RMIN_NM', 'GENION_ATTEMPTS', 'WATER_PROTECT_NM', 'LIPID_SCAN_A',
+           'SALT_M', 'MOLAR_PER_NM3', 'WATERS_PER_NM3', 'ION_RMIN_NM', 'GENION_ATTEMPTS', 'WATER_PROTECT_NM', 'LIPID_SCAN_A',
            'LIPID_DELETE_A', 'GENERATED', 'INTERMEDIATES', 'INDEX_GROUPS', 'FMAX_TARGET', 'H_BOND_RANGE', 'GLPA_MAX_BOND_A',
            'LYS_BACKBONE', 'ONE_LETTER', 'GM3_XML_TO_GLPA', 'LIPIDATED', 'CYSG_HDB', 'DIHRES_EM_FC', 'EM_MDP',
            'APL_VALIDATE', 'APL_SLICE_WARNING_PERCENT', 'APL_SLICE_TOLERANCE_PERCENT', 'RDF_VALIDATE', 'Settings']
@@ -78,6 +78,11 @@ NSTEPS = 50000  # default maximum EM steps
 DISULFIDE_MAX_A, DISULFIDE_OK_A = 3.0, (1.8, 2.2)  # SG-SG below 3.0 A is a disulfide; outside 1.8-2.2 A it is rebuilt
 SLAB_Z_PAD_NM, MIN_Z_PAD_TOTAL_NM = 1.5, 2.0  # water above/below the solute, and the least total z padding
 SALT_M, ION_RMIN_NM, GENION_ATTEMPTS = 0.15, 0.60, 3
+# Added NaCl is a concentration in the water, so the ion numbers come from the aqueous volume, not the box: protein, ligands
+# and lipids take about 30 % of a membrane box. gmx solvate fills the box from spc216.gro (216 waters in a 1.86206 nm
+# cube, 33.46 per nm^3, 1.0 g/cm^3), so the water count that survives solvation converts to the volume the ions dissolve in.
+MOLAR_PER_NM3 = 0.602214076  # molecules per nm^3 in a 1 mol/L solution
+WATERS_PER_NM3 = 216 / 1.86206 ** 3
 WATER_PROTECT_NM = 0.45  # cavity waters this close to protein/ligand heavy atoms stay inside the bilayer core
 LIPID_SCAN_A, LIPID_DELETE_A = 1.0, 0.10  # EM survived 0.15 A (6WHC_MORF) but not 0.05 A (7RA3_MRTR)
 # Every file a build writes into the output directory; removed at the start so nothing stale survives a rerun.
@@ -293,6 +298,12 @@ class Settings:
     # Two bonds of different molecules whose closest approach is below this, inside both bonds, cross: one chain passes
     # through the other, which steepest descent cannot undo. Bonds of neighbouring packed chains stay 2.5 A apart or more.
     bond_crossing_nm: float = 0.12
+    # What the added NaCl concentration (SALT_M) is measured in: "water" = the volume of the waters left by solvation
+    # (the aqueous phase), "box" = the whole cell including protein and lipids (the earlier rule, about 0.21 M in the water).
+    salt_volume: str = "water"
+    # How the neutralizing counterions relate to the target: "inclusive" (CHARMM-GUI 2017) makes the counterion species equal
+    # the target number and the other ion target - |charge|; "additive" adds the target pairs and |charge| counterions on top.
+    counterion_mode: str = "inclusive"
     # Independent-audit limits: protein CA RMSD across EM (nm) and the closest lipid-solute heavy-atom pair (nm).
     audit_max_ca_rmsd_nm: float = 0.15
     audit_min_contact_nm: float = 0.10

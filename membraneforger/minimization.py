@@ -15,8 +15,9 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from .config import AMINO, DIHRES_EM_FC, EM_MDP, FMAX_TARGET, Settings
-from .contacts import check_contacts, describe_contacts
+from .contacts import check_contacts, describe_contacts, record_contacts
 from .runtools import run_command, run_path
+from .solvation import ion_census, salt_summary
 from .structio import element, read_gro, read_pdb, wrap, xyz_nm
 from .validation import check_inputs_unchanged
 
@@ -247,6 +248,7 @@ def validate_em(system: dict, topology: dict, index: dict, settings: Settings = 
         raise SystemExit(f"EM final Fmax {float(fmax[-1]):.1f} >= {FMAX_TARGET:.0f} kJ/mol/nm{where}")
     if run_path(out, "topol.top").is_file():  # EM may not leave two atoms inside their LJ contact limit, nor a bond crossing
         report = check_contacts(out, "em.unverified.gro", index.get("Protein_LIG", 0), settings)
+        record_contacts(out, "em", report)
         if report["contacts"] or report["crossings"]:
             raise SystemExit(f"EM reached Fmax {float(fmax[-1]):.1f} but left {describe_contacts(report)}")
     gro = (run_path(out, "em.unverified.gro")).read_text().splitlines()
@@ -261,6 +263,9 @@ def validate_em(system: dict, topology: dict, index: dict, settings: Settings = 
     if not np.allclose([float(v) for v in gro[-1].split()][:2], read_gro(run_path(out, "boxed.gro"))[1][:2], atol=1e-3):
         raise SystemExit("EM changed the membrane XY box")
     steps = re.findall(r"converged to Fmax < \S+ in (\d+) steps", text)
-    return {"summary": f"Fmax {float(fmax[-1]):.1f}, Epot {float(energy[-1]):.4e}, {steps[-1] if steps else '?'} steps",
+    census = ion_census(topology["names"])  # the names just compared with the minimized structure
+    salt = salt_summary(census["water"] + census["na"] + census["cl"], census["na"], census["cl"])
+    return {"salt_in_water_M": {k: salt[k] for k in ("na_M", "cl_M", "nacl_added_M", "ionic_strength_M")},
+            "summary": f"Fmax {float(fmax[-1]):.1f}, Epot {float(energy[-1]):.4e}, {steps[-1] if steps else '?'} steps",
             "fmax_kj_mol_nm": float(fmax[-1]), "potential_kj_mol": float(energy[-1]),
             "steps": int(steps[-1]) if steps else None, "fmax_target": FMAX_TARGET, "atoms": len(atoms)}
