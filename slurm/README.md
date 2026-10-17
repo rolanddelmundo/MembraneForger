@@ -5,6 +5,7 @@
 | `setup.sh` | Builds a self-contained Python environment (plus a CPU GROMACS and gfortran) inside the repository, and compiles PPM 3.0 if its source is present. No Anaconda, modules or root needed. | once per user, on a login node |
 | `run_membraneforger.sbatch` | Builds one all-atom complex per array task in a bundled membrane: orientation, Martini 3 slice, backmapping, validation, energy minimization. Writes `<name>/em.gro` next to the input PDB. | copy next to your PDB files, fill in the three blocks, `sbatch` it |
 | `examples/gemini_6WHC.sbatch` | The same script with the blocks filled in for the Gemini cluster (City of Hope): builds the bundled 6WHC example in five membranes. A worked example and an installation check. | `sbatch` as is on Gemini; adapt on another cluster |
+| `test_contact_gates.sbatch` | Repeats a build that failed, with a branch checked out as a worktree beside the repository (fill in `REPO`, `BRANCH` and `PREVIOUS`; it uses the `gmx` that `setup.sh` built), after running the unit tests. The log ends with the new build's result and its `contacts.json` summary. | from the folder that holds the failed output folder |
 
 ```bash
 git clone https://github.com/rolanddelmundo/MembraneForger.git ~/MembraneForger
