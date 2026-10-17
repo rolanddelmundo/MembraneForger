@@ -59,6 +59,7 @@ The slice gate compares the cut membrane with the membrane it was cut from, befo
 | Option | Meaning | Default |
 |---|---|---|
 | `--apl-validate yes\|no` | Stop before backmapping when a leaflet's area per lipid changes by more than `--apl-tolerance`. | `yes` |
+| `--cg-validate yes\|no` | Stop before embedding when the coarse-grained frame has an empty leaflet, a broken molecule, a strongly tilted bilayer or pervasive bead overlaps; `no` only reports it. | `yes` |
 | `--apl-tolerance PERCENT` | Largest accepted change of the leaflet area per lipid across slicing (a warning is logged above 3 %). | `5.0` |
 | `--rdf-validate yes\|no` | Compare the lateral headgroup RDF of the slice with its source. Warns only. | `yes` |
 | `--no-slice-offset` | Keep the slice window centred on the complex instead of choosing the offset (up to 0.5 nm) that best preserves lipid density. | off |
