@@ -150,8 +150,8 @@ def make_parser() -> argparse.ArgumentParser:
                              "NAME = one particular bundled frame (--list-membranes lists the names; the protein is embedded "
                              "into any of these), or a Martini 3 frame of your own complex, given as FILE or custom=FILE (default: 1)")
     parser.add_argument("--runs", type=int, default=1, metavar="N",
-                        help=f"build the complex N times, each in a different bundled membrane of the --cg 1 or 2 series (its "
-                             f"first N frames, at most the number the series holds), one system per run in <out>/<frame>/ (default: %(default)s)")
+                        help="build the complex N times, each in a different bundled membrane of the --cg 1 or 2 series (its "
+                             "first N frames, at most the number the series holds), one system per run in <out>/<frame>/ (default: %(default)s)")
     parser.add_argument("--list-membranes", action="store_true", help="list the bundled membranes by name and exit")
     parser.add_argument("--embed", action="store_true",
                         help="embed the protein into the membrane of a --cg FILE instead of fitting it onto the frame's "
