@@ -17,7 +17,9 @@ script runs again, so a job that ran out of time continues where it stopped. The
 <out>/summary.json.
 """
 import argparse
+import hashlib
 import json
+import subprocess
 import sys
 import time
 import traceback
@@ -134,6 +136,23 @@ def run_case(mf, args, frame, case, folder):
     return result
 
 
+def fingerprint(repo, frame):
+    """What a cached result depends on: the frame's bytes and the repository's commit (and uncommitted changes)."""
+    def git(*a):
+        return subprocess.run(["git", "-C", str(repo), *a], capture_output=True, text=True).stdout.strip()
+
+    return {"frame_md5": hashlib.md5(Path(frame).read_bytes()).hexdigest(), "commit": git("rev-parse", "HEAD"),
+            "dirty": bool(git("status", "--porcelain", "--untracked-files=no"))}
+
+
+def load_cached(saved, stamp):
+    """A cached result for the same fingerprint, else None (a changed frame or commit is measured again)."""
+    if not saved.exists():
+        return None
+    cached = json.loads(saved.read_text())
+    return cached if cached.get("fingerprint") == stamp and not stamp["dirty"] else None
+
+
 def percentile(values, q):
     """q-th percentile of a list, or None when it is empty."""
     return round(float(np.percentile(values, q)), 2) if values else None
@@ -222,24 +241,30 @@ def main(argv=None):
     for name, path in frames.items():
         results[name] = {}
         done = out / "cases" / f"{name}__frame.json"
-        if done.exists():
-            results[name]["frame"] = json.loads(done.read_text())
-        else:
-            results[name]["frame"] = frame_numbers(mf, path, mapping)
+        stamp = fingerprint(args.repo, path)
+        results[name]["frame"] = load_cached(done, stamp)
+        if results[name]["frame"] is None:
+            results[name]["frame"] = {**frame_numbers(mf, path, mapping), "fingerprint": stamp}
             done.write_text(json.dumps(jsonable(results[name]["frame"]), indent=1) + "\n")
         for case in CASES:
             saved = out / "cases" / f"{name}__{case}.json"
-            if saved.exists():
-                results[name][case] = json.loads(saved.read_text())
+            results[name][case] = load_cached(saved, stamp)
+            if results[name][case] is not None:
                 print(f"{name} {case}: done earlier", flush=True)
                 continue
             print(f"{name} {case}: running", flush=True)
-            results[name][case] = run_case(mf, args, path, case, out / "cases" / f"{name}__{case}")
+            results[name][case] = {**run_case(mf, args, path, case, out / "cases" / f"{name}__{case}"), "fingerprint": stamp}
             saved.write_text(json.dumps(jsonable(results[name][case]), indent=1) + "\n")
             print(f"{name} {case}: {'ok' if results[name][case]['ok'] else 'stopped'} in {results[name][case]['seconds']} s", flush=True)
     aggregates = aggregate(results)
     write_summary(out, results, aggregates)
     print(f"wrote {out / 'summary.md'}")
+    # only the single helix at the hole site is expected to be stopped by a gate; any other stopped case would
+    # leave the cross-frame statistics partial
+    failed = [f"{n} {c}" for n, r in results.items() for c in CASES if c != "helix_hole" and not r[c].get("ok")]
+    if failed:
+        print("ERROR: these cases stopped and are missing from the statistics: " + ", ".join(failed))
+        return 1
     return 0
 
 
