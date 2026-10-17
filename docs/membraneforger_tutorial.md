@@ -203,6 +203,7 @@ complex, so the same code measures the coarse-grained and the atomistic stages. 
 
 | Validation | CG frame | Embed | Slice | Backmap | Minimized | Equilibrated | Final |
 |---|---|---|---|---|---|---|---|
+| CG frame quality (absolute, before embedding) | ✓ | | | | | | |
 | Ring penetration / clashes (build) | | | ✓ | ✓ | ✓ | | |
 | Voronoi APL (global and per species) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Lateral headgroup RDF | ✓ | ✓ | ✓ | | | | |
@@ -499,6 +500,16 @@ turns every one into a PASS / WARNING / FAIL / INSUFFICIENT SAMPLING / REFERENCE
 | 10 | Tail interdigitation | backmap -> minimized -> equilibrated | overlap of the opposing leaflets | overlap integral of the two tail-density profiles | <= 10 % from the reference (backmapped stage, then a matched reference) | 10-20 % | > 20 % |
 | 11 | Protein insertion and orientation | embed -> slice -> backmap -> equilibration | placement and hydrophobic matching | tilt, insertion depth, inversion, embedded fraction | slicing: tilt <= 1 deg, depth <= 0.5 A; AA stages 2 deg / 1 A; equilibrium drift < 3 deg and < 1 A | 1-3 deg / 0.5-1.5 A (slice); 2-5 deg / 1-2.5 A (AA); 3-7 deg / 1-2 A drift | beyond, inversion, or a monotonic drift |
 | 12 | Box-area / volume convergence | AA equilibration | stationarity of NPT equilibration | L_x L_y, V, APL and thickness vs time, block SEM | final-window drift < 1 % and half-window means within 2 % | 1-3 % or 2-5 % | > 3 %, > 5 %, or a persistent monotonic trend |
+
+The coarse-grained frame the build starts from is graded on its own before anything is embedded (gate 0,
+`MembraneValidation.validate_cg_frame`; there is no reference yet, so the limits are absolute and sit in
+`membrane_report.CG_FRAME_GATE`, set just outside what the eight bundled 50 us frames show). PASS /
+WARNING / FAIL: both leaflets populated (empty = FAIL); leaflet APL 42-60 A^2 (WARNING 30-100); headgroup-to-headgroup
+thickness 38-47 A (WARNING 28-56); PO4-normal tilt from z <= 5 deg (WARNING <= 10); non-sterol lipids whose headgroup and
+beads lie on opposite sides of the midplane <= 0.5 %; longest bead-to-bead link inside a lipid <= 0.8 nm (WARNING <= 1.0;
+Martini bonds are <= 0.6 nm); lipid-protein bead pairs closer than 0.30 nm at most max(5, beads/2000) (WARNING up to ten
+times that). `--cg-validate no` reports a FAIL without stopping the build. A membrane model unlike the bundled ones (the 6WHC example
+has APL 54-59 A^2 and D_HH 37 A) may sit outside the PASS windows; that is a WARNING, not a defect.
 
 Plus the hard construction checks that are PASS or FAIL only: complete residues, no duplicate lipid, every anchor
 inside the cell, no hard-core seam overlap, no new protein-lipid clash (gate 1); ring threading, the CHARMM-GUI
