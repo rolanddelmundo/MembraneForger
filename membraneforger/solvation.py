@@ -200,8 +200,8 @@ def salt_summary(nwater: int, n_pos: int, n_neg: int) -> dict:
 def shortfall_warning(basis: str, volume: float, box: list[float], charge: int, target: int, short: int) -> str:
     """The warning for a system whose charge leaves no room for the requested salt: the shortfall and the box that fixes it."""
     needed = water_volume_for_salt(charge)
-    return (f"WARNING: {SALT_M} M NaCl needs {needed:.0f} nm^3 of {basis} volume to hold the {abs(charge)} neutralizing ions plus the "
-            f"salt, there are {volume:.0f} nm^3 ({short} ions short of the {target} requested): only the neutralizing ions are added; "
+    return (f"WARNING: {SALT_M} M NaCl is {abs(charge)} ions of each kind only in {needed:.0f} nm^3 of {basis} volume; there are "
+            f"{volume:.0f} nm^3 ({short} ions short of the {target} requested), so only the {abs(charge)} neutralizing ions are added; "
             f"a box {(needed - volume) / (box[0] * box[1]):.2f} nm taller at fixed xy (z = {box[2]:.2f} nm now) reaches the target")
 
 
