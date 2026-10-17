@@ -8,7 +8,7 @@ from dataclasses import dataclass
 __all__ = ['ORIENTATION', 'ORIENT_CHAINS', 'ORIENT_RESIDUES', 'NTERM_SIDE', 'PDB_ID', 'PPM_MEMBRANE', 'BOX',
            'AMINO', 'SOLVENT', 'N_CAP', 'C_CAP', 'RENAME_RESIDUE', 'RENAME_ATOM', 'RENAME_MOLECULE', 'TERMINUS_MENU',
            'DEFAULT_LIGANDS', 'NSTEPS', 'DISULFIDE_MAX_A', 'DISULFIDE_OK_A', 'SLAB_Z_PAD_NM', 'MIN_Z_PAD_TOTAL_NM',
-           'SALT_M', 'ION_RMIN_NM', 'GENION_ATTEMPTS', 'WATER_CLASH_NM', 'WATER_PROTECT_NM', 'LIPID_SCAN_A',
+           'SALT_M', 'ION_RMIN_NM', 'GENION_ATTEMPTS', 'WATER_PROTECT_NM', 'LIPID_SCAN_A',
            'LIPID_DELETE_A', 'GENERATED', 'INTERMEDIATES', 'INDEX_GROUPS', 'FMAX_TARGET', 'H_BOND_RANGE', 'GLPA_MAX_BOND_A',
            'LYS_BACKBONE', 'ONE_LETTER', 'GM3_XML_TO_GLPA', 'LIPIDATED', 'CYSG_HDB', 'DIHRES_EM_FC', 'EM_MDP',
            'APL_VALIDATE', 'APL_SLICE_WARNING_PERCENT', 'APL_SLICE_TOLERANCE_PERCENT', 'RDF_VALIDATE', 'Settings']
@@ -78,7 +78,7 @@ NSTEPS = 50000  # default maximum EM steps
 DISULFIDE_MAX_A, DISULFIDE_OK_A = 3.0, (1.8, 2.2)  # SG-SG below 3.0 A is a disulfide; outside 1.8-2.2 A it is rebuilt
 SLAB_Z_PAD_NM, MIN_Z_PAD_TOTAL_NM = 1.5, 2.0  # water above/below the solute, and the least total z padding
 SALT_M, ION_RMIN_NM, GENION_ATTEMPTS = 0.15, 0.60, 3
-WATER_CLASH_NM, WATER_PROTECT_NM = 0.18, 0.45
+WATER_PROTECT_NM = 0.45  # cavity waters this close to protein/ligand heavy atoms stay inside the bilayer core
 LIPID_SCAN_A, LIPID_DELETE_A = 1.0, 0.10  # EM survived 0.15 A (6WHC_MORF) but not 0.05 A (7RA3_MRTR)
 # Every file a build writes into the output directory; removed at the start so nothing stale survives a rerun.
 GENERATED = ("oriented.pdb", "orientation_report.json", "membrane.pdb", "aa_cg_mapping.tsv", "prot-memb.pdb",
@@ -90,7 +90,7 @@ GENERATED = ("oriented.pdb", "orientation_report.json", "membrane.pdb", "aa_cg_m
              "audit.json", "run_manifest.json", "ring_piercing.json", "membrane_validation.json", "membrane_validation.md",
              "membrane_validation_lipids.tsv", "membrane_validation_apl.png", "membrane_validation_species.png",
              "membrane_validation_rdf.png", "membrane_validation_composition.png", "membrane_validation_protein_density.png",
-             "em_clash_trace.json", "work", "int")
+             "em_clash_trace.json", "contacts.json", "work", "int")
 # Generated files that are steps on the way to em.gro rather than final outputs or reports: at the end of every build,
 # passed or failed, they are moved into int/ (runtools.INT_DIR) next to the build's working files; nothing is deleted.
 INTERMEDIATES = ("oriented.pdb", "membrane.pdb", "prot-memb.pdb", "topol.pre_genion.top", "boxed.gro", "solv_raw.gro",
@@ -284,6 +284,15 @@ class Settings:
     # EM survived 0.15 A and failed at 0.05-0.08 A in the repository runs. mstool's relaxation uses a soft-core
     # repulsion that is finite and force-free at zero distance, so such overlaps can survive it.
     min_start_contact_nm: float = 0.012
+    # Force-field contact gate (contacts.check_contacts), run on boxed.gro after backmapping, on solv_ions.gro before EM
+    # and on em.unverified.gro after it: a non-excluded atom pair closer than this fraction of its Lennard-Jones Rmin_ij
+    # (from the pair's own NBFIX row or the combination rule) is an overlap. At 0.6 Rmin the LJ repulsion of a heavy-atom
+    # pair alone is thousands of kJ/mol/nm (C-C 4.0 A Rmin -> 2.4 A; C-O 3.7 -> 2.2 A), while equilibrium contacts stay
+    # above about 0.7 Rmin (water O..H hydrogen bond, Na+..O 2.3 A vs a 3.1 A Rmin, packed acyl H..H 2.0 A vs 2.7 A).
+    contact_rmin_fraction: float = 0.6
+    # Two bonds of different molecules whose closest approach is below this, inside both bonds, cross: one chain passes
+    # through the other, which steepest descent cannot undo. Bonds of neighbouring packed chains stay 2.5 A apart or more.
+    bond_crossing_nm: float = 0.12
     # Independent-audit limits: protein CA RMSD across EM (nm) and the closest lipid-solute heavy-atom pair (nm).
     audit_max_ca_rmsd_nm: float = 0.15
     audit_min_contact_nm: float = 0.10
