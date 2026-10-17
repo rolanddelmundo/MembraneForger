@@ -70,15 +70,14 @@ To build the same protein in five different membranes, add `--runs 5` with `--cg
 
 ## Inputs and outputs
 
-**Inputs**
+You provide an all-atom structure (`--aa complex.pdb`: every chain you want simulated, each with a unique chain ID;
+no water, ions, crystallization additives or insertion codes; ligands need a topology in `forcefield/toppar/`) and,
+optionally, a membrane: `--cg 1` (default, a bundled GPR139 membrane), `--cg 2` (kappa opioid receptor), `--cg NAME`
+such as `KOR5` (`--list-membranes` lists them), or `--cg FILE` for a Martini 3 frame of your own complex. The
+orientation options (`--orient-chain`, `--nterm-side`, `--orientation`) say which chain sits in the membrane. Every
+option is in the [command-line reference](docs/cli_reference.md).
 
-| Input | Option | Notes |
-|---|---|---|
-| All-atom structure | `--aa complex.pdb` | Required. Keep every chain you want simulated, each with a unique chain ID. Remove water, ions and crystallization additives, and residue insertion codes. Ligands need a topology in `forcefield/toppar/`. Hydrogens are optional. |
-| Membrane | `--cg 1`, `--cg 2`, `--cg NAME` or `--cg FILE` | Optional. `1` (default) and `2` pick a bundled GPR139 or kappa opioid receptor membrane at random; a name such as `KOR5` picks that bundled frame (`--list-membranes` lists them). A file is a Martini 3 frame of your own complex. |
-| Orientation | `--orient-chain`, `--nterm-side`, `--orientation` | Which chain sits in the membrane and how to orient it. |
-
-**Main outputs** in the `--out` directory
+The main files in the `--out` directory:
 
 | File | Content |
 |---|---|
@@ -90,21 +89,10 @@ To build the same protein in five different membranes, add `--runs 5` with `--cg
 | `audit.json`, `run_manifest.json` | audit result, settings, versions and checksums |
 | `int/` | every intermediate file, kept for inspection and restarts |
 
-## Validation
-
-Each stage checks its own result, and a failed check stops the build and names the stage.
-
-- **Before backmapping**, the cut membrane is compared with the membrane it came from: area per lipid per leaflet,
-  composition, lateral headgroup RDF, thickness and protein orientation. A leaflet whose area per lipid changes by
-  more than 5 % stops the build.
-- **After backmapping**, ring threading, lipid stereochemistry (including every GM3 sugar centre) and clashes are
-  checked.
-- **After minimization**, an independent audit runs `gmx grompp -maxwarn 0` and `gmx check` and re-checks energies,
-  geometry and disulfides.
-
-After you equilibrate, `python -m membraneforger.equilibration` grades convergence and equilibrium membrane
-properties on the trajectory. The [tutorial](docs/membraneforger_tutorial.md#5-validation) describes every
-measurement and threshold.
+Each stage checks its own result, and a failed check stops the build and names the stage. The checks before and after
+backmapping and minimization, and the thresholds, are described in the
+[tutorial](docs/membraneforger_tutorial.md#5-validation). After you equilibrate,
+`python -m membraneforger.equilibration` grades convergence and membrane properties on the trajectory.
 
 ## Documentation
 
@@ -114,7 +102,8 @@ measurement and threshold.
   lipid composition, restarts.
 - [Troubleshooting](docs/troubleshooting.md): common failures and what to check.
 - [Running on Slurm](slurm/README.md) and [the bundled membranes](examples/preeq_cg_cellmem/README.md).
-- [Changelog](CHANGELOG.md).
+- [Module map](membraneforger/README.md) and [Python example](examples/build_from_python.py), for developers.
+- [Contents of `archive/`](docs/archive_overview.md) and the [changelog](CHANGELOG.md).
 
 ## Tests
 
