@@ -65,8 +65,8 @@ python -m membraneforger --aa complex.pdb --orient-chain R --nterm-side out --ou
 `--nterm-side` refers to residue 1 as it appears in your file. A receptor that still carries its signal peptide
 usually needs `in`. The [tutorial](docs/membraneforger_tutorial.md) walks through a full build.
 
-To build the same protein in five different membranes, add `--runs 5`: one system per bundled frame, in
-`my_build/GPR1/` to `my_build/GPR5/` (see [Advanced options](docs/advanced.md#several-membranes-for-one-complex)).
+To build the same protein in five different membranes, add `--runs 5` with `--cg 2`: one system per bundled kappa opioid receptor frame, in
+`my_build/KOR1/`, `my_build/KOR2/`, `my_build/KOR3/`, `my_build/KOR5/` and `my_build/KOR6/` (see [Advanced options](docs/advanced.md#several-membranes-for-one-complex)).
 
 ## Inputs and outputs
 
