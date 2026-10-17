@@ -12,6 +12,10 @@
   simulation run, so the numbering has gaps). `KOR4`, `KOR8` and `GPR1` to `GPR4`, `GPR6` to `GPR9` are gone: the
   GPR139 series now holds one frame, so `--cg 1 --runs N` accepts N = 1 only. The earlier frames stay in the git
   history. The leaflet composition is unchanged at the precision of the table.
+- **Tutorial numbers re-measured on the 50 µs frames.** Lipids removed by embedding, pocket volumes, single-helix
+  pockets, seam removals, the slice-offset effect and the construction deviation now come from the eight bundled
+  frames (`examples/measure_tutorial_numbers.py`); on these frames the offset search no longer reduces the whole-cell
+  spread. Statements about the earlier 30 µs frames are labelled as such.
 - **Series and `--runs` limit come from the frames present.** The nine-frame limit is gone: `--runs` is bounded by
   the number of frames the series holds, and the error message names them; `--list-membranes` and the unknown-name
   error list the names that exist.
