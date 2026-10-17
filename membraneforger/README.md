@@ -35,7 +35,7 @@ python -m membraneforger --aa prot-lig.pdb --cg system.gro --orient-chain R --ou
 | `reporting.py` | `run_manifest.json` |
 | `visualization.py` | VMD + Tachyon stage renders (runs in a python that can import `vmd`) |
 | `runtools.py`, `structio.py` | logging/subprocess wrapper, file readers and writers |
-| `example.py`, `cpu.submit` | use from Python, and a Slurm array template |
+| `../examples/build_from_python.py`, `../slurm/examples/array_cases.sbatch` | use from Python, and a Slurm array template |
 | `tests/` | `python -m unittest discover -s membraneforger/tests -t .` from the repository root |
 
 Requirements: Python >= 3.10 with numpy, scipy, networkx (matplotlib optional, for the validation figures); GROMACS;

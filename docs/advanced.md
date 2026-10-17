@@ -195,5 +195,5 @@ contact. The exclusions appear in the build log and in `run_manifest.json` (`exc
 
 ## Using MembraneForger from Python
 
-`membraneforger/example.py` shows how to call the build from Python, and
+`examples/build_from_python.py` shows how to call the build from Python, and
 [membraneforger/README.md](../membraneforger/README.md) maps each module to its role.

@@ -13,7 +13,7 @@
 # (and optionally extra command-line options in a fourth column, e.g. "--orient-chain R --nterm-side out" or
 # "--pdb-id 7F6G --orient-chain R" for the membrane orientation). Use MEMBRANE as the all-atom entry to finish a
 # system that is already all-atom.
-#   sbatch --array=0-7 --export=ALL,REPO=/path/to/membraneforger,CASES=cases.tsv,OUTROOT=/path/to/outputs cpu.submit
+#   sbatch --array=0-7 --export=ALL,REPO=/path/to/membraneforger,CASES=cases.tsv,OUTROOT=/path/to/outputs slurm/examples/array_cases.sbatch
 # REPO is the folder that contains the membraneforger/ package. PY must import mstool, numpy, scipy and networkx;
 # GMX is the GROMACS command.
 

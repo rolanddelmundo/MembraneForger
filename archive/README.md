@@ -258,7 +258,7 @@ public artifacts.
 
 ## Troubleshooting
 
-See `docs/troubleshooting.md` for common failures, including missing GROMACS,
+See `../docs/troubleshooting.md` (the current guide; the legacy one is in git history) for common failures, including missing GROMACS,
 missing CHARMM36 or membrane parameters, unsupported chemistry, unknown or
 conflicting config keys, ambiguous Stage 4 atom matching, unsupported
 `run_cg_production: true`, and cleanup refusals.
