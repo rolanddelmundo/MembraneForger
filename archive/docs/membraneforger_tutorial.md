@@ -167,7 +167,7 @@ wrong. The Voronoi measurement below replaces them.)
 
 mstool backmaps the sliced membrane around the complex held as a rigid obstacle, the structure is checked for ring
 threading, stereochemistry and clashes (another seed is tried when needed), the topology is built, the box is set in
-z, water and 0.15 M NaCl are added, the system is minimized with and then without the lipid dihedral restraints, and
+z, water and 0.15 M NaCl (in the water, see below) are added, the system is minimized with and then without the lipid dihedral restraints, and
 an independent audit must pass before `em.gro` appears. Every intermediate is kept: at the end of each build, passed
 or failed, the steps on the way to `em.gro` (`config.INTERMEDIATES`) are moved into `<out>/int/`, beside the working
 files (`int/work`) and the audit's scratch runs (`int/audit`); the top level holds the final outputs and the reports.
@@ -362,7 +362,47 @@ sialic acid C2 and C4-C8) and the two ceramide trans bonds of every GM3 with the
 `backmap_data/map.dat` (`membraneforger/stereo.py`, the same test as `examples/check_gm3_stereo.py`), and fails the
 build on any inverted centre or cis bond: a configuration never corrects itself in MD. The same test runs on
 `membrane.pdb` right after backmapping, where a wrong GM3 counts as a wrong configuration in the backmap verdict and
-another seed is tried, so a build only reaches the audit with a GM3 that was wrong on every attempt. The GIPR data that motivated this work
+another seed is tried, so a build only reaches the audit with a GM3 that was wrong on every attempt.
+
+Two lipids threaded through each other, or an atom placed on top of another molecule's atom, are the other defects
+minimization cannot repair: steepest descent ends at a finite Fmax on the atom the bonds hold in place (one build ended
+at Fmax 20878 kJ/mol/nm on a DOPC carbon 2.4 A from a POPC carbon, unchanged through 50000 steps). The lipid scan and
+the start-contact check only look at lipids against the solute, so the build now also tests the structure the way
+GROMACS sees it (`membraneforger/contacts.py`): every non-bonded pair (different molecules, or the same molecule more
+than `nrexcl` bonds apart) against `contact_rmin_fraction` (0.6) of its own Lennard-Jones Rmin, taken from the NBFIX
+table or the combination rule, hydrogens included, under periodic boundaries; and every pair of bonds of two molecules
+for a crossing (closest approach below `bond_crossing_nm`, 0.12, inside both bonds). At 0.6 Rmin the repulsion of a
+heavy-atom pair is thousands of kJ/mol/nm, while hydrogen bonds and packed tails stay above about 0.7 Rmin. Pairs of
+two solvent molecules are not judged: `gmx genion` puts an ion on a water's site, whose neighbours then sit at
+water-water distances (0.6-0.7 of the chloride-oxygen Rmin), and a free water or ion relaxes in the first EM steps; a
+solvent molecule caught in the protein or a lipid is what the gate is for. The gates: `boxed.gro` right after
+backmapping (a finding that involves a lipid rejects the seed, like a ring threading), the water and ion placement (a
+water is dropped, an ion placement retried, when any of its atoms is inside the limit of a protein, ligand or lipid
+atom), `solv_ions.gro` before EM (a lipid or solvent finding, or any crossing, stops the build), and `em.unverified.gro`
+after EM (nothing may remain). Every gate's findings are written to `contacts.json`,
+by stage, and an Fmax failure names the culprit's element, its force-field overlaps before and after EM and the stage a
+lipid first clashed in (`em_clash_trace.json`).
+
+Known limitation of the gate: atoms within `nrexcl` bonds of each other are all treated as excluded, but force-field
+topologies reintroduce some of them as explicit 1-4 interactions (`[ pairs ]`, `[ pairtypes ]`). A badly overlapping
+intramolecular 1-4 pair is therefore not examined, and the gate relies on backmapping and EM for it. No validated build
+has shown such a case. A follow-up would audit real 1-4 distances and energies on validated builds, and only if that shows a
+gap add a topology-aware check, benchmarked on valid and deliberately distorted lipids rather than a fixed cutoff.
+
+The salt is counted in the water, not in the box. A membrane system is about 30 % protein and lipid by volume, so 0.15 M of
+the whole cell would be about 0.21 M in the water. `gmx solvate` fills the box from `spc216.gro` (33.46 waters per nm^3), so
+the number of waters that survive solvation gives the aqueous volume, and the target is N = round(0.15 M x N_A x V)
+(`Settings.salt_volume` = "water"; "box" restores the cell-volume rule). Neutralization follows
+`Settings.counterion_mode`. "inclusive" (default, the CHARMM-GUI 2017 convention) makes the counterion species equal N
+and the other ion N - |Q|, so a Q = -217 system at N = 176 would need a negative Cl-: it is set to 0, only the 217 Na+
+are added, and a WARN line states the shortfall and how much taller the box must be (at fixed xy) to reach the target.
+"additive" adds N pairs and then |Q| counterions on top (Na+ = N + |Q|). The `ions:` log line states the volumes, the
+mode, the counts and the Na+, Cl- and NaCl-pair concentrations and the ionic strength in the water, which counts both
+ions and is larger than the added salt whenever the system carries charge. The ions are placed once, by `gmx genion -np
+-nn` with these counts (`-conc` would measure the whole cell); they equilibrate with the membrane afterwards, which
+pulls counterions to the surface and leaves the bulk below the nominal value.
+
+The GIPR data that motivated this work
 (backmap 57 / 59, minimized 57 / 59 against a slice at 56 / 59 A^2) are consistent with what the report measures:
 backmapping and minimization keep the lipid count and the cell, hence the leaflet mean; what they change is local.
 
@@ -494,7 +534,8 @@ the build's own checks). Where the thresholds live: `Settings` in `config.py`
 
 `membraneforger/config.py` carries the defaults, each with the reasoning: `box_xy_buffer_nm` (1.0), the slice
 offset search (`slice_optimize_offset`, `slice_offset_search_nm` 0.5, `slice_offset_step_nm` 0.1), the seam
-(`seam_min_bead_nm` 0.30, `seam_hard_core_nm` 0.15, `seam_relax_steps` 400), the gate (`APL_VALIDATE`,
+(`seam_min_bead_nm` 0.30, `seam_hard_core_nm` 0.15, `seam_relax_steps` 400), the force-field contact gate
+(`contact_rmin_fraction` 0.6, `bond_crossing_nm` 0.12), the gate (`APL_VALIDATE`,
 `APL_SLICE_WARNING_PERCENT` 3, `APL_SLICE_TOLERANCE_PERCENT` 5, `RDF_VALIDATE`, the RDF ceilings and
 `slice_window_samples` 12 per axis). On the command line: `--apl-validate yes|no`, `--apl-tolerance PERCENT`,
 `--rdf-validate yes|no`, `--no-slice-offset`, `--xy-buffer NM`.
