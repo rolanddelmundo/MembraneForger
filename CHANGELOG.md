@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **The coarse-grained frame is graded before embedding** (gate 0, `membrane_validation.md`): both leaflets populated, absolute
+  leaflet APL and bilayer thickness, bilayer tilt, lipids on the wrong leaflet, broken molecules and lipid-protein bead
+  overlaps, as PASS / WARNING / FAIL records. The eight bundled frames pass. A FAIL stops the build
+  unless `--cg-validate no`.
 - **Repository layout.** The command-line, tutorial, advanced and troubleshooting guides are back in `docs/` and
   `CITATION.cff` is back in the repository root; both had been moved into `archive/`, which broke the README links.
   `membraneforger/cpu.submit` is now `slurm/examples/array_cases.sbatch` and `membraneforger/example.py` is

@@ -31,11 +31,13 @@ from collections import Counter
 from pathlib import Path
 
 import numpy as np
+from scipy.sparse.csgraph import minimum_spanning_tree
 from scipy.spatial import cKDTree
+from scipy.spatial.distance import cdist
 
 from .audit import itp_atoms, topology_includes, topology_molecules
 from .config import AMINO, SOLVENT, Settings
-from .lipids import LIPID_AA_ANCHORS, display_name
+from .lipids import LIPID_AA_ANCHORS, display_name, is_sterol
 from .packing import (
     LEAFLETS,
     aa_stage,
@@ -76,6 +78,14 @@ AA_LIPIDS = set(LIPID_AA_ANCHORS) | {"POPC", "DOPC", "POPE", "DOPE", "POPS", "DO
 # Hard guardrails of the gates (docs/membraneforger_tutorial.md 5.3 and 6): (PASS ceiling, WARNING ceiling).
 CG_GATE = {"thickness_percent": (3.0, 5.0), "tilt_deg": (1.0, 3.0), "depth_A": (0.5, 1.5)}
 AA_GATE = {"thickness_percent": (10.0, 15.0), "tilt_deg": (2.0, 5.0), "depth_A": (1.0, 2.5)}
+# Absolute guardrails of the coarse-grained frame the build starts from (validate_cg_frame). The windows are (PASS low, PASS
+# high, WARNING low, WARNING high), FAIL beyond; the ceilings are (PASS, WARNING), FAIL beyond. They were set just outside what
+# the eight bundled 50 us frames show: leaflet APL 46.8-52.7 A^2, D_HH 42.4-42.8 A, PO4 normal tilt <= 1.5 deg, at most one
+# non-sterol lipid on the wrong side, longest bead-to-bead link inside a lipid 0.59-0.63 nm, closest lipid bead to the protein
+# 0.32 nm. They are not literature values: another membrane model (the 11.2 nm 6WHC example has APL 54-59 A^2 and D_HH 37 A)
+# may sit outside the PASS windows, which is a WARNING; only a frame that is not a fluid bilayer at all fails.
+CG_FRAME_GATE = {"apl_A2": (42.0, 60.0, 30.0, 100.0), "thickness_A": (38.0, 47.0, 28.0, 56.0), "tilt_deg": (5.0, 10.0),
+                 "wrong_leaflet_percent": (0.5, 100.0), "molecule_gap_nm": (0.8, 1.0), "protein_overlap_nm": 0.30}
 CORE_HALF_NM = 0.8   # the hydrophobic core: within this of the midplane no water belongs (about the C4-C14 tail region)
 STAGE_COLOURS = {"cg_frame": "#52514e", "embed": "#2a78d6", "slice": "#eb6834", "backmap": "#1baf7a", "minimize": "#eda100",
                  "old_rule": "#e34948"}
@@ -270,6 +280,7 @@ class MembraneValidation:
         """Start with no stages; the embedded membrane becomes the reference when it is added."""
         self.out, self.settings = out, settings
         self.stages, self.summaries, self.reference, self.slice_check, self.cut = {}, [], None, None, None
+        self.cg_check = None
 
     def add_cg(self, name: str, membrane: list[dict], placed: list[dict], box: list[float], midplane_nm: float,
                protein_nm: np.ndarray | None = None) -> dict:
@@ -315,7 +326,14 @@ class MembraneValidation:
     def structure_records(self, stage: dict, thickness: dict, orientation: dict | None) -> list[dict]:
         """Thickness, protein orientation and (all-atom) interdigitation and core hydration records of one stage."""
         name = stage["name"]
-        if self.reference is None or name == "embed" or name == "cg_frame":
+        if name == "cg_frame":
+            low, high, warn_low, warn_high = CG_FRAME_GATE["thickness_A"]
+            value = thickness["thickness_A"]
+            return [metric("bilayer thickness", name, value, "A", n=sum(thickness["n_per_leaflet"].values()),
+                           status=classify_window(value, low, high, warn_low, warn_high),
+                           reason=f"headgroup plane to headgroup plane (PASS {low}-{high} A, WARNING {warn_low}-{warn_high} A); "
+                                  "absolute, the frame has no reference yet")]
+        if self.reference is None or name == "embed":
             return [metric("bilayer thickness", name, thickness["thickness_A"], "A", n=sum(thickness["n_per_leaflet"].values()),
                            status="NOT RUN", reason="reference stage" if name == "embed" else "before embedding; reported")]
         gate = CG_GATE if stage["resolution"] == "cg" else AA_GATE
@@ -337,6 +355,71 @@ class MembraneValidation:
                 stage["core_hydration"] = {k: hydration[k] for k in ("n_core", "n_core_free", "n_protein_associated", "ratio_percent",
                                                                      "transmembrane_water_path", "status")}
         return records
+
+    def validate_cg_frame(self, membrane: list[dict], cg_protein: list[list[dict]], box: list[float], midplane_nm: float,
+                          leaflets: dict) -> dict:
+        """Grade the coarse-grained frame the build starts from, before anything is embedded (after add_cg('cg_frame')).
+
+        Absolute checks only; the embedded membrane does not exist yet and the slice gate compares against it later.
+        `membrane` holds whole molecules (make_membrane_whole), `leaflets` the PO4 detail of bilayer_midplane.
+        Raises SystemExit on a FAIL when Settings.cg_validate is set.
+        """
+        gate, name, settings = CG_FRAME_GATE, "cg_frame", self.settings
+        cur = self.stages[name]
+        lipids, records = cur["stage"]["lipids"], []
+        for leaflet in LEAFLETS:
+            n, apl = cur["measure"][leaflet]["lipids"], cur["measure"][leaflet]["apl_A2"]
+            low, high, warn_low, warn_high = gate["apl_A2"]
+            records.append(metric("leaflet lipids", name, n, "lipids", leaflet, n=n, status="PASS" if n else "FAIL",
+                                  reason="a bilayer has lipids in both leaflets" if n else "no lipid in this leaflet: not a bilayer"))
+            if n:
+                records.append(metric("leaflet APL, absolute", name, apl, "A^2", leaflet, n=n,
+                                      status=classify_window(apl, low, high, warn_low, warn_high),
+                                      reason=f"Voronoi area per lipid, protein footprint excluded (PASS {low}-{high} A^2, "
+                                             f"WARNING {warn_low}-{warn_high} A^2)"))
+        tilt = leaflets.get("po4_normal_tilt_from_z_deg") if leaflets else None
+        records.append(metric("bilayer normal tilt", name, tilt, "deg", n=leaflets.get("po4_beads") if leaflets else None,
+                              deviation=tilt, status="NOT RUN" if tilt is None else classify(tilt, *gate["tilt_deg"]),
+                              reason="PO4 bead normal against z; embedding and slicing assume a z-normal bilayer"
+                                     + (f" (PASS <= {gate['tilt_deg'][0]} deg, WARNING <= {gate['tilt_deg'][1]} deg)" if tilt is not None
+                                        else "; fewer than 10 PO4 beads, not measured")))
+        side = [(l["leaflet"] == "upper") != (float(mol["xyz"][:, 2].mean()) > midplane_nm)
+                for mol, l in zip(membrane, lipids) if not is_sterol(mol["cg"])]
+        percent = 100.0 * sum(side) / len(side) if side else 0.0
+        records.append(metric("lipids on the wrong leaflet", name, sum(side), "lipids", n=len(side), deviation=percent,
+                              status=classify(percent, *gate["wrong_leaflet_percent"]),
+                              reason=f"{percent:.2f} % of the non-sterol lipids have their headgroup on one side of the midplane and their "
+                                     f"beads on the other (PASS <= {gate['wrong_leaflet_percent'][0]} %); sterols flip and are left out"))
+        gaps = [(float(minimum_spanning_tree(cdist(m["xyz"], m["xyz"])).max()), m["cg"]) for m in membrane if len(m["xyz"]) > 1]
+        gap, gap_lipid = max(gaps) if gaps else (0.0, None)
+        records.append(metric("longest bead link inside a lipid", name, gap, "nm", n=len(gaps),
+                              status=classify(gap, *gate["molecule_gap_nm"]),
+                              reason=f"largest nearest-bead gap inside one whole molecule ({gap_lipid}); Martini bonds are <= 0.6 nm, "
+                                     f"a broken molecule has a gap of nanometres (PASS <= {gate['molecule_gap_nm'][0]} nm)"))
+        cell = np.array(box[:3], dtype=float)
+        beads = np.vstack([m["xyz"] for m in membrane])
+        protein = np.array([[b["x"], b["y"], b["z"]] for res in cg_protein for b in res])
+        wrap = lambda xyz: np.where(np.mod(xyz, cell) >= cell, 0.0, np.mod(xyz, cell))  # np.mod of a tiny negative rounds up to the edge
+        close = cKDTree(wrap(protein), boxsize=cell).query_ball_point(wrap(beads), gate["protein_overlap_nm"])
+        pairs = int(sum(len(c) for c in close))
+        tolerated = max(5, len(beads) // 2000)
+        records.append(metric("protein-lipid bead overlaps", name, pairs, "pairs", n=len(beads),
+                              status=classify(pairs, tolerated, 10 * tolerated),
+                              reason=f"lipid-protein bead pairs closer than {gate['protein_overlap_nm']} nm (PASS <= {tolerated}, "
+                                     f"WARNING <= {10 * tolerated}; the closest in the bundled frames is 0.32 nm)"))
+        cur["records"] += records
+        summary = next(s for s in self.summaries if s["name"] == name)
+        summary["records"] = cur["records"]
+        overall = overall_status(records)
+        self.cg_check = {"records": records, "status": overall["status"], "overall": overall, "cg_validate": settings.cg_validate}
+        for r in records:
+            log(self.out, f"CG frame {r['metric']}" + (f" ({r['leaflet']})" if r["leaflet"] else "")
+                          + f": {fmt(r['value'], 2)} {r['units']}: {r['status']}; {r['reason']}",
+                "PASS" if r["status"] in ("PASS", "NOT RUN") else "WARN")
+        if settings.cg_validate and overall["status"] == "FAIL":
+            raise SystemExit("the coarse-grained frame is not a usable bilayer: " + "; ".join(overall["failures"])
+                             + ". See membrane_validation.md; --cg-validate no only reports it")
+        return self.cg_check
 
     def slice_reference(self) -> dict | None:
         """The compact per-leaflet reference the slicer uses to place the window (None before the embed stage)."""
@@ -500,10 +583,11 @@ class MembraneValidation:
     def record(self, cut: dict | None = None) -> dict:
         """Everything for run_manifest.json and membrane_validation.json."""
         records = self.all_records()
-        graded = [r for r in records if r["stage"] in ("slice", "backmap", "minimize")]
+        graded = [r for r in records if r["stage"] in ("cg_frame", "slice", "backmap", "minimize")]
         return {"reference_stage": "embed", "stages": self.summaries, "slice_check": self.slice_check, "records": records,
                 "stage_matrix": stage_matrix(self.stages), "overall": overall_status(graded) if graded else None,
-                "gates": {"1 CG slicing fidelity": overall_status([r for r in records if r["stage"] == "slice"]) if self.slice_check else None,
+                "gates": {"0 CG frame quality": overall_status([r for r in records if r["stage"] == "cg_frame"]) if self.cg_check else None,
+                          "1 CG slicing fidelity": overall_status([r for r in records if r["stage"] == "slice"]) if self.slice_check else None,
                           "2 backmapping integrity": overall_status([r for r in records if r["stage"] in ("backmap", "minimize")])
                           if any(n in self.stages for n in ("backmap", "minimize")) else None,
                           "3 equilibration convergence": None, "4 equilibrium physical properties": None},
@@ -517,6 +601,13 @@ class MembraneValidation:
 
 
 # ----------------------------------------------------------------------------------------------------------- outputs
+
+def classify_window(value, pass_low: float, pass_high: float, warning_low: float, warning_high: float) -> str:
+    """PASS inside [pass_low, pass_high], WARNING inside [warning_low, warning_high], FAIL beyond; non-finite is INSUFFICIENT SAMPLING."""
+    if value is None or not np.isfinite(value):
+        return "INSUFFICIENT SAMPLING"
+    return "PASS" if pass_low <= value <= pass_high else "WARNING" if warning_low <= value <= warning_high else "FAIL"
+
 
 def fmt(value, digits=1) -> str:
     """Table cell: a number to `digits` decimals, or a dash."""
@@ -797,7 +888,8 @@ def write_outputs(out: Path, record: dict, stages: dict) -> list[Path]:
     return written
 
 
-MATRIX_ROWS = [("Ring penetration / clashes", "pipeline (ring_piercing.json, lipid scan, audit)", ("slice", "backmap", "minimize")),
+MATRIX_ROWS = [("CG frame quality (absolute)", "records", ("cg_frame",)),
+               ("Ring penetration / clashes", "pipeline (ring_piercing.json, lipid scan, audit)", ("slice", "backmap", "minimize")),
                ("Voronoi APL", "measure", ("cg_frame", "embed", "slice", "backmap", "minimize", "equilibrated", "final")),
                ("Lateral RDF", "rdfs", ("cg_frame", "embed", "slice")),
                ("Lipids around the protein", "protein_density", ("embed", "slice", "backmap", "minimize", "equilibrated", "final")),

@@ -11,7 +11,7 @@ __all__ = ['ORIENTATION', 'ORIENT_CHAINS', 'ORIENT_RESIDUES', 'NTERM_SIDE', 'PDB
            'SALT_M', 'MOLAR_PER_NM3', 'WATERS_PER_NM3', 'ION_RMIN_NM', 'GENION_ATTEMPTS', 'WATER_PROTECT_NM', 'LIPID_SCAN_A',
            'LIPID_DELETE_A', 'GENERATED', 'INTERMEDIATES', 'INDEX_GROUPS', 'FMAX_TARGET', 'H_BOND_RANGE', 'GLPA_MAX_BOND_A',
            'LYS_BACKBONE', 'ONE_LETTER', 'GM3_XML_TO_GLPA', 'LIPIDATED', 'CYSG_HDB', 'DIHRES_EM_FC', 'EM_MDP',
-           'APL_VALIDATE', 'APL_SLICE_WARNING_PERCENT', 'APL_SLICE_TOLERANCE_PERCENT', 'RDF_VALIDATE', 'Settings']
+           'APL_VALIDATE', 'APL_SLICE_WARNING_PERCENT', 'APL_SLICE_TOLERANCE_PERCENT', 'RDF_VALIDATE', 'CG_VALIDATE', 'Settings']
 
 # ============================================================
 # MEMBRANE ORIENTATION
@@ -47,6 +47,10 @@ APL_VALIDATE = "yes"       # yes | no
 APL_SLICE_WARNING_PERCENT = 3.0      # a leaflet APL change up to this is PASS, up to the tolerance WARNING, beyond FAIL
 APL_SLICE_TOLERANCE_PERCENT = 5.0
 RDF_VALIDATE = "yes"       # yes | no   (the RDF comparison is part of the slice gate's verdict)
+# The coarse-grained frame the build starts from is graded before anything is embedded (membrane_report.validate_cg_frame):
+# CG_VALIDATE = yes stops the build on the hard failures (an empty leaflet, a broken molecule, a strongly tilted bilayer,
+# pervasive bead overlaps); every other finding is a WARNING. "no" only logs the result.
+CG_VALIDATE = "yes"        # yes | no
 
 AMINO = {"ALA", "ARG", "ASN", "ASP", "CYS", "CYSG", "CYSP", "GLN", "GLU", "GLY", "HIS", "HSD", "HSE", "HSP", "ILE",
          "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL", "AIB", "LEM", "KTZ", "KRT", "KSM"}
@@ -368,6 +372,7 @@ class Settings:
     apl_slice_warning_percent: float = APL_SLICE_WARNING_PERCENT
     apl_slice_tolerance_percent: float = APL_SLICE_TOLERANCE_PERCENT
     rdf_validate: bool = RDF_VALIDATE.lower() == "yes"
+    cg_validate: bool = CG_VALIDATE.lower() == "yes"
     rdf_peak_warning_a: float = 0.5
     rdf_max_peak_shift_a: float = 1.0
     rdf_max_noise_units: float = 3.0
