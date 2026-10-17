@@ -11,6 +11,13 @@
   blocks (scheduler, software, this run) with working defaults, so only those are edited; submitted as is it builds
   the bundled 6WHC example. `slurm/examples/gemini_6WHC.sbatch` is the filled-in Gemini version.
 
+### Fixed
+
+- The GM3 stereochemistry audit makes every molecule whole across the periodic boundary before testing, using the
+  `.gro` box or the PDB `CRYST1` record. A GPU `mdrun` writes minimization output with molecules wrapped into the
+  cell atom by atom, which the audit read as inverted sugar stereocentres — a false positive that failed correct
+  builds.
+
 ## 2.0.0 (2026-10-10)
 
 MembraneForger now needs only an all-atom structure. It orients the complex in the membrane, embeds it in a bundled
