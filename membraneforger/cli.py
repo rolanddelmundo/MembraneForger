@@ -18,25 +18,24 @@ from .orientation import NTERM_SIDES, ORIENTATION_MODES, OrientationRequest, par
 from .pipeline import Session, build
 from .runtools import find_gromacs
 
-__all__ = ['BUNDLED_MEMBRANES', 'MAX_RUNS', 'bundled_frames', 'bundled_membrane', 'bundled_series', 'describe_bundled_membranes',
+__all__ = ['BUNDLED_MEMBRANES', 'bundled_frames', 'bundled_membrane', 'bundled_series', 'describe_bundled_membranes',
            'make_parser', 'locate_forcefield', 'locate_data', 'parse_chains', 'parse_box', 'parse_disulfide_pair',
            'orientation_request', 'run_sessions', 'main']
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 BUNDLED_DIR = REPOSITORY / "examples" / "preeq_cg_cellmem"
 # --cg 1 / --cg 2: one frame drawn at random from the bundled pre-equilibrated membranes of that receptor
-# (examples/preeq_cg_cellmem/README.md lists all 18); the chosen file is logged and recorded in run_manifest.json.
+# (examples/preeq_cg_cellmem/README.md lists them); the chosen file is logged and recorded in run_manifest.json.
 BUNDLED_MEMBRANES = {"1": "GPR*_cg_cellmem.gro", "2": "KOR*_cg_cellmem.gro"}
-# --cg NAME: one particular bundled frame by name (GPR1 ... GPR9, KOR1 ... KOR9), for a repeatable build.
+# --cg NAME: one particular bundled frame by name (--list-membranes lists them), for a repeatable build.
 BUNDLED_FRAME_SUFFIX = "_cg_cellmem.gro"
 RECEPTORS = {"GPR": "GPR139", "KOR": "kappa opioid receptor"}
 # --runs N: the complex is built N times, each time in a different frame of the chosen series (the first N frames of
-# the series, so the set is the same from one invocation to the next); a series holds nine frames.
-MAX_RUNS = 9
+# the series, so the set is the same from one invocation to the next); the bound is the number of frames the series holds.
 
 
 def bundled_frames() -> dict:
-    """The bundled frames by name (GPR1 ... KOR9), each mapped to its file in examples/preeq_cg_cellmem/."""
+    """The bundled frames by name (for example KOR1 or GPR5), each mapped to its file in examples/preeq_cg_cellmem/."""
     return {p.name[:-len(BUNDLED_FRAME_SUFFIX)].upper(): p for p in sorted(BUNDLED_DIR.glob("*" + BUNDLED_FRAME_SUFFIX))
             if p.name[:-len(BUNDLED_FRAME_SUFFIX)][:3].upper() in RECEPTORS}
 
@@ -66,13 +65,13 @@ def bundled_membrane(code: str) -> Path | None:
     if name in frames:
         return frames[name]
     if name[:3] in RECEPTORS and name[3:].isdigit():  # looks like a frame name, but no such frame is bundled
-        raise SystemExit(f"no bundled membrane named {code}: --list-membranes shows the {len(frames)} bundled frames")
+        raise SystemExit(f"no bundled membrane named {code}: the bundled frames are {', '.join(frames)} (--list-membranes)")
     return None  # a file path
 
 
 def describe_bundled_membranes() -> str:
     """The text of --list-membranes: every bundled frame by name."""
-    lines = ["bundled Martini 3 cell membranes (examples/preeq_cg_cellmem/, 30 us each; pass a name to --cg):"]
+    lines = ["bundled Martini 3 cell membranes (examples/preeq_cg_cellmem/, 50 us each; pass a name to --cg):"]
     for name, path in bundled_frames().items():
         lines.append(f"  {name:<5} {RECEPTORS[name[:3]]:<22} {path.name}")
     lines.append("--cg 1 picks a GPR139 frame at random and --cg 2 a kappa opioid receptor frame; --runs N builds the complex in "
@@ -148,11 +147,11 @@ def make_parser() -> argparse.ArgumentParser:
                              "the only source of protein and ligand chemistry")
     parser.add_argument("--cg", "--coarse-grain", dest="coarse_grain", default="1", metavar="1|2|NAME|FILE",
                         help="membrane: 1 = a random bundled GPR139 frame, 2 = a random bundled kappa opioid receptor frame, "
-                             "NAME = one particular bundled frame (GPR1 ... GPR9, KOR1 ... KOR9; the protein is embedded into "
-                             "any of these), or a Martini 3 frame of your own complex, given as FILE or custom=FILE (default: 1)")
+                             "NAME = one particular bundled frame (--list-membranes lists the names; the protein is embedded "
+                             "into any of these), or a Martini 3 frame of your own complex, given as FILE or custom=FILE (default: 1)")
     parser.add_argument("--runs", type=int, default=1, metavar="N",
                         help=f"build the complex N times, each in a different bundled membrane of the --cg 1 or 2 series (its "
-                             f"first N frames, at most {MAX_RUNS}), one system per run in <out>/<frame>/ (default: %(default)s)")
+                             f"first N frames, at most the number the series holds), one system per run in <out>/<frame>/ (default: %(default)s)")
     parser.add_argument("--list-membranes", action="store_true", help="list the bundled membranes by name and exit")
     parser.add_argument("--embed", action="store_true",
                         help="embed the protein into the membrane of a --cg FILE instead of fitting it onto the frame's "
@@ -275,10 +274,18 @@ def main(argv: list | None = None) -> int:
     if not args.membrane and not args.all_atom:
         parser.error("--aa is required")
     embed, cg, frames = args.embed, str(args.coarse_grain), []
-    if not 1 <= args.runs <= MAX_RUNS:
-        parser.error(f"--runs must be between 1 and {MAX_RUNS}, the number of frames in a bundled series")
+    if args.runs < 1:
+        parser.error("--runs must be at least 1")
     if args.runs > 1 and (args.membrane or cg not in BUNDLED_MEMBRANES):
         parser.error("--runs builds in several bundled membranes of one series: use it with --cg 1 or --cg 2 (--aa, no --membrane)")
+    if args.runs > 1:
+        try:
+            held = bundled_series(cg)
+        except SystemExit as exc:
+            parser.error(str(exc))
+        if args.runs > len(held):
+            parser.error(f"--runs must be between 1 and {len(held)}, the number of frames in the --cg {cg} series "
+                         f"({', '.join(p.name[:-len(BUNDLED_FRAME_SUFFIX)] for p in held)})")
     try:
         bundled = bundled_series(cg)[:args.runs] if args.runs > 1 else [bundled_membrane(cg)]
     except SystemExit as exc:
