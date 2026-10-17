@@ -90,6 +90,10 @@ Martini and CHARMM36 names differ for two species. GM3 is `DPG3` in the coarse-g
 ANE5A merged into one molecule) and PIP2 is `SAP6` there and `SAPI25` in the all-atom files.
 [examples/preeq_cg_cellmem/README.md](../examples/preeq_cg_cellmem/README.md) lists the frames in detail.
 
+Lipid contacts around the receptor over the 50 µs of the simulations behind `KOR5` and `GPR5` (lipids within 5 and
+5-10 Å of the receptor, per leaflet): [KOR5](../examples/preeq_cg_cellmem/figures/KOR5_lipid_contacts_0-50us.svg),
+[GPR5](../examples/preeq_cg_cellmem/figures/GPR5_lipid_contacts_0-50us.svg).
+
 ### Several membranes for one complex
 
 The bundled frames are independent 50 µs replicates of one cell-membrane model, so building the same complex in
