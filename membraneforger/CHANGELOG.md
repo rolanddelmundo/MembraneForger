@@ -24,7 +24,7 @@
 - **Tutorial numbers re-measured on the 50 µs frames.** Lipids removed by embedding, pocket volumes, single-helix
   pockets, seam removals, the slice-offset effect and the construction deviation now come from the eight bundled
   frames (`membraneforger/examples/measure_tutorial_numbers.py`); on these frames the offset search no longer reduces the whole-cell
-  spread. The `KOR1` stage table and its RDF statements are re-measured as well. Statements about the earlier 30 µs frames are labelled as such.
+  spread. The `KOR1` stage table and its RDF statements are re-measured as well. Remaining 30 µs-frame, GIPR and unmeasured statements in the tutorial were removed or replaced by 50 µs values; gate 0 is now in the tutorial's flow diagram and settings, `advanced.md` uses Upper/Lower like the other guides, and the README mstool pin matches the supported range (0.3.9 or 0.3.10).
 - **Series and `--runs` limit come from the frames present.** The nine-frame limit is gone: `--runs` is bounded by
   the number of frames the series holds, and the error message names them; `--list-membranes` and the unknown-name
   error list the names that exist.
