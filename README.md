@@ -9,11 +9,12 @@ returns a solvated, energy-minimized CHARMM36 system (`em.gro`) that has passed 
 ## How it works
 
 1. **Orient** the protein in the membrane (from an OPM entry, PPM 3.0, or your own coordinates).
-2. **Embed** it in a bundled coarse-grained cell membrane, or in your own Martini 3 frame.
-3. **Cut** the membrane to the protein plus a margin, and check that the cut kept the lipid packing.
-4. **Backmap** the lipids to all atoms around the fixed protein.
-5. **Build** the CHARMM36 topology, add water and 0.15 M NaCl, and minimize.
-6. **Audit** the result. `em.gro` is written only when every check passes.
+2. **Check** the coarse-grained membrane frame (bundled, or your own Martini 3 frame) before anything is placed in it.
+3. **Embed** the protein in it.
+4. **Cut** the membrane to the protein plus a margin, and check that the cut kept the lipid packing.
+5. **Backmap** the lipids to all atoms around the fixed protein.
+6. **Build** the CHARMM36 topology, add water and 0.15 M NaCl, and minimize.
+7. **Audit** the result. `em.gro` is written only when every check passes.
 
 The output is minimized, not equilibrated. Run restrained equilibration before production.
 

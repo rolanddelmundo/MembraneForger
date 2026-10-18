@@ -1,6 +1,6 @@
 # Advanced options
 
-This page collects the details that used to live in the top-level README. For the full option list see the
+This page collects the details behind the top-level README. For the full option list see the
 [command-line reference](cli_reference.md). For the science behind each stage and every threshold see the
 [tutorial](membraneforger_tutorial.md).
 
@@ -188,7 +188,7 @@ the chemistry does not support a disulfide, such as two cysteines of a cytosolic
 
 That pair is then not bonded, not repaired to 2.03 Å and not expected in the topology: `pdb2gmx` is asked before
 linking (`-ss`) and told to leave it, so both cysteines are built as reduced CYS carrying their HG1 thiol hydrogen.
-Every other pair of the same chain is still bonded, and a chain with no excluded pair is built exactly as before.
+Every other pair of the same chain is still bonded.
 Coordinates are never changed, so the two sulfurs start where the model put them and the minimization relaxes the
 contact. The exclusions appear in the build log and in `run_manifest.json` (`excluded_disulfides`).
 

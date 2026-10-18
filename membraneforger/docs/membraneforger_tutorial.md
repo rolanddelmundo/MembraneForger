@@ -144,7 +144,7 @@ the cell is not cut. The cut is made lipid by lipid:
    (`--no-slice-offset` keeps the centred window). On the 8 bundled 50 us frames (6WHC complex) the search gives no gain
    in the spread of the whole-cell deviation (standard deviation, lower / upper: 2.4 / 1.5 % centred, 2.5 / 1.4 % with
    the search; worst case 14.3 and 13.0 %), and the construction deviation of section 4 is smaller with the centred
-   window (median 0.71 %, 95th percentile 1.87 %, largest 2.18 %) than with the search (1.55, 3.39, 4.87 %).;
+   window (median 0.71 %, 95th percentile 1.87 %, largest 2.18 %) than with the search (1.55, 3.39, 4.87 %);
 6. the new periodic seam is relaxed in place at the coarse-grained level: a short steepest descent pushes apart
    beads of different lipids that only the cut brought within 0.30 nm of each other, with the complex as a fixed
    repulsive wall, every bead held near its position and every lipid held in shape by intramolecular distance
@@ -152,14 +152,12 @@ the cell is not cut. The cut is made lipid by lipid:
    still in a hard-core overlap (< 0.15 nm) afterwards is removed; on the 8 bundled 50 us frames none was (the seam removed 0 lipids on all of them). The
    relaxation moves about 40 % of the lipids by 0.02 nm on average and 0.3 nm at most.
 
-### Why the previous rule was wrong
+### Why whole-lipid anchoring
 
-The earlier rule kept a lipid only when **every** bead lay inside the window. Lipid tails reach a nanometre
-sideways, so a band of lipids along every cut edge lost one tail bead to the outside and was deleted, while the new
-cell kept the full window area. The lipid number fell by 15-30 % per unit area and the two leaflets, with different
-compositions and tail disorder, lost different amounts. Energy minimization cannot create lipids, and NPT
-relaxation cannot repair it either: both leaflets share one x, y cell, so no single lateral contraction can restore
-two different deficits.
+Keeping a lipid only when every bead lies inside the window deletes a band of lipids along every cut edge, because tails
+reach a nanometre sideways, while the new cell keeps the full window area: the lipid number falls by 15-30 % per unit area
+and the two leaflets lose different amounts. Neither minimization nor NPT can repair this, since both leaflets share one
+x, y cell.
 
 ## 4. Backmapping and the rest of the build
 
@@ -170,8 +168,7 @@ an independent audit must pass before `em.gro` appears. Every intermediate is ke
 or failed, the steps on the way to `em.gro` (`config.INTERMEDIATES`) are moved into `<out>/int/`, beside the working
 files (`int/work`) and the audit's scratch runs (`int/audit`); the top level holds the final outputs and the reports.
 A retried backmapping seed keeps the earlier attempt (`int/work/mstool_before_seed<N>`,
-`int/work/membrane_seed<N>.pdb`). The measurements of gate 2 were added around this part;
-the build itself did not change.
+`int/work/membrane_seed<N>.pdb`).
 
 ### 4.1 Disulfides
 
@@ -370,24 +367,21 @@ Ratio at 10 A, with the lipids in the shell and in the leaflet in brackets:
 | GPR5 | 0.83 (21/672) | 0.85 (21/251) | 1.31 (66/597) | 1.32 (66/212) |
 
 The lower leaflet is enriched next to the protein in every frame (1.24-1.56) and the upper leaflet ranges from depleted
-(GPR5, 0.83) to enriched (KOR3, 1.35). Slicing keeps the shell lipids, so the ratio changes only through the leaflet
-mean.
+(GPR5, 0.83) to enriched (KOR3, 1.35).
 
 **Reading the minimized and trajectory .gro files.** The .gro format keeps 5 characters of a residue name (SAPI25 is
 written SAPI2) and the GM3 topology splits each molecule into four residues (CER160 BGLC BGAL ANE5AC, written CER16
 BGLC BGAL ANE5A). The minimized stage and the equilibration frames therefore take their molecules from the build's
 topology (`topol.top` and its .itp files), which is exact; without a topology that matches the file, the residue
 names are mapped back with those two rules. A molecule that is neither lipid, protein nor solvent is reported
-(`WARNING`, "molecules identified") and left out of every measurement. Before this, PIP2 and GM3 were missing from
-the minimized stage and their atoms were counted as protein, which inflated the protein footprint and made every
-species read about 30 % too tightly packed after minimization.
+(`WARNING`, "molecules identified") and left out of every measurement.
 
 ### 5.7 Integrity
 
 Every kept lipid is complete, no lipid index appears twice, every anchor lies inside the new cell (within the seam
 relaxation's displacement), no hard-core seam overlap remains, and no lipid bead ends closer to the complex than the
 closest one was before the cut. Ring threading and the all-atom lipid-solute scan belong to the build itself and
-run after backmapping and minimization as before.
+run after backmapping and minimization.
 
 ### 5.8 Gate 2: backmapping integrity
 
@@ -413,7 +407,7 @@ another seed is tried, so a build only reaches the audit with a GM3 that was wro
 Two lipids threaded through each other, or an atom placed on top of another molecule's atom, are the other defects
 minimization cannot repair: steepest descent ends at a finite Fmax on the atom the bonds hold in place (one build ended
 at Fmax 20878 kJ/mol/nm on a DOPC carbon 2.4 A from a POPC carbon, unchanged through 50000 steps). The lipid scan and
-the start-contact check only look at lipids against the solute, so the build now also tests the structure the way
+the start-contact check only look at lipids against the solute, so the build also tests the structure the way
 GROMACS sees it (`membraneforger/contacts.py`): every non-bonded pair (different molecules, or the same molecule more
 than `nrexcl` bonds apart) against `contact_rmin_fraction` (0.6) of its own Lennard-Jones Rmin, taken from the NBFIX
 table or the combination rule, hydrogens included, under periodic boundaries; and every pair of bonds of two molecules
@@ -565,7 +559,7 @@ the build's own checks). Where the thresholds live: `Settings` in `config.py`
 ## 7. Limitations and assumptions
 
 - The seam of a cut membrane was never equilibrated: the relaxation removes overlaps, it does not equilibrate the
-  interface. Equilibrate the built system before production, as before.
+  interface. Equilibrate the built system before production.
 - The construction check isolates slicing; the whole-cell comparison carries the heterogeneity of the parent
   membrane around the protein (on the bundled frames the lower leaflet there has a 5-13 % smaller APL than the cell average, the upper leaflet -4 to +0.4 %).
   The offset search does not reduce that on these frames.
