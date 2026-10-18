@@ -109,6 +109,14 @@ measure of packing: the frame's footprint is tessellated with the coarse-grained
 membrane's with the complex's heavy atoms, which are far denser generators. On the matched 6WHC frame the same lipids
 give a lower-leaflet APL of 57.3 A^2 with the CG protein and 48.3 A^2 with the fitted all-atom complex.
 
+![KOR1 before and after embedding: the bundled 50 us frame, the embedded membrane with 6WHC, and the slice](figures/kor1_membrane_before_after.png)
+
+*Figure 1. The coarse-grained membrane of the `KOR1` build at its three coarse-grained stages: the bundled 50 us frame
+with its own receptor, the membrane after embedding the 6WHC complex, and the slice cut around it (1302, 1279 and 466
+lipids). Top-down view of each leaflet and side view (x-z), coloured by the Voronoi area per lipid. "After" means after
+embedding and slicing: the build does not equilibrate the coarse-grained membrane, and the figure is drawn by
+`membraneforger/examples/make_tutorial_figures.py`.*
+
 ## 3. Slicing (BOX = auto)
 
 The window is the complex's x, y extent plus `--xy-buffer` (1.0 nm) on each side; an axis whose window would reach
@@ -271,6 +279,32 @@ The repaired slice therefore preserves the embedded membrane's packing to within
 representative cases and within 5 % on every bundled frame tested; it does not preserve it "perfectly", and the
 report says by how much.
 
+Area per lipid (A^2, Voronoi, protein footprint excluded) at each stage for the 8 bundled frames with the 6WHC complex
+(slice offset search on). "Uncut" is the same lipids as the slice, in the embedded membrane; the construction
+deviation is the slice against them. Head-plane is the area per phosphate/amide anchor (section 5.2).
+
+| Frame | Leaflet | CG frame | Embedded | Slice | Uncut | Construction | Head-plane embedded | Head-plane slice |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| KOR1 | upper | 47.99 | 47.72 | 47.54 | 46.99 | +1.17 % | 65.72 | 64.85 |
+| KOR1 | lower | 51.04 | 48.87 | 46.25 | 45.48 | +1.70 % | 63.47 | 60.44 |
+| KOR2 | upper | 47.87 | 47.64 | 46.86 | 45.54 | +2.90 % | 65.84 | 64.55 |
+| KOR2 | lower | 51.66 | 49.29 | 43.56 | 43.82 | -0.59 % | 63.48 | 55.58 |
+| KOR3 | upper | 47.36 | 47.24 | 45.82 | 45.08 | +1.65 % | 66.06 | 64.02 |
+| KOR3 | lower | 52.11 | 49.99 | 46.37 | 45.70 | +1.46 % | 63.59 | 59.14 |
+| KOR5 | upper | 46.76 | 46.79 | 45.03 | 45.21 | -0.39 % | 65.37 | 62.61 |
+| KOR5 | lower | 51.63 | 49.19 | 44.61 | 42.54 | +4.87 % | 62.38 | 58.42 |
+| KOR6 | upper | 47.12 | 46.90 | 46.80 | 46.74 | +0.12 % | 65.51 | 65.89 |
+| KOR6 | lower | 51.92 | 49.76 | 45.01 | 44.15 | +1.95 % | 63.29 | 57.54 |
+| KOR7 | upper | 46.90 | 46.75 | 46.52 | 46.35 | +0.36 % | 66.18 | 65.48 |
+| KOR7 | lower | 52.72 | 50.30 | 43.77 | 42.81 | +2.25 % | 63.24 | 55.97 |
+| KOR9 | upper | 47.75 | 47.64 | 47.83 | 47.03 | +1.70 % | 66.35 | 65.00 |
+| KOR9 | lower | 51.89 | 50.33 | 45.51 | 45.81 | -0.65 % | 64.16 | 57.26 |
+| GPR5 | upper | 46.86 | 46.95 | 47.03 | 46.07 | +2.09 % | 65.80 | 67.30 |
+| GPR5 | lower | 51.39 | 49.70 | 46.67 | 46.43 | +0.52 % | 63.66 | 60.62 |
+
+The `KOR1` rows are the stage table above; `KOR5` lower is the one construction deviation above the 3 % warning level
+(PASS WITH WARNINGS).
+
 ### 5.4 Composition and leaflet asymmetry
 
 For each leaflet and species the report gives N and the mole fraction in the reference and in the slice, the
@@ -316,6 +350,28 @@ shell, with the counting uncertainty (ratio / sqrt(n)). The cross-section is tak
 tilted helix shifts laterally by up to 2 nm across a leaflet: against all protein atoms of the leaflet, even the
 total lipid density read 1.3-1.4 at the protein for a single-pass protein tilted 53 degrees (0.9-1.1 at headgroup
 depth). The CG frame stage is left out: its protein is the frame's own receptor, not the complex.
+
+![All-lipid density around the protein, slice stage, 8 bundled frames](figures/protein_density_by_frame.png)
+
+*Figure 2. Cumulative density of all lipids within R of the protein over the leaflet mean, slice stage, 6WHC complex,
+for each bundled frame and leaflet; 1 = as common as anywhere. The first shell (R = 10 A) is marked.*
+
+Ratio at 10 A, with the lipids in the shell and in the leaflet in brackets:
+
+| Frame | Upper, embedded | Upper, slice | Lower, embedded | Lower, slice |
+|---|---|---|---|---|
+| KOR1 | 1.12 (28/666) | 1.14 (28/249) | 1.37 (70/613) | 1.29 (70/217) |
+| KOR2 | 1.15 (29/671) | 1.16 (29/253) | 1.44 (73/611) | 1.32 (73/228) |
+| KOR3 | 1.35 (34/677) | 1.32 (34/260) | 1.35 (68/601) | 1.34 (68/215) |
+| KOR5 | 1.30 (33/676) | 1.26 (33/264) | 1.56 (79/606) | 1.43 (80/228) |
+| KOR6 | 1.14 (29/676) | 1.15 (29/254) | 1.46 (74/603) | 1.36 (74/223) |
+| KOR7 | 0.94 (24/683) | 0.96 (24/254) | 1.53 (76/598) | 1.28 (75/231) |
+| KOR9 | 1.24 (31/672) | 1.26 (31/248) | 1.35 (67/599) | 1.24 (65/221) |
+| GPR5 | 0.83 (21/672) | 0.85 (21/251) | 1.31 (66/597) | 1.32 (66/212) |
+
+The lower leaflet is enriched next to the protein in every frame (1.24-1.56) and the upper leaflet ranges from depleted
+(GPR5, 0.83) to enriched (KOR3, 1.35). Slicing keeps the shell lipids, so the ratio changes only through the leaflet
+mean.
 
 **Reading the minimized and trajectory .gro files.** The .gro format keeps 5 characters of a residue name (SAPI25 is
 written SAPI2) and the GM3 topology splits each molecule into four residues (CER160 BGLC BGAL ANE5AC, written CER16
