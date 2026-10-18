@@ -447,7 +447,7 @@ def finish_system(session: Session, staged: dict) -> str:
     left = {c: overlaps["contacts_by_class"][c] + overlaps["crossings_by_class"][c] for c in tolerated}
     if any(left.values()):
         log(out, f"{left['membrane']} membrane contact(s) and bond crossing(s) go into minimization (membrane_overlap_before_em="
-                 f"'warn'; seeds were retried first); the check after EM stops the build if any remains", "WARN")
+                 f"'warn'; no seed is retried for them); the check after EM stops the build if any remains", "WARN")
     run_stage(session, "contacts", refuse_overlaps, overlaps, ("membrane", "solvent"), "before EM", tolerated)
     index = run_stage(session, "index", make_index, out, topology)
     log(out, "index_ini.ndx: " + ", ".join(f"{k} {v}" for k, v in index.items()))
