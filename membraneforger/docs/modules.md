@@ -25,6 +25,8 @@ python -m membraneforger --aa prot-lig.pdb --cg system.gro --orient-chain R --ou
 | `structure_metrics.py` | bilayer thickness, protein tilt and depth, Z-density profiles, core hydration, tail interdigitation |
 | `trajectory.py` | convergence, S_CD order parameters, MSD and diffusion, K_A, leaflet tension (gates 3 and 4) |
 | `qc.py` | the metric record and the PASS / WARNING / FAIL / INSUFFICIENT SAMPLING classification |
+| `contacts.py` | force-field-aware contact validator and bond-crossing detector (gate 2 and the build's contact gates) |
+| `stereo.py` | geometric GM3 stereochemistry check: sugar stereocentres and ceramide trans bonds |
 | `membrane_report.py` | the staged validation of a build: slice gate, all-atom stages, `membrane_validation.md/.json`, figures |
 | `equilibration.py` | `python -m membraneforger.equilibration`: gates 3 and 4 on a finished trajectory |
 | `backmapping.py`, `mstool_worker.py` | membrane backmapping; the worker is the only file that imports mstool |
@@ -36,6 +38,7 @@ python -m membraneforger --aa prot-lig.pdb --cg system.gro --orient-chain R --ou
 | `visualization.py` | VMD + Tachyon stage renders (runs in a python that can import `vmd`) |
 | `runtools.py`, `structio.py` | logging/subprocess wrapper, file readers and writers |
 | `../examples/build_from_python.py`, `../slurm/examples/array_cases.sbatch` | use from Python, and a Slurm array template |
+| `../examples/measure_tutorial_numbers.py`, `../examples/make_tutorial_figures.py` | re-measure the tutorial numbers on the bundled frames, and redraw the tutorial figures and tables from that output |
 | `tests/` | `python -m unittest discover -s membraneforger/tests -t .` from the repository root |
 
 Requirements: Python >= 3.10 with numpy, scipy, networkx (matplotlib optional, for the validation figures); GROMACS;
