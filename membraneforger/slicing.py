@@ -196,9 +196,9 @@ def relax_seam(xyz: list[np.ndarray], size: np.ndarray, cell_z: float, cropped: 
                protein_repulsion_nm: float | None = None, protein_clearance_nm: float | None = None) -> dict:
     """Relax the new periodic seam in place: push apart beads of different lipids that only the cut brought together.
 
-    Steepest descent on: a soft repulsion k (r0 - r)^2 for inter-lipid bead pairs closer than repulsion_nm that were
-    NOT that close in the source frame, the same repulsion from the placed complex's heavy atoms (which do not move),
-    weak position restraints holding every bead near where it was, and distance restraints between all beads of one
+    Steepest descent on: a soft repulsion (force k (r0 - r), potential k (r0 - r)^2 / 2, k = 1) for inter-lipid bead
+    pairs closer than repulsion_nm that were NOT that close in the source frame, the same repulsion from the placed
+    complex's heavy atoms (which do not move), weak position restraints holding every bead near where it was, and distance restraints between all beads of one
     lipid that keep its shape. It stops when no such pair is closer than contact_nm (the seam contact threshold) or
     after `steps` steps. Returns the moved coordinates and what moved.
 
