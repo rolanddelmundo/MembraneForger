@@ -1,8 +1,9 @@
 # MembraneForger tutorial: building and validating an all-atom membrane system
 
 > The bundled membranes are now eight 50 us frames (`KOR1`, `KOR2`, `KOR3`, `KOR5`, `KOR6`, `KOR7`, `KOR9`, `GPR5`). The
-> measurements below that name `KOR1`, `GPR1` or `GPR3`, or count "18 frames", were made on the earlier 30 us frames of
-> the same simulations and have not been repeated on the 50 us frames; they illustrate the method and are labelled as
+> cross-frame figures of sections 2 and 4 were re-measured on them (6WHC complex, 8 frames). The remaining measurements
+> that name `GPR1` or `GPR3`, give a thickness change, or count "18 frames", were made on the earlier 30 us frames of the same
+> simulations and have not been repeated; they illustrate the method and are labelled as
 > 30 us where they appear.
 
 MembraneForger takes an all-atom protein (or protein-ligand) structure and a pre-equilibrated Martini 3 membrane
@@ -77,10 +78,10 @@ kept lipids moved and how much their shape changed, and the closest remaining be
 
 Why: the earlier rule removed every lipid with any bead within 0.40 nm. A G protein's lipid anchors (the Ggamma
 geranylgeranyl chain, the Galpha N-terminus) reach into the inner leaflet, and with the 6WHC receptor-Gs complex
-that rule deleted 88-110 lipids per bundled frame, 32-43 of them only for touching those anchors. Each deleted lipid
+that rule deleted 88-110 lipids per bundled frame (30 us frames), 32-43 of them only for touching those anchors. Each deleted lipid
 took its whole tail with it, leaving an empty column in the inner leaflet that solvation does not fill (water is
 removed between the phosphate planes) and that the area-per-lipid gate cannot see (the Voronoi cells of the anchor
-atoms absorb it). The current rule removes 24-41 lipids on the same 18 (30 us) frames. Removing only lipids whose headgroup
+atoms absorb it). The current rule removes 20-31 lipids on the 8 bundled 50 us frames. Removing only lipids whose headgroup
 anchor the complex occupies was also tried and rejected: next to a thin anchor it still deletes lipids whose volume
 nothing replaces (a 3 nm^3 pocket on the 30 us GPR1 frame).
 
@@ -88,15 +89,15 @@ nothing replaces (a 3 nm^3 pocket on the 30 us GPR1 frame).
 its PO4 plane) is sampled on a 0.1 nm grid; a point farther than 0.60 nm from every lipid bead and every heavy atom
 of the complex is empty, and touching empty points form a pocket (`membrane_voids`, periodic in x and y). A pocket
 larger than 1.0 nm^3, less than the volume of one phospholipid, stops the build before slicing, naming the leaflet and
-the position. On the 18 earlier (30 us) bundled frames with the 6WHC complex: uncut frames 0.00-0.20 nm^3, this embedding
-0.02-0.76 nm^3, the earlier rule 1.2-6.8 nm^3. If the gate stops a build, the frame's cavity cannot be adapted to the
+the position. On the 8 bundled 50 us frames with the 6WHC complex: uncut frames 0.007-0.066 nm^3, this embedding
+0.019-0.272 nm^3 (on the earlier 30 us frames: 0.00-0.20, 0.02-0.76, and 1.2-6.8 nm^3 for the earlier rule). If the gate stops a build, the frame's cavity cannot be adapted to the
 complex by moving lipids; use a coarse-grained frame of the complex itself (`--cg FILE`) or another frame.
 
 **Embedding site (`--embed-site`).** A bundled frame was equilibrated around a receptor, and where the receptor was
 it has a hole of the receptor's shape: about 5-6 nm^3 of empty acyl volume per leaflet once the receptor is taken
 out. The default site, `hole`, puts the complex there, which suits another receptor of similar size. A much smaller
-complex cannot fill it: a single-pass protein (one transmembrane helix) left a 3.5 nm^3 pocket in the 30 us GPR1 frame and
-2.8 nm^3 in the 30 us KOR1 even after the push, and the empty-pocket gate stops the build with a message naming the other site.
+complex cannot fill it: a single-pass protein (one transmembrane helix) left a pocket of 1.7-2.9 nm^3 in the receptor's hole of every bundled 50 us frame (2.87 nm^3 in GPR5, 2.53 nm^3 in KOR1,
+1.68 nm^3 in KOR5) even after the push, and the empty-pocket gate stops the build with a message naming the other site.
 With `--embed-site free` the complex goes on unbroken membrane instead, and the push makes room for it. The site is
 chosen for the membrane that will be cut around the complex, not for its helix alone: the slice window (the
 complex's x/y extent plus `--xy-buffer`, or `--box`, plus the 0.5 nm crop offset the slicer may take;
@@ -142,14 +143,17 @@ the cell is not cut. The cut is made lipid by lipid:
    that crosses the new cell edge stays where it is (mstool runs with `pbc=True`, GROMACS wraps);
 5. the window may be shifted on a cropped axis by up to 0.5 nm (never past the 0.5 nm minimum margin) in steps of
    0.1 nm; the offset whose lipid counts best match the reference leaflet density and composition is used
-   (`--no-slice-offset` keeps the centred window). On the bundled frames the gain is small: the spread of the
-   whole-cell deviation over the 18 earlier (30 us) frames changed from 3.7 / 3.4 % (lower / upper, standard deviation) to 2.8 / 2.9 %,
-   and the worst case from 11.3 to 9.0 %;
+   (`--no-slice-offset` keeps the centred window). On the 8 bundled 50 us frames (6WHC complex) the search gives no gain
+   in the spread of the whole-cell deviation (standard deviation, lower / upper: 2.4 / 1.5 % centred, 2.5 / 1.4 % with
+   the search; worst case 14.3 and 13.0 %), and the construction deviation of section 4 is smaller with the centred
+   window (median 0.71 %, 95th percentile 1.87 %, largest 2.18 %) than with the search (1.55, 3.39, 4.87 %). On the
+   earlier 30 us frames the search had reduced the spread from 3.7 / 3.4 % to 2.8 / 2.9 % and the worst case from 11.3
+   to 9.0 %;
 6. the new periodic seam is relaxed in place at the coarse-grained level: a short steepest descent pushes apart
    beads of different lipids that only the cut brought within 0.30 nm of each other, with the complex as a fixed
    repulsive wall, every bead held near its position and every lipid held in shape by intramolecular distance
    restraints. Pairs that were already that close in the source frame are data and are left alone. Only a lipid
-   still in a hard-core overlap (< 0.15 nm) afterwards is removed; on the 18 earlier (30 us) frames none was. The
+   still in a hard-core overlap (< 0.15 nm) afterwards is removed; on the 8 bundled 50 us frames none was (the seam removed 0 lipids on all of them). The
    relaxation moves about 40 % of the lipids by 0.02 nm on average and 0.3 nm at most.
 
 ### Why the previous rule was wrong
@@ -203,6 +207,7 @@ complex, so the same code measures the coarse-grained and the atomistic stages. 
 
 | Validation | CG frame | Embed | Slice | Backmap | Minimized | Equilibrated | Final |
 |---|---|---|---|---|---|---|---|
+| CG frame quality (absolute, before embedding) | ✓ | | | | | | |
 | Ring penetration / clashes (build) | | | ✓ | ✓ | ✓ | | |
 | Voronoi APL (global and per species) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Lateral headgroup RDF | ✓ | ✓ | ✓ | | | | |
@@ -253,27 +258,28 @@ The slice is compared with the embedded membrane in two ways, and only the first
   the build.
 
 Measured on the bundled kappa opioid receptor frame `KOR1` with the oriented glucagon receptor complex (6WHC)
-embedded, cut to 12.7 x 10.6 nm (the values come from `membrane_validation.md`; the old-rule row is the lipid
+embedded, sliced with the default settings (offset search on; the values come from `membrane_validation.md`; the old-rule row is the lipid
 count the all-beads-inside rule keeps in the same window, with the APL that count implies):
 
 | Stage / algorithm | Upper lipids | Lower lipids | Upper APL (A^2) | Lower APL (A^2) | dAPL upper vs embed | dAPL lower vs embed | Verdict |
 |---|---:|---:|---:|---:|---:|---:|---|
-| CG frame (frame's own receptor) | 684 | 618 | 47.0 | 52.0 | | | |
-| Embedded CG membrane (reference) | 661 | 558 | 47.7 | 52.7 | reference | reference | |
-| Old all-beads-inside slice | 211 | 145 | 55.0 | 65.5 | +15.4 % | +24.2 % | FAIL |
-| New anchor slice, offset + relaxed seam | 243 | 184 | 47.8 | 51.6 | +0.2 % | -2.1 % | PASS |
-| same lipids in the uncut membrane | 243 | 184 | 48.1 | 50.5 | construction: -0.7 % | +2.0 % | PASS |
+| CG frame (frame's own receptor) | 671 | 631 | 48.0 | 51.0 | | | |
+| Embedded CG membrane (reference) | 666 | 613 | 47.7 | 48.9 | reference | reference | |
+| Old all-beads-inside slice | 211 | 185 | 56.1 | 54.3 | +17.6 % | +11.0 % | FAIL |
+| New anchor slice, offset + relaxed seam | 249 | 217 | 47.5 | 46.2 | -0.4 % | -5.3 % | PASS |
+| same lipids in the uncut membrane | 249 | 217 | 47.0 | 45.5 | construction: +1.2 % | +1.7 % | PASS |
 
-The old rule deleted 71 lipids whose anchor was inside the window (39 lower, 32 upper) because one tail bead
-crossed the edge. The new slice keeps them; the seam relaxation moved 165 lipids by 0.015 nm on average (0.22 nm at
-most) and removed none. The same build on the 11.2 nm `6WHC` frame (fit, not embedded; one axis cut): old rule
+The old rule deleted 70 lipids whose anchor was inside the window because one tail bead
+crossed the edge. The new slice keeps them; the seam relaxation moved 216 lipids by 0.021 nm on average (0.38 nm at
+most) and removed none. The lower leaflet is 5.3 % denser than the whole embedded cell (percentile 0.61 of 144
+equal-size windows): the construction check passes, the difference is where the window sits. The same build on the 11.2 nm `6WHC` frame (fit, not embedded; one axis cut): old rule
 +11.5 / +13.6 %, new slice +1.8 / -0.7 % against the whole cell and -0.1 / +2.5 % against the same lipids uncut.
 
-Over all 18 earlier (30 us) bundled frames (36 leaflets, frames aligned to their boxes first, section 1.1) the construction
-deviation of the new slice has a median of 0.9 %, a 95th percentile of 2.7 % and a largest value of 4.0 %, so the
-3 / 5 % ceilings pass every correct crop tested and fail the old rule (+12 to +32 % on the same frames) by a wide
-margin. The whole-cell deviation of a correct crop scatters more (standard deviation about 3 %, up to 9 %; the upper
-leaflet next to the protein is 3-4 % denser than the cell mean), which is why it is reported as representativeness
+Over all 8 bundled 50 us frames (16 leaflets, 6WHC complex, slice offset search on) the construction deviation of the
+new slice has a median of 1.55 %, a 95th percentile of 3.39 % and a largest value of 4.87 % (0.71, 1.87 and 2.18 % with
+the centred window), so the 5 % ceiling holds on every frame and the 3 % warning level is crossed on one (KOR5, lower
+leaflet, 4.87 %: PASS WITH WARNINGS); on the earlier 30 us frames the old rule failed by +12 to +32 %. The whole-cell
+deviation of a correct crop scatters more (standard deviation 1.4 % upper and 2.5 % lower leaflet, worst case 13.0 %), which is why it is reported as representativeness
 and not used to stop the build. A 50 -> 56 and 51 -> 59 A^2 change (the GIPR `gipsi_v3` build
 that exposed the defect) is +12 and +16 %: FAIL on both leaflets under either comparison.
 
@@ -308,7 +314,7 @@ Thickness is the distance between the median anchor z of the two leaflets (non-s
 map whose spread is reported. Protein orientation is the tilt of the principal axis of the complex's heavy atoms
 within 1.5 nm of the midplane, its insertion depth (mean z of those atoms relative to the midplane) and an inversion
 flag. Across slicing (gate 1) thickness may change by 3 / 5 % (PASS / WARNING), tilt by 1 / 3 degrees and depth by
-0.5 / 1.5 A; in the examples thickness changes by 0.2 % (KOR1: 42.9 to 42.8 A) and tilt and depth by 0.0, as expected
+0.5 / 1.5 A; in the examples thickness changes by 0.2 % (30 us KOR1: 42.9 to 42.8 A) and tilt and depth by 0.0, as expected
 from a rigid translation.
 
 ### 5.6a Lipids around the protein
@@ -466,12 +472,12 @@ carry the structure (POPC-POPC first peak 7.5 A, DOPC-DOPC 9.5 A, CHOL-CHOL 11.5
 deviation from the whole-cell curve is in addition graded
 against the empirical distribution of the same deviation over equal-size windows cut everywhere in the embedded
 membrane (below its 95th percentile PASS, below the 99th WARNING, above FAIL; a slice that deviates less than the
-parent's windows is never graded down): the slice must look like one of the parent's own windows. In the `KOR1` build the RMS difference against the same lipids uncut is 1.6
-(upper) and 1.4 (lower) noise units, in the `6WHC` build 0.7 / 0.8, and the POPC-POPC and DOPC-DOPC first peaks of
-the slice lie within one 1 A bin of the reference's. The slice therefore keeps the lateral organization of the
-membrane it was cut from. Against the whole embedded cell the `KOR1` upper leaflet sits at the 98.6th percentile of
-the 144 equal-size windows (WARNING, the lower at the 86th): a window around the protein is not a typical window,
-which is representativeness, not a construction error.
+parent's windows is never graded down): the slice must look like one of the parent's own windows. In the `KOR1` build (50 us) the RMS difference against the same lipids uncut is 1.5
+(upper) and 1.4 (lower) noise units, in the earlier 30 us `6WHC` build 0.7 / 0.8, and the POPC-POPC and DOPC-DOPC first peaks of
+the slice lay within one 1 A bin of the reference's. The slice therefore keeps the lateral organization of the
+membrane it was cut from. Against the whole embedded cell the `KOR1` slice sits at the 24th (upper) and 61st (lower) percentile of
+the 144 equal-size windows (PASS); on the earlier 30 us frame the upper leaflet reached the 98.6th (WARNING), since a
+window around the protein is not a typical window, which is representativeness, not a construction error.
 
 Across resolutions the anchors change from Martini beads to atoms, and the atomistic force field has its own
 excluded-volume distances. Backmapping preserves the lateral topology inherited from the equilibrated Martini
@@ -499,6 +505,16 @@ turns every one into a PASS / WARNING / FAIL / INSUFFICIENT SAMPLING / REFERENCE
 | 10 | Tail interdigitation | backmap -> minimized -> equilibrated | overlap of the opposing leaflets | overlap integral of the two tail-density profiles | <= 10 % from the reference (backmapped stage, then a matched reference) | 10-20 % | > 20 % |
 | 11 | Protein insertion and orientation | embed -> slice -> backmap -> equilibration | placement and hydrophobic matching | tilt, insertion depth, inversion, embedded fraction | slicing: tilt <= 1 deg, depth <= 0.5 A; AA stages 2 deg / 1 A; equilibrium drift < 3 deg and < 1 A | 1-3 deg / 0.5-1.5 A (slice); 2-5 deg / 1-2.5 A (AA); 3-7 deg / 1-2 A drift | beyond, inversion, or a monotonic drift |
 | 12 | Box-area / volume convergence | AA equilibration | stationarity of NPT equilibration | L_x L_y, V, APL and thickness vs time, block SEM | final-window drift < 1 % and half-window means within 2 % | 1-3 % or 2-5 % | > 3 %, > 5 %, or a persistent monotonic trend |
+
+The coarse-grained frame the build starts from is graded on its own before anything is embedded (gate 0,
+`MembraneValidation.validate_cg_frame`; there is no reference yet, so the limits are absolute and sit in
+`membrane_report.CG_FRAME_GATE`, set just outside what the eight bundled 50 us frames show). PASS /
+WARNING / FAIL: both leaflets populated (empty = FAIL); leaflet APL 42-60 A^2 (WARNING 30-100); headgroup-to-headgroup
+thickness 38-47 A (WARNING 28-56); PO4-normal tilt from z <= 5 deg (WARNING <= 10); non-sterol lipids whose headgroup and
+beads lie on opposite sides of the midplane <= 0.5 %; longest bead-to-bead link inside a lipid <= 0.8 nm (WARNING <= 1.0;
+Martini bonds are <= 0.6 nm); lipid-protein bead pairs closer than 0.30 nm at most max(5, beads/2000) (WARNING up to ten
+times that). `--cg-validate no` reports a FAIL without stopping the build. A membrane model unlike the bundled ones (the 6WHC example
+has APL 54-59 A^2 and D_HH 37 A) may sit outside the PASS windows; that is a WARNING, not a defect.
 
 Plus the hard construction checks that are PASS or FAIL only: complete residues, no duplicate lipid, every anchor
 inside the cell, no hard-core seam overlap, no new protein-lipid clash (gate 1); ring threading, the CHARMM-GUI
