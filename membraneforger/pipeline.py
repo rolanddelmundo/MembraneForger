@@ -40,6 +40,7 @@ STAGE_HINTS = {
               "transcript in {out}/" + LOG_NAME,
     "slice": "the slice report in {out}/run_manifest.json and the log, the --box option and --xy-buffer",
     "slice_check": "{out}/membrane_validation.md and membrane_validation.json; --apl-tolerance and --apl-validate",
+    "cg_check": "{out}/membrane_validation.md and membrane_validation.json (CG frame records); --cg-validate no only reports them",
     "membrane_check": "{out}/membrane_validation.md and membrane_validation.json",
     "mstool": "the --mstool-python interpreter and the transcript at the end of {out}/" + LOG_NAME,
     "classify": "the residue and bead names of the coarse-grained input listed in the message",
@@ -170,6 +171,11 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
              + (f"; PO4 normal {leaflets['po4_normal_tilt_from_z_deg']} deg from z" if leaflets else ""))
     session.analysis = MembraneValidation(out, session.settings)
     run_stage(session, "membrane_check", session.analysis.add_cg, "cg_frame", membrane, [], box, midplane, protein_of_cg_frame(cg["protein"]))
+    try:
+        run_stage(session, "cg_check", session.analysis.validate_cg_frame, membrane, cg["protein"], box, midplane, leaflets)
+    except StageFailure:
+        session.analysis.write()  # a refused frame still gets its report
+        raise
     enabled, anchors = oriented["report"]["enabled"], tuple(oriented["report"]["anchor_chains"])
     if session.embed:
         # An oriented complex has its bilayer centre at z = 0 and goes straight in; the midplane is the CG bilayer's own.
