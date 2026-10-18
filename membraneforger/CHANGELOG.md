@@ -90,10 +90,10 @@ Two defaults changed since 1.0.0, and the review decisions below change more. Co
 
 ### Changed
 
-- A membrane contact or bond crossing found before EM no longer stops a fit-mode build on its last backmapping seed: earlier
-  seeds are still retried, the last seed logs a warning and the check after EM (0.6 of Rmin, no crossings) decides.
-  Builds on 21 GCGR, GIPR and GLP1R complexes and the quick-start complex all start with 23 to 585 such pairs and recover under plain
-  EM. `membrane_overlap_before_em = "stop"` restores the earlier behaviour.
+- A membrane contact or bond crossing found before EM no longer rejects a backmapping seed or stops the build: it is logged as a
+  warning and the check after EM (0.6 of Rmin, no crossings) decides. Another seed leaves the same overlaps (the quick start and 28
+  GLP1R builds start with 23 to 585 such pairs) and plain EM removes them, so retrying only added minutes.
+  `membrane_overlap_before_em = "stop"` restores the earlier behaviour.
 - Lipids that overlap the embedded complex are pushed aside at the coarse-grained level, and only those still
   overlapping are removed. An empty pocket larger than 1.0 nm³ in a leaflet stops the build.
 - Minimization runs first with the lipid dihedral restraints, then without them, and both are audited.

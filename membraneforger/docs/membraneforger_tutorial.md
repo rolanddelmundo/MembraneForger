@@ -427,10 +427,10 @@ heavy-atom pair is thousands of kJ/mol/nm, while hydrogen bonds and packed tails
 two solvent molecules are not judged: `gmx genion` puts an ion on a water's site, whose neighbours then sit at
 water-water distances (0.6-0.7 of the chloride-oxygen Rmin), and a free water or ion relaxes in the first EM steps; a
 solvent molecule caught in the protein or a lipid is what the gate is for. The gates: `boxed.gro` right after
-backmapping (a membrane finding rejects the seed, like a ring threading, except on the last seed, where it is logged as a
-warning and minimization separates the pairs: a fit-mode complex such as the quick start has 100 to 600 membrane pairs
-below 0.6 Rmin and up to 30 crossings at this stage, which plain EM removes; `membrane_overlap_before_em = "stop"` refuses
-the build instead), the water and ion placement (a
+backmapping (a membrane finding is logged as a warning and no seed is retried for it: a fit-mode complex such as the quick
+start has 20 to 600 membrane pairs below 0.6 Rmin and up to 30 crossings at this stage whatever the seed, and plain EM removes
+them; `membrane_overlap_before_em = "stop"` refuses
+the seed and finally the build instead), the water and ion placement (a
 water is dropped, an ion placement retried, when any of its atoms is inside the limit of a protein, ligand or lipid
 atom), `solv_ions.gro` before EM (a solvent finding stops the build; a membrane finding or crossing only when `membrane_overlap_before_em` is `stop`), and `em.unverified.gro`
 after EM (nothing may remain). Every gate's findings are written to `contacts.json`,
