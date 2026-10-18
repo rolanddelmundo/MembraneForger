@@ -1,6 +1,20 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 (2026-10-18)
+
+MembraneForger now needs only an all-atom structure. It orients the complex in the membrane, embeds it in a bundled
+pre-equilibrated Martini 3 cell membrane, cuts the membrane to size, and validates every stage before and after
+backmapping.
+
+Two defaults changed since 1.0.0, and the review decisions below change more. Commands written for 1.0.0 may need updating:
+
+- **Orientation is on by default** (`--orientation auto`). An input with several protein chains now needs
+  `--orient-chain`, and PPM needs `--nterm-side` when no OPM entry matches. Add `--orientation none` to use your
+  coordinates as given, as 1.0.0 did.
+- **Intermediates move to `<out>/int/`.** `oriented.pdb`, `membrane.pdb`, `boxed.gro`, the minimization files and
+  the other steps on the way to `em.gro` are kept there instead of in the top-level output directory.
+
+### Review decisions, 50 µs frames and repository layout
 
 - **Review decisions (defaults changed).**
   - The slice window is centred by default; the offset search is opt-in (`--slice-offset-search`). Construction deviation median/95th/max on the eight bundled frames: 0.71/1.88/2.19 % centred, 1.55/3.39/4.87 % searched.
@@ -45,31 +59,10 @@
   blocks (scheduler, software, this run) with working defaults, so only those are edited; submitted as is it builds
   the bundled 6WHC example. `slurm/examples/gemini_6WHC.sbatch` is the filled-in Gemini version.
 
-### Fixed
-
-- The GM3 stereochemistry audit makes every molecule whole across the periodic boundary before testing, using the
-  `.gro` box or the PDB `CRYST1` record. A GPU `mdrun` writes minimization output with molecules wrapped into the
-  cell atom by atom, which the audit read as inverted sugar stereocentres — a false positive that failed correct
-  builds.
-
-## 2.0.0 (2026-10-10)
-
-MembraneForger now needs only an all-atom structure. It orients the complex in the membrane, embeds it in a bundled
-pre-equilibrated Martini 3 cell membrane, cuts the membrane to size, and validates every stage before and after
-backmapping.
-
-This is a major version because two defaults changed. Commands written for 1.0.0 may need updating:
-
-- **Orientation is on by default** (`--orientation auto`). An input with several protein chains now needs
-  `--orient-chain`, and PPM needs `--nterm-side` when no OPM entry matches. Add `--orientation none` to use your
-  coordinates as given, as 1.0.0 did.
-- **Intermediates move to `<out>/int/`.** `oriented.pdb`, `membrane.pdb`, `boxed.gro`, the minimization files and
-  the other steps on the way to `em.gro` are kept there instead of in the top-level output directory.
-
 ### New
 
 - **Single-input builds.** `--cg 1` (default) and `--cg 2` embed the complex in a bundled GPR139 or kappa opioid
-  receptor membrane: 18 frames of an asymmetric ten-species cell membrane, 30 µs of Martini 3 each, in
+  receptor membrane: the 50 µs Martini 3 frames of an asymmetric ten-species cell membrane (eight frames, see below), in
   `examples/preeq_cg_cellmem/`. `--cg FILE --embed` embeds into a frame of your own.
 - **Membrane orientation** from an exact OPM/OPRLM entry or a local PPM 3.0 run, applied to the whole complex as one
   rigid body (`--orientation`, `--orient-chain(s)`, `--nterm-side`, `--pdb-id`, `--ppm-exe`).
@@ -105,6 +98,10 @@ This is a major version because two defaults changed. Commands written for 1.0.0
 
 ### Fixed
 
+- The GM3 stereochemistry audit makes every molecule whole across the periodic boundary before testing, using the
+  `.gro` box or the PDB `CRYST1` record. A GPU `mdrun` writes minimization output with molecules wrapped into the
+  cell atom by atom, which the audit read as inverted sugar stereocentres — a false positive that failed correct
+  builds.
 - GM3 backmapping: swapped glucose and galactose bead assignments, six wrong chirality definitions, the missing sialic
   acid C7 chirality definition and the missing ceramide trans definitions. Every GM3 sugar stereocentre is now
   checked in the built membrane.
