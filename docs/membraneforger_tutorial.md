@@ -2,7 +2,7 @@
 
 > The bundled membranes are now eight 50 us frames (`KOR1`, `KOR2`, `KOR3`, `KOR5`, `KOR6`, `KOR7`, `KOR9`, `GPR5`). The
 > cross-frame figures of sections 2 and 4 were re-measured on them (6WHC complex, 8 frames). The remaining measurements
-> that name `GPR1` or `GPR3`, give a thickness change, or count "18 frames", were made on the earlier 30 us frames of the same
+> that name `GPR1` or `GPR3`, or count "18 frames", were made on the earlier 30 us frames of the same
 > simulations and have not been repeated; they illustrate the method and are labelled as
 > 30 us where they appear.
 
@@ -314,8 +314,8 @@ Thickness is the distance between the median anchor z of the two leaflets (non-s
 map whose spread is reported. Protein orientation is the tilt of the principal axis of the complex's heavy atoms
 within 1.5 nm of the midplane, its insertion depth (mean z of those atoms relative to the midplane) and an inversion
 flag. Across slicing (gate 1) thickness may change by 3 / 5 % (PASS / WARNING), tilt by 1 / 3 degrees and depth by
-0.5 / 1.5 A; in the examples thickness changes by 0.2 % (30 us KOR1: 42.9 to 42.8 A) and tilt and depth by 0.0, as expected
-from a rigid translation.
+0.5 / 1.5 A; in the 50 us KOR1 example embedding changes thickness by 0.1 % (42.58 to 42.61 A) and slicing changes tilt and depth
+by 0.0, as expected from a rigid translation.
 
 ### 5.6a Lipids around the protein
 
