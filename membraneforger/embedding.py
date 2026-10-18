@@ -339,7 +339,7 @@ def embed_complex(aa_atoms: list[dict], cg_protein: list[list[dict]], membrane: 
     tm = heavy & (np.abs(xyz[:, 2] - centre_z) <= BELT_NM / 2.0)
     if tm.sum() < 10:
         raise SystemExit(f"fewer than 10 heavy atoms within {BELT_NM / 2.0:.1f} nm of the bilayer centre z = "
-                         f"{belt['z_a']:.1f} A; orient the input with the membrane normal along z or pass --bilayer-z")
+                         f"{belt['z_a']:.1f} A; orient the input with the membrane normal along z or pass --bilayer-z-nm")
     if site == "free":
         tm_xy = xyz[tm, :2].mean(axis=0)
         window = slice_window(xyz, tm_xy, cell[:2], window_buffer_nm, window_slack_nm, requested_xy_nm)
@@ -352,7 +352,7 @@ def embed_complex(aa_atoms: list[dict], cg_protein: list[list[dict]], membrane: 
                 raise SystemExit(f"no place in this {cell[0]:.1f} x {cell[1]:.1f} nm frame keeps the membrane cut around this complex "
                                  f"({min(size[0], cell[0]):.1f} x {min(size[1], cell[1]):.1f} nm with the crop slack) "
                                  f"{FRAME_PROTEIN_CLEARANCE_NM} nm from the frame's own protein (best {clear:.2f} nm): use a smaller "
-                                 "--xy-buffer or --box, or --embed-site hole")
+                                 "--xy-buffer or --box-nm, or --embed-site hole")
         where = ("the membrane farthest from the frame's own protein for the cut around the complex "
                  + (f"(cut edge {clear:.2f} nm, transmembrane centre {away:.2f} nm from its nearest bead in the bilayer)"
                     if clear is not None else "(the frame has no protein in the bilayer)"))

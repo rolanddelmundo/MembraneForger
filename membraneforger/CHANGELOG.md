@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Review decisions (defaults changed).**
+  - The slice window is centred by default; the offset search is opt-in (`--slice-offset-search`). Construction deviation median/95th/max on the eight bundled frames: 0.71/1.88/2.19 % centred, 1.55/3.39/4.87 % searched.
+  - Counterions default to `additive` (neutralizing ions plus the requested salt pairs); `--counterion-mode inclusive` restores the old behaviour. The manifest and log report neutralizing ions, salt pairs, Na/Cl totals and ionic strength separately.
+  - The slice-stage thickness record was dropped from the report by a name-collision in `all_records()`; it is now graded (3 % PASS / 5 % WARNING). Protein tilt and insertion depth at the slice are diagnostics (NOT RUN), since slicing does not move the complex.
+  - A build into an `--out` that already holds an earlier build is refused unless `--overwrite` is given; checkpoints and trajectories also need `--overwrite-restart`. Slurm reruns into an existing folder must pass `--overwrite` (for example through `EXTRA`).
+  - The default `--out` is `./<all-atom structure stem>_membraneforger` for a single build and for `--runs`; duplicate run folders are refused.
+  - Geometry options are in nm: `--box-nm`, `--bilayer-z-nm`, `--fit-max-core-rmsd-nm`. The Å spellings still work with a conversion warning. `--no-slice-offset` is a hidden no-op.
+  - New accessible-shell-area normalization of the lateral headgroup RDF (`rdf.lateral_rdf_shell`), reported separately and not used by any gate; `examples/validate_rdf_normalization.py` compares it with the existing curve and with random geometry-matched references.
+
 - **The coarse-grained frame is graded before embedding** (gate 0, `membrane_validation.md`): both leaflets populated, absolute
   leaflet APL and bilayer thickness, bilayer tilt, lipids on the wrong leaflet, broken molecules and lipid-protein bead
   overlaps, as PASS / WARNING / FAIL records. The eight bundled frames pass. A FAIL stops the build

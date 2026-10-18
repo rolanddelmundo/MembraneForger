@@ -319,11 +319,19 @@ class RealFrames(unittest.TestCase):
 
 class OffsetSlack(unittest.TestCase):
     def test_slack_is_the_search_range_clamped_to_the_minimum_margin(self):
-        self.assertAlmostEqual(mf.offset_slack(mf.Settings()), 0.5)                              # 1.0 buffer, 0.5 margin
-        self.assertAlmostEqual(mf.offset_slack(mf.Settings(box_xy_buffer_nm=0.7)), 0.2)
-        self.assertEqual(mf.offset_slack(mf.Settings(box_xy_buffer_nm=0.5)), 0.0)                # cannot shift at all
-        self.assertEqual(mf.offset_slack(mf.Settings(box_xy_buffer_nm=0.3)), 0.0)
+        search = dict(slice_optimize_offset=True)
+        self.assertAlmostEqual(mf.offset_slack(mf.Settings(**search)), 0.5)                      # 1.0 buffer, 0.5 margin
+        self.assertAlmostEqual(mf.offset_slack(mf.Settings(box_xy_buffer_nm=0.7, **search)), 0.2)
+        self.assertEqual(mf.offset_slack(mf.Settings(box_xy_buffer_nm=0.5, **search)), 0.0)      # cannot shift at all
+        self.assertEqual(mf.offset_slack(mf.Settings(box_xy_buffer_nm=0.3, **search)), 0.0)
         self.assertEqual(mf.offset_slack(mf.Settings(slice_optimize_offset=False)), 0.0)
+
+    def test_the_window_is_centred_unless_the_search_is_requested(self):
+        self.assertFalse(mf.Settings().slice_optimize_offset)
+        self.assertEqual(mf.offset_slack(mf.Settings()), 0.0)
+        args = mf.make_parser().parse_args(["--aa", "x.pdb"])
+        self.assertFalse(args.slice_offset_search)
+        self.assertTrue(mf.make_parser().parse_args(["--aa", "x.pdb", "--slice-offset-search"]).slice_offset_search)
 
 
 class Integration(unittest.TestCase):
