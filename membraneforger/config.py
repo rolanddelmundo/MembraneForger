@@ -302,6 +302,11 @@ class Settings:
     # Two bonds of different molecules whose closest approach is below this, inside both bonds, cross: one chain passes
     # through the other, which steepest descent cannot undo. Bonds of neighbouring packed chains stay 2.5 A apart or more.
     bond_crossing_nm: float = 0.12
+    # What a membrane contact or bond crossing found before EM does on the last backmapping seed: "warn" logs it and lets
+    # minimization separate the pairs, with the check after EM (which stops the build) deciding; "stop" refuses the build, as
+    # every seed was before. Earlier seeds are always retried. 7 of 7 quick-start builds that reached EM with 126-245 such
+    # contacts and up to 17 crossings passed the check after EM and the audit.
+    membrane_overlap_before_em: str = "warn"
     # What the added NaCl concentration (SALT_M) is measured in: "water" = the volume of the waters left by solvation
     # (the aqueous phase), "box" = the whole cell including protein and lipids (the earlier rule, about 0.21 M in the water).
     salt_volume: str = "water"
