@@ -34,7 +34,7 @@ PPM_MEMBRANE = ""          # advanced: PPM 3.0 membrane code, "" = undefined fla
 # (whole lipids only; an axis that would be as wide as the cell is kept whole), and z is sized around the bilayer
 # midplane with SLAB_Z_PAD_NM of water above and below. A user box is opt-in: "x,y,z" in nm, with x and y no larger
 # than the coarse-grained cell (the membrane is cut to that size around the complex) and z at least the automatic minimum.
-BOX = "auto"               # auto | "x,y,z" (nm)
+BOX = "auto"               # auto | "x,y,z" in nm, e.g. "14,14,22" (x and y are cut around the complex, z sizes the water)
 
 # ============================================================
 # SLICE VALIDATION
@@ -95,7 +95,7 @@ GENERATED = ("oriented.pdb", "orientation_report.json", "membrane.pdb", "aa_cg_m
              "solv_raw.gro", "solv.gro", "solv_ions.gro", "index_ini.ndx", "genion.ndx", "ions.mdp", "ions.tpr",
              "ions_mdout.mdp", "em.mdp", "mdout.mdp", "em_mdout.mdp", "emres_mdout.mdp", "em.tpr", "em.log", "em.edr",
              "em.trr", "em.gro", "em.unverified.gro", "emres.mdp", "emres.tpr", "emres.log", "emres.edr", "emres.trr",
-             "emres.gro", "toppar",
+             "emres.gro", "em.cpt", "emres.cpt", "toppar",
              "audit.json", "run_manifest.json", "ring_piercing.json", "membrane_validation.json", "membrane_validation.md",
              "membrane_validation_lipids.tsv", "membrane_validation_apl.png", "membrane_validation_species.png",
              "membrane_validation_rdf.png", "membrane_validation_composition.png", "membrane_validation_protein_density.png",
@@ -305,9 +305,11 @@ class Settings:
     # What the added NaCl concentration (SALT_M) is measured in: "water" = the volume of the waters left by solvation
     # (the aqueous phase), "box" = the whole cell including protein and lipids (the earlier rule, about 0.21 M in the water).
     salt_volume: str = "water"
-    # How the neutralizing counterions relate to the target: "inclusive" (CHARMM-GUI 2017) makes the counterion species equal
-    # the target number and the other ion target - |charge|; "additive" adds the target pairs and |charge| counterions on top.
-    counterion_mode: str = "inclusive"
+    # How the neutralizing counterions relate to the target: "additive" (default) adds the target NaCl pairs and then |charge|
+    # counterions of the balancing species on top, so the requested salt concentration is always reached and never depends on
+    # the box height; "inclusive" (CHARMM-GUI 2017) makes the counterion species equal the target number and the other ion
+    # target - |charge|, which leaves no Cl- at all when |charge| exceeds the target.
+    counterion_mode: str = "additive"
     # Independent-audit limits: protein CA RMSD across EM (nm) and the closest lipid-solute heavy-atom pair (nm).
     audit_max_ca_rmsd_nm: float = 0.15
     audit_min_contact_nm: float = 0.10
@@ -351,10 +353,13 @@ class Settings:
     seam_min_bead_nm: float = 0.30
     seam_hard_core_nm: float = 0.15
     seam_relax_steps: int = 400
-    # Crop position: the window may be shifted on a cropped axis by up to slice_offset_search_nm (never past the
-    # minimum margin) in steps of slice_offset_step_nm; the offset whose lipid counts best reproduce the reference
-    # leaflet density and composition is used (slicing.choose_offset). Off: the window is centred on the complex.
-    slice_optimize_offset: bool = True
+    # Crop position. Default: the window is centred on the complex. Opt-in (--slice-offset-search): the window may be
+    # shifted on a cropped axis by up to slice_offset_search_nm (never past the minimum margin) in steps of
+    # slice_offset_step_nm, and the offset whose lipid counts best reproduce the reference leaflet density and
+    # composition is used (slicing.choose_offset). Over the 8 bundled KOR frames cut around 6WHC the construction
+    # deviation of the leaflet APL (median / 95th percentile / largest) is 0.71 / 1.87 / 2.18 % centred and
+    # 1.55 / 3.39 / 4.87 % with the search, so the search is off unless asked for.
+    slice_optimize_offset: bool = False
     slice_offset_search_nm: float = 0.5
     slice_offset_step_nm: float = 0.1
     # Slice validation against the membrane that was cut (the embedded membrane). The construction check compares the
