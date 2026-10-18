@@ -14,7 +14,7 @@
 # build is repeated from its own run_manifest.json command into a new output folder.
 #
 #   1. edit the USER-DEFINED block (REPO, BRANCH, PREVIOUS)
-#   2. from the folder that holds the failed output folder:   sbatch test_contact_gates.sbatch
+#   2. from the folder that holds the failed output folder:   sbatch $REPO/slurm/examples/test_contact_gates.sbatch
 #
 # The log ends with the new build's PASS/FAIL line and the contact-gate summary (contacts.json by stage).
 

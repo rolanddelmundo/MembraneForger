@@ -1,4 +1,4 @@
-# MembraneForger
+# MembraneForger module map
 
 All-atom protein/ligand complex (+ a bundled or own Martini 3 coarse-grained membrane) -> validated,
 energy-minimized all-atom CHARMM36/GROMACS system.
