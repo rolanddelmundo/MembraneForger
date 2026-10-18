@@ -7,8 +7,9 @@ that every build writes next to `em.gro`.
 
 ```
 equilibrated Martini membrane (frame)
+    -> orientation of the complex (OPM / PPM)                                          (orient)
     -> gate 0: the frame is graded on its own, absolute limits                         (validate_cg_frame)
-    -> orientation of the complex (OPM / PPM) and placement into the frame            (orient, mapping / embed)
+    -> placement of the complex into the frame                                         (embed)
     -> embedded membrane: lipids pushed aside, only those it occupies removed, no pocket (the REFERENCE for slicing)
     -> PBC-aware, whole-lipid, anchor-based crop to the complex + buffer               (slice)
     -> gate 1: APL, composition, lateral RDF, thickness, protein orientation, integrity (slice_check)
