@@ -33,7 +33,7 @@ install.
 ```bash
 git clone https://github.com/rolanddelmundo/MembraneForger.git
 cd MembraneForger
-pip install numpy scipy networkx "pandas<3" openmm mstool==0.3.9 matplotlib
+pip install numpy scipy networkx "pandas<3" openmm "mstool>=0.3.9,<=0.3.10" matplotlib
 ```
 
 On a Slurm cluster, `bash membraneforger/slurm/setup.sh` builds a self-contained environment with GROMACS instead, and
