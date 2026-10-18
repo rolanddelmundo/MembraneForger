@@ -784,6 +784,21 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class LigandPackages(unittest.TestCase):
+    """The build reads only these files from the ligand force-field packages; the rest of each package was dropped."""
+
+    def test_files_the_build_reads_are_present(self):
+        for name, spec in mf.config.LIPIDATED.items():
+            package = FORCEFIELD / spec["package"]
+            with self.subTest(residue=name):
+                self.assertTrue((package / spec["top"]).is_file())
+                self.assertTrue((package / "charmm36.ff" / "ffbonded.itp").is_file())
+        v6g = FORCEFIELD / "V6G_gromacs"
+        for rel in ("V6G_gmx.top", "V6G_base_ff_params.itp", "charmm36.ff/V6G_ffbonded.itp"):
+            with self.subTest(v6g=rel):
+                self.assertTrue((v6g / rel).is_file())
+
+
 class BundledMembranes(unittest.TestCase):
     """--cg 1 | 2 | NAME resolve to files in membraneforger/examples/preeq_cg_cellmem/; anything else is the user's own file."""
 
