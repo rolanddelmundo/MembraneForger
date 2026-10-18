@@ -534,8 +534,10 @@ g(r) [rdf]                 g(r_k) = A_acc n_k / [ N(N-1)/2 * pi (r_{k+1}^2 - r_k
 coordination number        n = rho * sum_k g(r_k) pi (r_{k+1}^2 - r_k^2) up to the first minimum,  rho = (N-1) / A_acc
 curve difference           rms of g_sample - g_reference over 3-20 A, in units of the counting noise
                            sigma^2 = sum over both curves of g_ref / E_k  (Poisson counts, E_k = counts expected at g = 1)
-lipid density near the     rho~(R) = [N(<R) / A_acc(<R)] / [N / A_acc], R = distance to the nearest protein atom in the
-protein [structure_metrics]   leaflet slab; the first-shell value is the same ratio for R below the first-shell distance
+lipid density near the     rho~(R) = [N(<R) / A(<R)] / [N / A_open], R = in-plane distance of a lipid anchor to the nearest
+protein [rdf]              protein heavy atom within 0.6 nm of the leaflet's median anchor z (the protein's cross-section
+                           at headgroup depth); A(<R) and A_open are areas on a 0.05 nm grid, A_open the part farther
+                           than 0.3 nm from that cross-section (not the Voronoi A_acc). First-shell value: R = 1.0 nm
 thickness                  D_HH = median z(upper anchors) - median z(lower anchors), non-sterol lipids
 protein tilt               theta = arccos |e_z|, e = leading eigenvector of the covariance of the protein atoms within
                            1.5 nm of the midplane
