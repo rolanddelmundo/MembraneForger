@@ -6,8 +6,8 @@ import numpy as np
 
 from .common import CG_GRO, REPO, failure, mf
 
-KOR1 = REPO / "examples" / "preeq_cg_cellmem" / "KOR1_cg_cellmem.gro"
-GPR5 = REPO / "examples" / "preeq_cg_cellmem" / "GPR5_cg_cellmem.gro"
+KOR1 = REPO / "membraneforger" / "examples" / "preeq_cg_cellmem" / "KOR1_cg_cellmem.gro"
+GPR5 = REPO / "membraneforger" / "examples" / "preeq_cg_cellmem" / "GPR5_cg_cellmem.gro"
 
 
 def liquid_frame(box=18.0, spacing=0.42, rotate_deg=0.0, seed=0):
@@ -67,7 +67,7 @@ class FrameAlignment(unittest.TestCase):
         self.assertEqual(frame_overlaps(xyz, np.array([0, 1, 2]), box), 1)  # beads 0 and 1 are 0.1 nm apart across the boundary
 
     def test_the_shipped_frames_are_periodic_in_their_boxes(self):
-        # every bundled KOR/GPR139 frame is periodic as shipped (examples/align_frames.py reports 0 degrees on all of them);
+        # every bundled KOR/GPR139 frame is periodic as shipped (membraneforger/examples/align_frames.py reports 0 degrees on all of them);
         # a frame rotated off its box has thousands of overlapping pairs, a periodic one at most a stray contact or two
         for frame in (CG_GRO, *mf.bundled_frames().values()):
             atoms, box = mf.read_cg(frame)

@@ -9,7 +9,7 @@ from scipy.spatial import cKDTree
 
 from .common import AA_PDB, CG_GRO, FORCEFIELD, MAPPING, REPO, failure, mf, residue, small_system
 
-KOR1 = REPO / "examples/preeq_cg_cellmem/KOR1_cg_cellmem.gro"
+KOR1 = REPO / "membraneforger/examples/preeq_cg_cellmem/KOR1_cg_cellmem.gro"
 
 
 def load(cg_path):
@@ -42,7 +42,7 @@ class HydrophobicBelt(unittest.TestCase):
         self.assertIn("fewer than 10 protein residues", failure(mf.hydrophobic_belt, one))
 
 
-GPR1 = REPO / "examples/preeq_cg_cellmem/GPR5_cg_cellmem.gro"
+GPR1 = REPO / "membraneforger/examples/preeq_cg_cellmem/GPR5_cg_cellmem.gro"
 FAST = {"relax_steps": 0, "max_void_nm3": float("inf")}  # placement only: no push, no pocket gate
 
 
