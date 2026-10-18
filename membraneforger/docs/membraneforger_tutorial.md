@@ -100,7 +100,7 @@ a receptor bead, so the hole reaches that far past the bead centres); if no poin
 push. The receptor's beads count as solid in the pocket search, and after slicing the build checks the actual window
 again (`frame_protein_in_slice`). A single helix with the default 1 nm buffer gives a cell of
 about 4 nm, where the cut edges alone can move the APL past the slice gate; give it a larger buffer (`--xy-buffer 3`;
-with it 7 of the 8 bundled frames pass the slice gate and KOR7 stops at +5.4 %).
+with it all 8 bundled frames pass the slice gate with the centred window; KOR7 stops at +5.4 % only with the offset search, which is not reproduced by the centred default).
 
 The membrane that exists after this step is the **embedded membrane**. It is the reference every later stage is
 compared with: it is the membrane the slice is actually cut from. The uncut frame is also measured ("CG frame"
@@ -152,7 +152,7 @@ the cell is not cut. The cut is made lipid by lipid:
    repulsive wall, every bead held near its position and every lipid held in shape by intramolecular distance
    restraints. Pairs that were already that close in the source frame are data and are left alone. Only a lipid
    still in a hard-core overlap (< 0.15 nm) afterwards is removed; on the 8 bundled 50 us frames none was (the seam removed 0 lipids on all of them). The
-   relaxation moves about 40 % of the lipids by 0.02 nm on average and 0.3 nm at most.
+   relaxation moves 42-56 % of the lipids by 0.016-0.030 nm on average and 0.39 nm at most; KOR1, KOR7 and KOR9 reach the 400-step cap, the converged frames take 154-260 steps.
 
 ### Why whole-lipid anchoring
 
@@ -234,7 +234,7 @@ Keep these apart; the report does.
   "Available area divided by the number of POPC" is not the APL of POPC in a mixed bilayer and is not computed.
 - **Head-plane area**: a second tessellation of the phosphate/amide anchors alone, sterols left out because their
   ROH sits about 0.5 nm below the phosphate plane. This is the area per lipid head in the headgroup plane
-  (60-66 A^2 in the KOR1 build against 46-51 A^2 for the all-lipid value, the difference being the cholesterol).
+  (59-66 A^2 in the KOR1 build against 46-51 A^2 for the all-lipid value, the difference being the cholesterol).
 
 ### 5.3 Slicing and the global APL
 
@@ -273,7 +273,7 @@ Over all 8 bundled 50 us frames (16 leaflets, 6WHC complex, centred window) the 
 new slice has a median of 0.71 %, a 95th percentile of 1.88 % and a largest value of 2.19 % (1.55, 3.39 and 4.87 % with
 `--slice-offset-search`), so the 3 % warning level is not crossed on any frame; the old all-beads-inside rule would have failed on every frame
 (+14.0 to +19.2 % upper, +6.5 to +12.2 % lower, 68-91 fewer lipids). The whole-cell
-deviation of a correct crop scatters more (standard deviation 1.6 % upper and 2.4 % lower leaflet, worst case 14.1 %, lower leaflet of KOR6), which is why it is reported as representativeness
+deviation of a correct crop scatters more (standard deviation 1.5 % upper and 2.4 % lower leaflet, worst case 14.3 %, lower leaflet of KOR7), which is why it is reported as representativeness
 and not used to stop the build; three frames (KOR5, KOR6, KOR9) end PASS WITH WARNINGS on it.
 
 The repaired slice therefore preserves the embedded membrane's packing to within 2-3 % per leaflet on the
