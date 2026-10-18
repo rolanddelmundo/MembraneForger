@@ -100,7 +100,7 @@ a receptor bead, so the hole reaches that far past the bead centres); if no poin
 push. The receptor's beads count as solid in the pocket search, and after slicing the build checks the actual window
 again (`frame_protein_in_slice`). A single helix with the default 1 nm buffer gives a cell of
 about 4 nm, where the cut edges alone can move the APL past the slice gate; give it a larger buffer (`--xy-buffer 3`;
-with it all 8 bundled frames pass the slice gate with the centred window; KOR7 stops at +5.4 % only with the offset search, which is not reproduced by the centred default).
+with it all 8 bundled frames pass the slice gate with the centred window; the +5.4 % KOR7 deviation reported for the offset-search build is not reproduced).
 
 The membrane that exists after this step is the **embedded membrane**. It is the reference every later stage is
 compared with: it is the membrane the slice is actually cut from. The uncut frame is also measured ("CG frame"
