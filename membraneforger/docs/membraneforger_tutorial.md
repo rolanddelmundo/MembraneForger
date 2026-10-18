@@ -229,7 +229,9 @@ Keep these apart; the report does.
 - **Local, per-lipid area**: the cell of each lipid in a 2D periodic Voronoi tessellation of its leaflet, generated
   from the headgroup anchors with the heavy atoms of the complex that lie between the midplane and the headgroup
   plane as additional generators whose cells are discarded. The protein footprint is therefore never assigned to a
-  lipid, `sum(A_i) = A_xy - A_protein` exactly, and the global APL is the mean of the per-lipid areas.
+  lipid, `sum(A_i) = A_xy - A_protein` exactly (A_protein is the summed area of the protein generators' cells), and the
+  global APL is the mean of the per-lipid areas. This is an anchor-based area, one generator per lipid; it is not the
+  all-atom APL@Voro sum of atom cells, so the two are not interchangeable.
 - **Species APL**: the mean (and median, SD, IQR) of the per-lipid areas of that species, per leaflet.
   "Available area divided by the number of POPC" is not the APL of POPC in a mixed bilayer and is not computed.
 - **Head-plane area**: a second tessellation of the phosphate/amide anchors alone, sterols left out because their
@@ -310,7 +312,7 @@ the search `KOR5` lower (+4.87 %) is the one that does (PASS WITH WARNINGS).
 
 For each leaflet and species the report gives N and the mole fraction in the reference and in the slice, the
 difference in mole percent, the sampling standard deviation a random crop of that many lipids would have, and the
-composition distance `D = 0.5 * sum |x_slice - x_reference|`. D is graded against the equal-size-window distribution
+composition distance `D_comp = 0.5 * sum |x_slice - x_reference|` (the total variation distance). D_comp is graded against the equal-size-window distribution
 (and against three times the multinomial expectation when fewer than 20 windows exist). Rare species (PIP2, GM3,
 10-20 molecules in a cut) are shown with their N and flagged "(few)" below 10; their mole fractions move by one or
 two points between reference and slice and their species APL has a standard deviation of 20-25 A^2 across molecules,
@@ -440,7 +442,7 @@ gap add a topology-aware check, benchmarked on valid and deliberately distorted 
 
 The salt is counted in the water, not in the box. A membrane system is about 30 % protein and lipid by volume, so 0.15 M of
 the whole cell would be about 0.21 M in the water. `gmx solvate` fills the box from `spc216.gro` (33.46 waters per nm^3), so
-the number of waters that survive solvation gives the aqueous volume, and the target is N = round(0.15 M x N_A x V)
+the number of waters that survive solvation gives the aqueous volume, and the target is N = round half up (0.15 M x 0.6022 nm^-3 per M x V_aq), with V_aq = N_water / 33.46 nm^-3
 (`Settings.salt_volume` = "water"; "box" restores the cell-volume rule). Neutralization follows
 `Settings.counterion_mode` (`--counterion-mode`). "additive" (default) adds N NaCl pairs and then |Q| counterions of the
 balancing species on top (Q = -217, N = 176: 393 Na+ and 176 Cl-), so the requested salt is reached at any box height.
@@ -465,18 +467,18 @@ python -m membraneforger.equilibration --out BUILD_DIR --energy ener.xvg --frame
     [--reference-ka MN_PER_M] [--reference-d UM2_PER_S]
 ```
 
-Convergence (gate 3) is judged on the final analysis window of each series: box area and volume from the energy
-file; APL per leaflet, thickness, core hydration, protein tilt and depth from the frames. A series passes when its
-fitted drift over the window is below 1 % of the mean and the first-half / second-half means differ by less than
-2 %; WARNING to 3 / 5 %; FAIL beyond or when the block means are monotonic with more than 1 % drift; block standard
+Convergence (gate 3): box area and volume come from the energy file; APL per leaflet, thickness, core hydration,
+protein tilt and depth from the frames. A series passes when its drift over the final window (the last half of the run)
+is below 1 % of the window mean and the first-half / second-half means of the whole series differ by less than 2 % of
+its mean (definitions in 5.13); WARNING to 3 / 5 %; FAIL beyond or when the block means are monotonic with more than 1 % drift; block standard
 errors are reported. S_CD profiles per species and chain are computed from the last frame and reported as
 REFERENCE NEEDED unless a matched profile is supplied (then RMSE 0.03 / 0.05).
 
 Gate 4 uses the production fraction only: lateral diffusion from the drift-corrected x, y MSD of the anchors
-(reported only when `MSD ~ t^alpha` with alpha in 0.9-1.1 and R^2 >= 0.98; WARNING for alpha in 0.8-0.9 or 1.1-1.2;
+(reported only when alpha, the log-log slope of MSD against lag, is in 0.9-1.1 and the linear fit of MSD against lag has R^2 >= 0.98, both over lags between 20 % and 50 % of the longest lag; WARNING for alpha in 0.8-0.9 or 1.1-1.2;
 otherwise "not in a diffusive regime"), K_A from the equilibrium area fluctuations with a block-bootstrap
 uncertainty (relative uncertainty above 40 % is INSUFFICIENT SAMPLING), and the leaflet tensions from a lateral
-pressure profile (`gamma = 0.1 * sum (P_N - P_L) dz` in mN/m per leaflet; the difference passes within 5 mN/m,
+pressure profile (`gamma = 0.1 * sum (P_N - P_L) dz` in mN/m for each side of the midplane; the difference passes within 5 mN/m,
 warns to 10, fails beyond when the uncertainty supports it; a single leaflet above 10 mN/m is flagged). Without a
 matched reference D and K_A are REFERENCE NEEDED: a universal target is not enforced. All these thresholds live in
 `membraneforger/trajectory.py` (`TENSION_THRESHOLDS_MN_PER_M`) and `membraneforger/membrane_report.py` so they can
@@ -531,6 +533,50 @@ of the atomistic force field, which can move the first peak without
 changing the leaflet mean APL. Such a shift is expected physics and is not graded; the test of slicing is the
 CG-to-CG comparison above.
 
+### 5.13 Definitions of the graded quantities
+
+Every formula below is what the code computes (module in brackets). Symbols: A_xy cell area, A_acc lipid-accessible
+area (the cell minus the protein footprint), N lipids in the leaflet, x_s mole fraction of species s.
+
+```
+Voronoi area [packing]     A_i = area of the periodic Voronoi cell of lipid i (shoelace formula);  sum A_i = A_acc = A_xy - A_protein
+APL                        APL = A_acc / N
+composition distance       D_comp = 1/2 sum_s |x_s(slice) - x_s(reference)|;  random crop of n lipids:
+                           E[D_comp] ~ 1/2 sum_s sqrt(2/pi) sqrt(x_s (1 - x_s) / n)
+g(r) [rdf]                 g(r_k) = A_acc n_k / [ N(N-1)/2 * pi (r_{k+1}^2 - r_k^2) ],  n_k = pairs in shell k
+coordination number        n = rho * sum_k g(r_k) pi (r_{k+1}^2 - r_k^2) up to the first minimum,  rho = (N-1) / A_acc
+curve difference           rms of g_sample - g_reference over 3-20 A, in units of the counting noise
+                           sigma^2 = sum over both curves of g_ref / E_k  (Poisson counts, E_k = counts expected at g = 1)
+lipid density near the     rho~(R) = [N(<R) / A(<R)] / [N / A_open], R = in-plane distance of a lipid anchor to the nearest
+protein [rdf]              protein heavy atom within 0.6 nm of the leaflet's median anchor z (the protein's cross-section
+                           at headgroup depth); A(<R) and A_open are areas on a 0.05 nm grid, A_open the part farther
+                           than 0.3 nm from that cross-section (not the Voronoi A_acc). First-shell value: R = 1.0 nm
+thickness                  D_HH = median z(upper anchors) - median z(lower anchors), non-sterol lipids
+protein tilt               theta = arccos |e_z|, e = leading eigenvector of the covariance of the protein atoms within
+                           1.5 nm of the midplane
+core water                 C = 100 * [N_free / (2 h A_xy)] / rho_bulk,  h = half-height of the core, N_free = core waters
+                           not associated with the protein, rho_bulk = bulk water number density
+tail interdigitation       Omega = sum_z min(rho_u, rho_l) / sum_z 1/2 (rho_u + rho_l)  (0 = disjoint, 1 = identical tail
+                           profiles). Not the local overlap integral of 4 rho_u rho_l / (rho_u + rho_l)^2 used elsewhere
+ion count [solvation]      N = round half up (c * 0.6022 nm^-3 per M * V_aq),  V_aq = N_water / 33.46 nm^-3;
+                           ionic strength I = 1/2 sum_i c_i z_i^2
+drift [trajectory]         delta_drift = 100 * slope * L_w / <s>_w  (linear fit over the final window of length L_w)
+half difference            100 * (<s>_second half - <s>_first half) / <s>_whole series
+block SEM                  std(block means, ddof = 1) / sqrt(B), B = 5 blocks
+S_CD                       S_CD = < (3 cos^2 theta - 1) / 2 >, theta = angle of the C-H vector to z; negative for ordered
+                           chains. NMR reports |S_CD| (GROMACS g_order prints -S_CD); compare with -S or |S|
+lateral diffusion          MSD(tau) = 4 D tau + c in two dimensions; D from the linear fit, alpha from log MSD vs log tau
+K_A                        K_A = k_B T <A> / var(A)  (sample variance, A the box area), uncertainty from a block bootstrap
+                           (B = 5 blocks, 200 resamples)
+leaflet tension            gamma_side = 0.1 * sum over the side (P_N - P_L) dz  [mN/m, P in bar, z in nm],
+                           P_N = P_zz, P_L = (P_xx + P_yy) / 2;  delta = gamma_upper - gamma_lower
+```
+
+D from the MSD is the value in the periodic cell: it is not corrected for the finite box, and in a membrane it depends
+on the box width logarithmically (Vogele, Koefinger and Hummer, PRL 2018), so compare it with a reference of a similar
+size. K_A from the box-area fluctuations is an apparent modulus; it depends on the system size and on undulations, and
+it needs a barostat that samples the NPT fluctuations (not Berendsen).
+
 ## 6. Thresholds in one place
 
 Gate 0 (the frame, below the table) and the twelve validation tests, the stage each is best read at, and the criteria the code applies (`membraneforger/qc.py`
@@ -542,9 +588,9 @@ turns every one into a PASS / WARNING / FAIL / INSUFFICIENT SAMPLING / REFERENCE
 | 2 | Bilayer thickness | all stages | expansion / compression, hydrophobic thickness | D_HH from the anchor planes, 1 nm local map | slice <= 3 % from embed; backmap / minimized <= 10 %; equilibrium <= 3 % from a matched reference | 3-5 % (CG), 10-15 % (AA), 3-5 % (reference) | beyond; REFERENCE NEEDED without a reference |
 | 3 | Lipid-tail order parameters | equilibrated AA | acyl-chain ordering, phase | S_CD per species, chain (sn-1, sn-2) and leaflet | profile RMSE <= 0.03 vs a matched profile | 0.03-0.05 | > 0.05; REFERENCE NEEDED without a profile |
 | 4 | Z-density profiles | backmap -> minimized -> equilibrated | bilayer architecture along the normal | rho(z) of heads, tails, cholesterol, protein, ions, water | heads outside tails and water outside heads on both sides, cholesterol between; first-to-last change reported | cholesterol not between tails and heads | head density inside the tail region |
-| 5 | Composition and leaflet asymmetry | frame -> embed -> slice -> final | the intended composition is kept | N and mole fraction per species and leaflet, distance D | below the 95th percentile of equal-size parent windows (or 3 sigma of a random crop with < 20 windows) | 95th-99th percentile | above the 99th percentile for species with N >= 10; rarer species are flagged "(few)", never failed alone |
+| 5 | Composition and leaflet asymmetry | frame -> embed -> slice -> final | the intended composition is kept | N and mole fraction per species and leaflet, distance D_comp | below the 95th percentile of equal-size parent windows (or 3 sigma of a random crop with < 20 windows) | 95th-99th percentile | above the 99th percentile for species with N >= 10; rarer species are flagged "(few)", never failed alone |
 | 6 | Leaflet differential tension | final equilibrated AA | mechanical balance of the asymmetric leaflets | gamma_upper, gamma_lower, delta gamma from a lateral pressure profile | abs(delta gamma) <= 5 mN/m with compatible uncertainty | 5-10 mN/m, or one leaflet above 10 mN/m | > 10 mN/m with the uncertainty supporting it; INSUFFICIENT SAMPLING otherwise |
-| 7 | Lipid lateral diffusion | final equilibrated AA | fluidity, lipid mobility | drift-corrected x, y MSD, D, exponent alpha | alpha 0.9-1.1 with R^2 >= 0.98; D within a factor 2 of a matched reference | alpha 0.8-0.9 or 1.1-1.2; factor 2-5 | not diffusive (not graded) or > 5-fold |
+| 7 | Lipid lateral diffusion | final equilibrated AA | fluidity, lipid mobility | drift-corrected x, y MSD, D (periodic cell), exponent alpha | alpha 0.9-1.1 with R^2 >= 0.98; D within a factor 2 of a matched reference | alpha 0.8-0.9 or 1.1-1.2; factor 2-5 | not diffusive (not graded) or > 5-fold |
 | 8 | Area compressibility K_A | final equilibrated AA | elasticity | K_A from equilibrium area fluctuations, block-bootstrap uncertainty | <= 20 % from a matched reference, uncertainty <= 20 % | 20-40 % | > 40 %; uncertainty > 40 % = INSUFFICIENT SAMPLING |
 | 9 | Hydrophobic-core water | minimized -> equilibrated | pores, cavities, packing defects | core water / bulk water (protein-associated water excluded), spanning-column test, persistence over frames | < 1 %; no column in any frame | 1-5 %; a column in fewer than half the frames (transient) | > 5 %; a column in half the frames or more (persistent) |
 | 10 | Tail interdigitation | backmap -> minimized -> equilibrated | overlap of the opposing leaflets | overlap integral of the two tail-density profiles | <= 10 % from the reference (backmapped stage, then a matched reference) | 10-20 % | > 20 % |
