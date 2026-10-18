@@ -127,7 +127,7 @@ class Structures(unittest.TestCase):
             self.assertGreater(sum(report["wrong_by_centre"].values()) + sum(report["cis_by_bond"].values()), 0)
 
     def test_the_example_script_uses_the_same_check(self):
-        text = (REPO / "examples" / "check_gm3_stereo.py").read_text()
+        text = (REPO / "membraneforger" / "examples" / "check_gm3_stereo.py").read_text()
         self.assertIn("from membraneforger.stereo import check_gm3_stereo", text)
 
 

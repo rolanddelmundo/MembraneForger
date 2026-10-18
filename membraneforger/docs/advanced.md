@@ -43,7 +43,7 @@ orientation the membrane normal is +z, the bilayer midplane is at z = 0 and the 
 
 PPM 3.0 is not bundled. Compile its Fortran source (distributed by the OPM team, `ppm3_code/`) with `make` and pass the
 `immers` executable with `--ppm-exe` or `MEMBRANEFORGER_PPM`; `res.lib` must sit next to it. On a cluster,
-`slurm/setup.sh` compiles it for you ([slurm/README.md](../slurm/README.md#ppm-30)). PPM is not needed with
+`membraneforger/slurm/setup.sh` compiles it for you ([membraneforger/slurm/README.md](../slurm/README.md#ppm-30)). PPM is not needed with
 `--orientation none` or when an exact OPM entry matches (`--pdb-id`). Advanced: `--ppm-membrane CODE`,
 `--ppm-heteroatoms`, `--opm-file FILE`, `--opm-cache DIR`.
 
@@ -76,10 +76,10 @@ how `--embed-site free` chooses its spot.
 ### Bundled membranes
 
 Eight frames (50 µs, Martini 3) of a GPCR in an asymmetric ten-species cell-membrane model, in
-`examples/preeq_cg_cellmem/`: `KOR1`, `KOR2`, `KOR3`, `KOR5`, `KOR6`, `KOR7`, `KOR9` (kappa opioid receptor) and `GPR5`
+`membraneforger/examples/preeq_cg_cellmem/`: `KOR1`, `KOR2`, `KOR3`, `KOR5`, `KOR6`, `KOR7`, `KOR9` (kappa opioid receptor) and `GPR5`
 (GPR139), about 18.3 × 18.3 × 19.2 nm each (the number is the simulation run the frame comes from). Leaflet
 composition in mole percent, averaged over the 8 frames
-(`examples/leaflet_composition.py`):
+(`membraneforger/examples/leaflet_composition.py`):
 
 | Leaflet | CHOL | POPC | DOPC | POPE | DOPE | PSM | DPG3 | POPS | DOPS | SAP6 |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -88,7 +88,7 @@ composition in mole percent, averaged over the 8 frames
 
 Martini and CHARMM36 names differ for two species. GM3 is `DPG3` in the coarse-grained frames (CER16, BGLC, BGAL and
 ANE5A merged into one molecule) and PIP2 is `SAP6` there and `SAPI25` in the all-atom files.
-[examples/preeq_cg_cellmem/README.md](../examples/preeq_cg_cellmem/README.md) lists the frames in detail.
+[membraneforger/examples/preeq_cg_cellmem/README.md](../examples/preeq_cg_cellmem/README.md) lists the frames in detail.
 
 Lipid contacts around the receptor over the 50 µs of the simulations behind `KOR5` and `GPR5` (lipids within 5 and
 5-10 Å of the receptor, per leaflet): [KOR5](../examples/preeq_cg_cellmem/figures/KOR5_lipid_contacts_0-50us.svg),
@@ -108,11 +108,11 @@ python -m membraneforger --aa complex.pdb --orient-chain R --nterm-side out --cg
 ```
 
 The runs are sequential, so five runs take about five times as long as one (`RUNS=5` in
-`slurm/run_membraneforger.sbatch`; raise its time limit). `--cg NAME` builds in one particular frame
+`membraneforger/slurm/run_membraneforger.sbatch`; raise its time limit). `--cg NAME` builds in one particular frame
 (`--list-membranes` lists them), which is the way to spread the runs over separate jobs.
 
 The bundled frames had been written with their coordinates rotated about z relative to the box, each by its own
-angle. They have been rotated back in place (`examples/align_frames.py`), and MembraneForger checks every frame it
+angle. They have been rotated back in place (`membraneforger/examples/align_frames.py`), and MembraneForger checks every frame it
 reads, rotating a frame with the same artefact back onto its periodic cell and logging the angle
 ([tutorial 1.1](membraneforger_tutorial.md#11-a-frame-must-be-periodic-in-its-box)).
 
@@ -195,5 +195,5 @@ contact. The exclusions appear in the build log and in `run_manifest.json` (`exc
 
 ## Using MembraneForger from Python
 
-`examples/build_from_python.py` shows how to call the build from Python, and
+`membraneforger/examples/build_from_python.py` shows how to call the build from Python, and
 [modules.md](modules.md) maps each module to its role.

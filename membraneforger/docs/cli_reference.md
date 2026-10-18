@@ -71,8 +71,8 @@ The slice gate compares the cut membrane with the membrane it was cut from, befo
 | `--mstool-python PATH` | Python interpreter that can import mstool. | the interpreter running MembraneForger |
 | `--ntomp N` | Threads. | all cores |
 | `--nsteps N` | Maximum energy-minimization steps. | `50000` |
-| `--toppar DIR` | Force-field directory with `charmm36.ff/`, `toppar/` and `protein_parameters/`. | `$MEMBRANEFORGER_TOPPAR`, else `forcefield/` |
-| `--data DIR` | Backmapping data directory with `map.dat` and extra force-field XML such as `GM3.xml`. | `$MEMBRANEFORGER_DATA`, else `backmap_data/` |
+| `--toppar DIR` | Force-field directory with `charmm36.ff/`, `toppar/` and `protein_parameters/`. | `$MEMBRANEFORGER_TOPPAR`, else `membraneforger/forcefield/` |
+| `--data DIR` | Backmapping data directory with `map.dat` and extra force-field XML such as `GM3.xml`. | `$MEMBRANEFORGER_DATA`, else `membraneforger/backmap_data/` |
 | `--fit-max-core-rmsd A` | Largest accepted core RMSD of the rigid fit onto your own frame's protein. | `5.0` Å |
 | `--fit-min-core-fraction F` | Smallest accepted fraction of backbone pairs kept by that fit. | `0.5` |
 

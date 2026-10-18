@@ -1,8 +1,8 @@
 #!/bin/bash
 # One-time MembraneForger setup on a cluster login node (needs internet; no Anaconda, modules or root needed):
 #
-#   bash slurm/setup.sh                              # Python, mstool, OpenMM and GROMACS in <repo>/env
-#   PPM_SRC=/path/to/ppm3_code bash slurm/setup.sh   # also compile PPM 3.0 (default source: <repo>/ppm3_code)
+#   bash membraneforger/slurm/setup.sh                              # Python, mstool, OpenMM and GROMACS in <repo>/env
+#   PPM_SRC=/path/to/ppm3_code bash membraneforger/slurm/setup.sh   # also compile PPM 3.0 (default source: <repo>/ppm3_code)
 #
 # Everything goes into the repository folder: micromamba (a single binary) in .micromamba/, the environment in env/.
 # Nothing is activated or added to your shell start-up files; run_membraneforger.sbatch calls env/bin/python and
@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 ENV_DIR="${MFORGER_ENV:-$REPO/env}"
 PPM_SRC="${PPM_SRC:-$REPO/ppm3_code}"
 TOOLS="$REPO/.micromamba"
@@ -49,7 +49,7 @@ elif [ -d "$PPM_SRC" ]; then
     (cd "$PPM_SRC" && PATH="$ENV_DIR/bin:$PATH" make)
     [ -x "$PPM_SRC/immers" ] || { echo "make did not produce $PPM_SRC/immers"; exit 1; }
 else
-    say "PPM 3.0 source not found at $PPM_SRC: skipped (see slurm/README.md)"
+    say "PPM 3.0 source not found at $PPM_SRC: skipped (see membraneforger/slurm/README.md)"
 fi
 if [ -x "$PPM_SRC/immers" ] && [ ! -f "$PPM_SRC/res.lib" ]; then
     echo "WARNING: $PPM_SRC/res.lib is missing; PPM needs it next to immers"

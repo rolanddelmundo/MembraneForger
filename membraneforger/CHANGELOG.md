@@ -2,13 +2,16 @@
 
 ## Unreleased
 
-- **Repository layout.** The command-line, tutorial, advanced and troubleshooting guides are back in `docs/` and
-  `CITATION.cff` is back in the repository root; both had been moved into `archive/`, which broke the README links.
-  `membraneforger/cpu.submit` is now `slurm/examples/array_cases.sbatch` and `membraneforger/example.py` is
-  `examples/build_from_python.py` (same content). The README is shorter. `archive/` (the unmaintained 0.1/0.2 workflow, with its
-  licence texts and notices for the vendored mstool and Martini files) is removed from main; commit `7e26de9` still
-  holds it. The module map is `docs/modules.md` (was `membraneforger/README.md`) and
-  `test_contact_gates.sbatch` is in `slurm/examples/`. No code, option, output or data file changed.
+- **Repository layout.** The repository root is now `README.md`, `LICENSE.txt`, `AUTHORS`, `CITATION.cff` and the
+  `membraneforger/` folder, as in BaNDyT. `forcefield/`, `backmap_data/`, `examples/`, `docs/`, `slurm/`,
+  `CHANGELOG.md` and `ruff.toml` moved into `membraneforger/` (`python -m membraneforger` still runs from the root;
+  Slurm: `bash membraneforger/slurm/setup.sh`). The command-line, tutorial, advanced and troubleshooting guides are back in
+  `docs/` and `CITATION.cff` is back in the root; both had been moved into `archive/`, which broke the README links.
+  `archive/` (the unmaintained 0.1/0.2 workflow, with its licence texts and notices for the vendored mstool and Martini
+  files) is removed from main; commit `7e26de9` still holds it. `membraneforger/cpu.submit` is now
+  `slurm/examples/array_cases.sbatch`, `membraneforger/example.py` is `examples/build_from_python.py`, the module map
+  is `docs/modules.md` and `test_contact_gates.sbatch` is in `slurm/examples/`. The README is shorter. No code logic,
+  option, output or data file changed; only the folders the program looks in for its bundled files.
 - **Bundled membranes are now 50 µs frames.** The 18 frames at 30 µs are replaced by the 50 µs frame of every
   simulation that reached 50 µs: `KOR1`, `KOR2`, `KOR3`, `KOR5`, `KOR6`, `KOR7`, `KOR9` and `GPR5` (the number is the
   simulation run, so the numbering has gaps). `KOR4`, `KOR8` and `GPR1` to `GPR4`, `GPR6` to `GPR9` are gone: the

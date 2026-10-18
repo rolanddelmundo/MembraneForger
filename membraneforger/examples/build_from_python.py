@@ -2,12 +2,12 @@
 #// MembraneForger - (c) 2026 Roland Del Mundo
 #// Example: build one system from Python instead of the command line.
 #//=============================================================
-"""Usage: python examples/build_from_python.py ALL_ATOM.pdb COARSE_GRAIN.gro OUTPUT_DIR [GMX]"""
+"""Usage: python membraneforger/examples/build_from_python.py ALL_ATOM.pdb COARSE_GRAIN.gro OUTPUT_DIR [GMX]"""
 # Do not modify the next 5 lines
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import membraneforger as mf
 
 # Modifications possible below

@@ -1,6 +1,6 @@
 """Rotate Martini frames back onto their periodic box, in place, keeping the .gro formatting, velocities and names.
 
-    python examples/align_frames.py examples/preeq_cg_cellmem/*_cg_cellmem.gro
+    python membraneforger/examples/align_frames.py membraneforger/examples/preeq_cg_cellmem/*_cg_cellmem.gro
 
 A frame whose coordinates were rotated about z after the simulation (a rotational fit saved without its box) is not
 periodic in the box it declares. membraneforger.align_frame_to_box finds the angle that makes it periodic again; this
@@ -12,7 +12,7 @@ import math
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 import membraneforger as mf  # noqa: E402
 

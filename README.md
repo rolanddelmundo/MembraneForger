@@ -23,7 +23,7 @@ The output is minimized, not equilibrated. Run restrained equilibration before p
   matplotlib is optional and draws the validation figures.
 - GROMACS (tested with 2023.3 and 2025.3). If it is not on your `PATH` as `gmx`, pass it with `--gmx`.
 - PPM 3.0, only if your structure is not already oriented and has no matching OPM entry
-  (see [Advanced options](docs/advanced.md#ppm-30)).
+  (see [Advanced options](membraneforger/docs/advanced.md#ppm-30)).
 
 ## Installation
 
@@ -36,9 +36,9 @@ cd MembraneForger
 pip install numpy scipy networkx "pandas<3" openmm mstool==0.3.9 matplotlib
 ```
 
-On a Slurm cluster, `bash slurm/setup.sh` builds a self-contained environment with GROMACS instead, and
-`slurm/run_membraneforger.sbatch` runs one structure per array task; its three marked blocks (scheduler, software,
-this run) are all that needs filling in for any cluster. See [slurm/README.md](slurm/README.md).
+On a Slurm cluster, `bash membraneforger/slurm/setup.sh` builds a self-contained environment with GROMACS instead, and
+`membraneforger/slurm/run_membraneforger.sbatch` runs one structure per array task; its three marked blocks (scheduler, software,
+this run) are all that needs filling in for any cluster. See [membraneforger/slurm/README.md](membraneforger/slurm/README.md).
 
 ## Quick start
 
@@ -47,8 +47,8 @@ The structure is already oriented, so PPM is not needed.
 
 ```bash
 python -m membraneforger \
-    --aa examples/preeq_cg_cellmem/6WHC_MTZP_prot-lig.pdb \
-    --cg examples/preeq_cg_cellmem/6WHC_MTZP_cg_cellmem.gro \
+    --aa membraneforger/examples/preeq_cg_cellmem/6WHC_MTZP_prot-lig.pdb \
+    --cg membraneforger/examples/preeq_cg_cellmem/6WHC_MTZP_cg_cellmem.gro \
     --orientation none \
     --out example_out
 ```
@@ -63,19 +63,19 @@ python -m membraneforger --aa complex.pdb --orient-chain R --nterm-side out --ou
 ```
 
 `--nterm-side` refers to residue 1 as it appears in your file. A receptor that still carries its signal peptide
-usually needs `in`. The [tutorial](docs/membraneforger_tutorial.md) walks through a full build.
+usually needs `in`. The [tutorial](membraneforger/docs/membraneforger_tutorial.md) walks through a full build.
 
 To build the same protein in five different membranes, add `--runs 5` with `--cg 2`: one system per bundled kappa opioid receptor frame, in
-`my_build/KOR1/`, `my_build/KOR2/`, `my_build/KOR3/`, `my_build/KOR5/` and `my_build/KOR6/` (see [Advanced options](docs/advanced.md#several-membranes-for-one-complex)).
+`my_build/KOR1/`, `my_build/KOR2/`, `my_build/KOR3/`, `my_build/KOR5/` and `my_build/KOR6/` (see [Advanced options](membraneforger/docs/advanced.md#several-membranes-for-one-complex)).
 
 ## Inputs and outputs
 
 You provide an all-atom structure (`--aa complex.pdb`: every chain you want simulated, each with a unique chain ID;
-no water, ions, crystallization additives or insertion codes; ligands need a topology in `forcefield/toppar/`) and,
+no water, ions, crystallization additives or insertion codes; ligands need a topology in `membraneforger/forcefield/toppar/`) and,
 optionally, a membrane: `--cg 1` (default, a bundled GPR139 membrane), `--cg 2` (kappa opioid receptor), `--cg NAME`
 such as `KOR5` (`--list-membranes` lists them), or `--cg FILE` for a Martini 3 frame of your own complex. The
 orientation options (`--orient-chain`, `--nterm-side`, `--orientation`) say which chain sits in the membrane. Every
-option is in the [command-line reference](docs/cli_reference.md).
+option is in the [command-line reference](membraneforger/docs/cli_reference.md).
 
 The main files in the `--out` directory:
 
@@ -91,19 +91,19 @@ The main files in the `--out` directory:
 
 Each stage checks its own result, and a failed check stops the build and names the stage. The checks before and after
 backmapping and minimization, and the thresholds, are described in the
-[tutorial](docs/membraneforger_tutorial.md#5-validation). After you equilibrate,
+[tutorial](membraneforger/docs/membraneforger_tutorial.md#5-validation). After you equilibrate,
 `python -m membraneforger.equilibration` grades convergence and membrane properties on the trajectory.
 
 ## Documentation
 
-- [Tutorial](docs/membraneforger_tutorial.md): build stages, validation and thresholds, limitations.
-- [Command-line reference](docs/cli_reference.md): every option and its default.
-- [Advanced options](docs/advanced.md): orientation modes, single-pass proteins, your own membrane, box size,
+- [Tutorial](membraneforger/docs/membraneforger_tutorial.md): build stages, validation and thresholds, limitations.
+- [Command-line reference](membraneforger/docs/cli_reference.md): every option and its default.
+- [Advanced options](membraneforger/docs/advanced.md): orientation modes, single-pass proteins, your own membrane, box size,
   lipid composition, restarts.
-- [Troubleshooting](docs/troubleshooting.md): common failures and what to check.
-- [Running on Slurm](slurm/README.md) and [the bundled membranes](examples/preeq_cg_cellmem/README.md).
-- [Module map](docs/modules.md) and [Python example](examples/build_from_python.py), for developers.
-- [Changelog](CHANGELOG.md).
+- [Troubleshooting](membraneforger/docs/troubleshooting.md): common failures and what to check.
+- [Running on Slurm](membraneforger/slurm/README.md) and [the bundled membranes](membraneforger/examples/preeq_cg_cellmem/README.md).
+- [Module map](membraneforger/docs/modules.md) and [Python example](membraneforger/examples/build_from_python.py), for developers.
+- [Changelog](membraneforger/CHANGELOG.md).
 
 ## Tests
 
@@ -119,5 +119,5 @@ If you use MembraneForger, cite this repository ([CITATION.cff](CITATION.cff)). 
 it relies on: Martini 3, mstool, CHARMM36 and CHARMM-GUI, CGenFF, GROMACS, and PPM 3.0 or OPM when you use them for
 orientation.
 
-MembraneForger is released under the MIT license ([LICENSE.txt](LICENSE.txt)). The force-field files in `forcefield/`
-and the mapping data in `backmap_data/` come from third-party projects and remain under their own terms.
+MembraneForger is released under the MIT license ([LICENSE.txt](LICENSE.txt)). The force-field files in `membraneforger/forcefield/`
+and the mapping data in `membraneforger/backmap_data/` come from third-party projects and remain under their own terms.

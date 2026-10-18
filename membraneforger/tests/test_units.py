@@ -449,7 +449,7 @@ class GroStageMolecules(unittest.TestCase):
 
     def setUp(self):
         self.out = Path(tempfile.mkdtemp())
-        toppar = REPO / "forcefield" / "toppar"
+        toppar = REPO / "membraneforger" / "forcefield" / "toppar"
         self.itps = {n: mf.read_itp(toppar / f"{n}.itp") for n in ("DOPC", "SAPI25", "GLPA", "TIP3", "SOD")}
         atoms, resid = [], 0
 
@@ -785,7 +785,7 @@ if __name__ == "__main__":
 
 
 class BundledMembranes(unittest.TestCase):
-    """--cg 1 | 2 | NAME resolve to files in examples/preeq_cg_cellmem/; anything else is the user's own file."""
+    """--cg 1 | 2 | NAME resolve to files in membraneforger/examples/preeq_cg_cellmem/; anything else is the user's own file."""
 
     def test_every_bundled_frame_has_a_name(self):
         frames = mf.bundled_frames()
@@ -798,7 +798,7 @@ class BundledMembranes(unittest.TestCase):
         self.assertTrue(any(name.startswith("GPR") for name in frames))
 
     def test_a_frame_name_resolves_in_any_spelling(self):
-        expected = REPO / "examples" / "preeq_cg_cellmem" / "KOR5_cg_cellmem.gro"
+        expected = REPO / "membraneforger" / "examples" / "preeq_cg_cellmem" / "KOR5_cg_cellmem.gro"
         for spelling in ("KOR5", "kor5", "Kor5", "KOR5.gro", "KOR5_cg_cellmem.gro", " KOR5 "):
             self.assertEqual(mf.bundled_membrane(spelling), expected, spelling)
 
@@ -816,7 +816,7 @@ class BundledMembranes(unittest.TestCase):
             self.assertEqual(series, [frames[n] for n in names])  # the same fixed order on every call
 
     def test_a_path_or_custom_file_is_not_bundled(self):
-        for value in ("custom=KOR5.gro", str(CG_GRO), "examples/preeq_cg_cellmem/KOR5_cg_cellmem.gro", "membrane.gro", "3"):
+        for value in ("custom=KOR5.gro", str(CG_GRO), "membraneforger/examples/preeq_cg_cellmem/KOR5_cg_cellmem.gro", "membrane.gro", "3"):
             self.assertIsNone(mf.bundled_membrane(value), value)
 
     def test_a_missing_frame_name_is_refused_by_name(self):
