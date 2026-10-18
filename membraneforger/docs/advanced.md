@@ -130,10 +130,10 @@ cut. z is sized from the protein height around the bilayer midplane.
 The cut is made lipid by lipid under periodic boundaries. Each lipid is made whole, one headgroup anchor represents it
 (PO4, cholesterol ROH, the GM3 sugar centroid; `membraneforger/lipids.py`), and the complete lipid is kept when the
 periodic image of its anchor falls in the window. The window may shift by up to 0.5 nm to the position that best
-preserves the source's lipid density and composition (`--no-slice-offset` turns this off), and the new periodic seam
+preserves the source's lipid density and composition when `--slice-offset-search` is given (the default window is centred on the complex), and the new periodic seam
 is relaxed in place at the coarse-grained level instead of deleting lipids.
 
-`--box X Y Z` (Å) sets the box instead. x and y may only be smaller than the membrane patch; z must leave the default
+`--box-nm X Y Z` (nm) sets the box instead. x and y may only be smaller than the membrane patch; z must leave the default
 water padding. A z too short for the complex is refused before backmapping.
 
 The default 1.0 nm buffer is small for large complexes. If the slice gate stops the build, rerun with a larger
@@ -171,8 +171,9 @@ from the kept membrane:
 python -m membraneforger --membrane <out>/int/membrane.pdb --out <out>
 ```
 
-Rerunning into the same `<out>` replaces that build's other outputs and intermediates and keeps only
-`int/membrane.pdb`. Give a new `--out` to keep the earlier build as it is.
+Rerunning into an `<out>` that holds an earlier build is refused unless `--overwrite` is given; checkpoints and trajectories
+there also need `--overwrite-restart` and are never deleted otherwise. With `--overwrite` the other outputs and intermediates are
+replaced and only `int/membrane.pdb` is kept. Give a new `--out` to keep the earlier build as it is.
 
 ## Disulfides
 

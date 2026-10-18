@@ -24,7 +24,8 @@ from scipy.spatial import cKDTree
 from .packing import leaflet_slab
 
 __all__ = ['lateral_rdf', 'rdf_features', 'leaflet_rdfs', 'region_rdfs', 'window_rdf_distribution', 'compare_rdf', 'rdf_comparison',
-           'protein_density_profiles']
+           'protein_density_profiles', 'open_area_grid', 'shell_areas', 'lateral_rdf_shell', 'leaflet_rdfs_shell',
+           'random_reference_rdfs', 'compare_normalizations']
 
 MIN_PAIR_SPECIES = 20   # same-species curves are computed for species with at least this many molecules in the leaflet
 DR_NM = 0.1             # 1 A bins: a leaflet of 150-250 anchors gives about 10 pairs per bin in the first shell
@@ -324,3 +325,156 @@ def protein_density_profiles(stage: dict, r_max_nm: float = PROFILE_R_MAX_NM, dr
         out[leaflet] = {"protein_atoms_in_slab": len(inside), "accessible_area_nm2": round(accessible, 3),
                         "first_shell_area_nm2": round(first_area, 3), "curves": curves}
     return out
+
+
+# ----------------------------------------------------------------- accessible-shell-area normalization (a separate analysis)
+# lateral_rdf divides the pair count of each shell by the area 2 pi r dr of the whole annulus times the leaflet's mean
+# density N / A_acc (A_acc: the cell minus the protein footprint). Near a protein that overstates the room a lipid has: part
+# of its annulus lies inside the protein, where no anchor can be, so even lipids placed at random in the open area give
+# g(r) < 1 out to the distance at which most annuli stop touching the protein, and the deficit grows with the protein's
+# share of the cell. The accessible-shell normalization below counts, for every anchor i, only the area of its annulus that
+# is open to lipids,
+#
+#     E_k = sum_i rho A_i(r_k, r_k + dr),   rho = (N - 1) / A_acc  (M / A_acc for partners),
+#     g_shell(r_k) = n_k / E_k,
+#
+# with A_i measured on the same periodic grid that gives A_acc, so g_shell = 1 exactly for uncorrelated anchors in the open
+# area (random_reference_rdfs checks this against a geometry-matched random placement). It is reported next to the
+# existing g(r), never in place of it; no gate reads it.
+
+
+def open_area_grid(protein_xy: np.ndarray, box_xy: np.ndarray, grid_nm: float = 0.05, accessible_nm: float = 0.3) -> dict:
+    """The periodic cell on a grid_nm grid, split into area open to lipid anchors and area closed by the protein cross-section.
+
+    A grid cell is open when its centre is at least accessible_nm from every protein heavy atom of the cross-section
+    (protein_xy, x and y in nm; none: the whole cell is open). Returns the open cell centres, the area of one cell and the
+    open area A_acc = (open cells) x (cell area).
+    """
+    box_xy = np.asarray(box_xy, dtype=float)
+    nx, ny = max(1, int(round(box_xy[0] / grid_nm))), max(1, int(round(box_xy[1] / grid_nm)))
+    gx, gy = np.meshgrid((np.arange(nx) + 0.5) * box_xy[0] / nx, (np.arange(ny) + 0.5) * box_xy[1] / ny, indexing="ij")
+    grid = np.column_stack([gx.ravel(), gy.ravel()])
+    cell_area = float(box_xy[0] * box_xy[1]) / len(grid)
+    protein_xy = np.asarray(protein_xy, dtype=float).reshape(-1, 2)
+    if len(protein_xy):
+        distance = cKDTree(np.mod(protein_xy, box_xy), boxsize=box_xy).query(grid)[0]
+        grid = grid[distance >= accessible_nm]
+    return {"open_xy": grid, "cell_area_nm2": cell_area, "accessible_nm2": float(len(grid) * cell_area), "box_xy": box_xy,
+            "protein_atoms": int(len(protein_xy)), "grid_nm": grid_nm, "accessible_nm": accessible_nm}
+
+
+def shell_areas(points: np.ndarray, open_grid: dict, edges: np.ndarray) -> np.ndarray:
+    """Area (nm^2) of each anchor's annulus [edges[k], edges[k+1]) that is open to lipids: an (N, bins) array, periodic cell."""
+    box_xy, open_xy, cell_area = open_grid["box_xy"], open_grid["open_xy"], open_grid["cell_area_nm2"]
+    points = np.asarray(points, dtype=float).reshape(-1, 2)
+    out = np.zeros((len(points), len(edges) - 1))
+    for i, point in enumerate(points):
+        delta = open_xy - point
+        delta -= box_xy * np.round(delta / box_xy)
+        out[i] = np.histogram(np.hypot(delta[:, 0], delta[:, 1]), bins=edges)[0] * cell_area
+    return out
+
+
+def lateral_rdf_shell(points: np.ndarray, open_grid: dict, dr: float = DR_NM, r_max: float | None = None,
+                      partners: np.ndarray | None = None) -> dict:
+    """g(r) of x, y points (or between two sets) normalized by each anchor's open annulus area; same keys as lateral_rdf.
+
+    The expected counts per unit g are E_k = sum_i rho A_i(k) (halved for one set, whose pairs are counted once), so a curve
+    of uncorrelated anchors in the open area is 1 at every r whatever the protein's share of the cell.
+    """
+    box_xy = open_grid["box_xy"]
+    r_max = min(0.5 * float(box_xy.min()) - 1e-6, R_CAP_NM) if r_max is None else r_max
+    edges = np.arange(0.0, r_max + dr, dr)
+    points = np.asarray(points, dtype=float).reshape(-1, 2)
+    area = open_grid["accessible_nm2"]
+    a = cKDTree(np.mod(points, box_xy), boxsize=box_xy)
+    if partners is None:
+        pairs = a.query_pairs(r_max, output_type="ndarray")
+        d = np.linalg.norm(minimum_image(points[pairs[:, 0]] - points[pairs[:, 1]], box_xy), axis=1) if len(pairs) else np.zeros(0)
+        density, weight = (len(points) - 1) / area, 0.5
+    else:
+        b = cKDTree(np.mod(partners, box_xy), boxsize=box_xy)
+        d = a.sparse_distance_matrix(b, r_max, output_type="coo_matrix").data
+        density, weight = len(partners) / area, 1.0
+    counts, _ = np.histogram(d, bins=edges)
+    expected = weight * density * shell_areas(points, open_grid, edges).sum(axis=0)
+    g = np.where(expected > 0, counts / np.maximum(expected, 1e-12), 0.0)
+    r = 0.5 * (edges[1:] + edges[:-1])
+    return {"r_nm": r, "g": g, "counts": counts, "n_points": int(len(points)), "density_nm2": float(density), "dr_nm": dr,
+            "expected_counts_per_unit_g": expected, "normalization": "accessible shell area"}
+
+
+def leaflet_rdfs_shell(stage: dict, band_nm: float = PROFILE_HEAD_BAND_NM, min_species: int = MIN_PAIR_SPECIES,
+                       grid_nm: float = 0.05, accessible_nm: float = 0.3, r_max_nm: float | None = None) -> dict:
+    """The all-anchor and same-species accessible-shell RDFs of each leaflet of a stage: {leaflet: {label: curve + features}}.
+
+    The protein's cross-section is taken at the leaflet's headgroup depth (within band_nm of the median anchor z), as in
+    protein_density_profiles. A leaflet without protein atoms at that depth is normalized by its whole cell.
+    """
+    box_xy = np.array(stage["box_nm"][:2], dtype=float)
+    protein = np.asarray(stage["protein_nm"], dtype=float).reshape(-1, 3)
+    out = {}
+    for leaflet in ("lower", "upper"):
+        rows = [r for r in stage["lipids"] if r["leaflet"] == leaflet]
+        points = np.array([[r["x_nm"], r["y_nm"]] for r in rows])
+        curves = {}
+        if len(points) >= 3:
+            plane = float(np.median([r["z_nm"] for r in rows]))
+            section = protein[(protein[:, 2] >= plane - band_nm) & (protein[:, 2] <= plane + band_nm)][:, :2]
+            grid = open_area_grid(section, box_xy, grid_nm, accessible_nm)
+            curves["all"] = {**lateral_rdf_shell(points, grid, r_max=r_max_nm), "well_sampled": len(points) >= min_species,
+                             "accessible_nm2": grid["accessible_nm2"]}
+            for species in sorted({r["resname"] for r in rows}):
+                sub = np.array([[r["x_nm"], r["y_nm"]] for r in rows if r["resname"] == species])
+                if len(sub) >= min_species:
+                    curves[f"{species}-{species}"] = {**lateral_rdf_shell(sub, grid, r_max=r_max_nm), "well_sampled": True,
+                                                      "accessible_nm2": grid["accessible_nm2"]}
+            for curve in curves.values():
+                curve["features"] = rdf_features(curve)
+        out[leaflet] = curves
+    return out
+
+
+def random_reference_rdfs(open_grid: dict, n_points: int, replicates: int = 200, hard_core_nm: float = 0.0, seed: int = 0,
+                          dr: float = DR_NM, r_max: float | None = None) -> dict:
+    """g(r) of n_points random anchors in the open area of a grid, with both normalizations, averaged over replicates.
+
+    The reference matches the geometry of a real leaflet (cell, protein cross-section, number of anchors) and carries no
+    lipid-lipid structure: positions are uniform over the open cells (hard_core_nm = 0: an ideal gas) or placed by random
+    sequential addition with a minimum separation hard_core_nm. Returns the mean and the standard deviation over replicates
+    of the existing g(r) (area = the open area) and of the accessible-shell g(r), on one r grid. The shell curve has to be
+    1 beyond the hard core (an ideal gas: everywhere) within its replicate scatter; the existing one is not.
+    """
+    rng = np.random.default_rng(seed)
+    box_xy, open_xy, cell = open_grid["box_xy"], open_grid["open_xy"], open_grid["grid_nm"]
+    raw, shell = [], []
+    for _ in range(replicates):
+        chosen, attempts = [], 0
+        while len(chosen) < n_points:
+            attempts += 1
+            if attempts > 2000 * n_points:
+                raise SystemExit(f"cannot place {n_points} anchors {hard_core_nm} nm apart in {open_grid['accessible_nm2']:.1f} nm^2: "
+                                 "the coverage is beyond random sequential addition (about 0.55)")
+            candidate = open_xy[rng.integers(len(open_xy))] + rng.uniform(-0.5 * cell, 0.5 * cell, size=2)
+            if hard_core_nm > 0 and chosen:
+                delta = np.array(chosen) - candidate
+                delta -= box_xy * np.round(delta / box_xy)
+                if (np.hypot(delta[:, 0], delta[:, 1]) < hard_core_nm).any():
+                    continue
+            chosen.append(candidate)
+        points = np.array(chosen)
+        raw.append(lateral_rdf(points, box_xy, dr=dr, r_max=r_max, area=open_grid["accessible_nm2"]))
+        shell.append(lateral_rdf_shell(points, open_grid, dr=dr, r_max=r_max))
+    stack = lambda curves: np.array([c["g"] for c in curves])
+    return {"r_nm": raw[0]["r_nm"], "replicates": replicates, "n_points": n_points, "hard_core_nm": hard_core_nm,
+            "accessible_nm2": open_grid["accessible_nm2"], "protein_atoms": open_grid["protein_atoms"],
+            "raw_mean": stack(raw).mean(axis=0), "raw_sd": stack(raw).std(axis=0, ddof=1),
+            "shell_mean": stack(shell).mean(axis=0), "shell_sd": stack(shell).std(axis=0, ddof=1)}
+
+
+def compare_normalizations(raw_curve: dict, shell_curve: dict, band_nm: tuple = (1.0, 2.5)) -> dict:
+    """Mean g(r) of one leaflet curve over band_nm with both normalizations, and the offset of each from 1 (percent)."""
+    inside = (raw_curve["r_nm"] >= band_nm[0]) & (raw_curve["r_nm"] <= band_nm[1])
+    raw, shell = float(raw_curve["g"][inside].mean()), float(shell_curve["g"][inside].mean())
+    return {"band_nm": list(band_nm), "mean_g_existing": round(raw, 4), "mean_g_shell": round(shell, 4),
+            "offset_existing_percent": round(100 * (raw - 1), 2), "offset_shell_percent": round(100 * (shell - 1), 2)}

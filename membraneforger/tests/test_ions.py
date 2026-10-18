@@ -81,11 +81,13 @@ class IonCounts(unittest.TestCase):
         self.assertIn("41 ions short of the 176 requested", text)
         dz = (mf.water_volume_for_salt(CHARGE) - 1949.3) / (box[0] * box[1])
         self.assertIn(f"{dz:.2f} nm taller", text)
+        self.assertIn("counterion_mode additive", text)
         self.assertGreater(dz, 2.0)
 
     def test_a_bad_mode_is_refused_and_the_defaults(self):
         self.assertIn("counterion_mode", failure(mf.ion_counts, 1000.0, -1, mode="both"))
-        self.assertEqual(mf.Settings().counterion_mode, "inclusive")
+        self.assertEqual(mf.Settings().counterion_mode, "additive")
+        self.assertEqual(mf.ion_counts(1949.3, -20), mf.ion_counts(1949.3, -20, mode="additive"))
 
     def test_rounding_is_within_half_a_pair_of_the_target(self):
         for nwater in range(1000, 90000, 777):
@@ -121,6 +123,29 @@ class SaltSummary(unittest.TestCase):
         pairs, pos, neg, _ = mf.ion_counts(WATERS / mf.WATERS_PER_NM3, CHARGE, mode="additive")
         self.assertEqual(WATERS - pos - neg, 64648)                        # TIP3 left for the topology, never negative
         self.assertTrue(math.isfinite(mf.salt_summary(WATERS, pos, neg)["na_M"]))
+
+
+class IonReport(unittest.TestCase):
+    def test_each_category_is_counted_apart(self):
+        _, pos, neg, _ = mf.ion_counts(WATERS / mf.WATERS_PER_NM3, CHARGE)                 # additive default: 393 Na+, 176 Cl-
+        report = mf.ion_report(WATERS, CHARGE, pos, neg, 176, "additive", "water", WATERS / mf.WATERS_PER_NM3)
+        self.assertEqual(report["neutralizing_ions"], {"species": "Na+", "count": 217})
+        self.assertEqual((report["salt_pairs"], report["na_total"], report["cl_total"]), (176, 393, 176))
+        self.assertAlmostEqual(report["salt_M"], 0.150, places=3)
+        self.assertAlmostEqual(report["neutralizing_M"], 217 / (WATERS / mf.WATERS_PER_NM3 * mf.MOLAR_PER_NM3), places=9)
+
+    def test_ionic_strength_is_the_salt_plus_half_the_neutralizing_concentration(self):
+        for charge in (-217, -20, 0, 20, 40):
+            _, pos, neg, _ = mf.ion_counts(WATERS / mf.WATERS_PER_NM3, charge)
+            report = mf.ion_report(WATERS, charge, pos, neg, 176, "additive", "water", WATERS / mf.WATERS_PER_NM3)
+            self.assertAlmostEqual(report["ionic_strength_M"], report["salt_M"] + 0.5 * report["neutralizing_M"], places=9)
+            self.assertEqual(report["neutralizing_ions"]["count"], abs(charge))
+            self.assertEqual(report["neutralizing_ions"]["species"], None if charge == 0 else "Na+" if charge < 0 else "Cl-")
+
+    def test_inclusive_clamp_reports_no_salt_pairs(self):
+        _, pos, neg, _ = mf.ion_counts(1949.3, CHARGE, mode="inclusive")
+        report = mf.ion_report(WATERS, CHARGE, pos, neg, 176, "inclusive", "water", 1949.3)
+        self.assertEqual((report["salt_pairs"], report["neutralizing_ions"]["count"]), (0, 217))
 
 
 class Census(unittest.TestCase):

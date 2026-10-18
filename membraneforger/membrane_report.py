@@ -67,7 +67,8 @@ from .structure_metrics import (
     thickness_change,
 )
 
-__all__ = ['STAGE_LABELS', 'MembraneValidation', 'stage_from_membrane_pdb', 'stage_from_gro', 'check_integrity',
+__all__ = ['STAGE_LABELS', 'SLICE_FIXED_COMPLEX', 'as_diagnostic', 'MembraneValidation', 'stage_from_membrane_pdb', 'stage_from_gro',
+           'check_integrity',
            'stage_summary', 'write_outputs', 'render_figures']
 
 STAGE_LABELS = {"cg_frame": "CG frame", "embed": "Embedded CG membrane (reference)", "slice": "Sliced CG membrane",
@@ -86,6 +87,11 @@ AA_GATE = {"thickness_percent": (10.0, 15.0), "tilt_deg": (2.0, 5.0), "depth_A":
 # may sit outside the PASS windows, which is a WARNING; only a frame that is not a fluid bilayer at all fails.
 CG_FRAME_GATE = {"apl_A2": (42.0, 60.0, 30.0, 100.0), "thickness_A": (38.0, 47.0, 28.0, 56.0), "tilt_deg": (5.0, 10.0),
                  "wrong_leaflet_percent": (0.5, 100.0), "molecule_gap_nm": (0.8, 1.0), "protein_overlap_nm": 0.30}
+# Slicing cuts lipids only: the complex is not moved, so its tilt, insertion depth and side of the membrane are the embedded
+# values to rounding. A criterion that cannot fail says nothing, so at the slice stage these measurements are reported as
+# diagnostics (NOT RUN, the value and its deviation kept); they are graded where they can change, across backmapping and
+# minimization (AA_GATE).
+SLICE_FIXED_COMPLEX = "diagnostic only: slicing does not move the complex, so this is unchanged by construction"
 CORE_HALF_NM = 0.8   # the hydrophobic core: within this of the midplane no water belongs (about the C4-C14 tail region)
 STAGE_COLOURS = {"cg_frame": "#52514e", "embed": "#2a78d6", "slice": "#eb6834", "backmap": "#1baf7a", "minimize": "#eda100",
                  "old_rule": "#e34948"}
@@ -339,7 +345,8 @@ class MembraneValidation:
         gate = CG_GATE if stage["resolution"] == "cg" else AA_GATE
         records = thickness_change(self.reference["thickness"], thickness, *gate["thickness_percent"], stage=name)["records"]
         if orientation is not None and self.reference["orientation"] is not None:
-            records += orientation_change(self.reference["orientation"], orientation, *gate["tilt_deg"], *gate["depth_A"], stage=name)["records"]
+            changes = orientation_change(self.reference["orientation"], orientation, *gate["tilt_deg"], *gate["depth_A"], stage=name)["records"]
+            records += [as_diagnostic(r, SLICE_FIXED_COMPLEX) for r in changes] if name == "slice" else changes
         if stage["resolution"] == "aa" and "tails" in stage:
             inter = tail_interdigitation(stage["tails"][0], stage["tails"][1], stage["midplane_nm"])
             first = next((self.stages[n] for n in ("backmap",) if n in self.stages and n != name), None)
@@ -576,8 +583,12 @@ class MembraneValidation:
     def all_records(self) -> list[dict]:
         """Every metric record of the build so far, in stage order (the slice gate's first)."""
         records = list(self.slice_check["records"]) if self.slice_check else []
+        # The slice stage's own structure records are added unless the slice gate already holds the same metric. The test is
+        # against the gate's records only: the earlier stages (cg_frame, embed) carry a "bilayer thickness" record of their own,
+        # and comparing with those left the slice-stage thickness out of the report and out of gate 1's verdict.
+        gate_keys = {(q["metric"], q["leaflet"]) for q in records}
         for name in record_stage_order(self.stages):
-            records += [r for r in self.stages[name].get("records", []) if name != "slice" or r["metric"] not in {q["metric"] for q in records}]
+            records += [r for r in self.stages[name].get("records", []) if name != "slice" or (r["metric"], r["leaflet"]) not in gate_keys]
         return records
 
     def record(self, cut: dict | None = None) -> dict:
@@ -598,6 +609,11 @@ class MembraneValidation:
     def write(self, cut: dict | None = None) -> list[Path]:
         """Write membrane_validation.json/.md, the per-lipid TSV and the figures; returns the files written."""
         return write_outputs(self.out, self.record(cut), self.stages)
+
+
+def as_diagnostic(record: dict, why: str) -> dict:
+    """The same record, kept for the reader but no longer graded: status NOT RUN and the reason prefixed with why."""
+    return {**record, "status": "NOT RUN", "reason": f"{why}; {record['reason']}"}
 
 
 # ----------------------------------------------------------------------------------------------------------- outputs

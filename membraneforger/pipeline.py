@@ -27,7 +27,7 @@ from .solvation import add_ions, make_index, rebox_system, solvate_system
 from .stereo import check_gm3_stereo
 from .structio import xyz_nm
 from .topology import build_topology, lipid_clashes, prepare_structure, repair_structure, resolve_lipid_clashes
-from .validation import align_frame_to_box, check_inputs_unchanged, clear_stale_outputs, protect_inputs, read_all_atom, read_cg
+from .validation import align_frame_to_box, check_inputs_unchanged, clear_stale_outputs, protect_inputs, read_all_atom, read_cg, refuse_overwrite
 
 __all__ = ['Session', 'StageFailure', 'run_stage', 'prepare_inputs', 'backmap_and_assemble', 'heavy_atom_piercings', 'membrane_piercings',
            'backmap_verdict', 'refuse_frame_protein_in_slice', 'review_contacts', 'refuse_overlaps',
@@ -38,7 +38,7 @@ STAGE_HINTS = {
     "inputs": "the input file named in the message",
     "orient": "{out}/orientation_report.json, the chains of the all-atom input, and {work}/orientation/ppm/ with the PPM "
               "transcript in {out}/" + LOG_NAME,
-    "slice": "the slice report in {out}/run_manifest.json and the log, the --box option and --xy-buffer",
+    "slice": "the slice report in {out}/run_manifest.json and the log, the --box-nm option and --xy-buffer",
     "slice_check": "{out}/membrane_validation.md and membrane_validation.json; --apl-tolerance and --apl-validate",
     "cg_check": "{out}/membrane_validation.md and membrane_validation.json (CG frame records); --cg-validate no only reports them",
     "membrane_check": "{out}/membrane_validation.md and membrane_validation.json",
@@ -85,6 +85,8 @@ class Session:
     # Cysteine pairs (chain, resid, resid) kept reduced although their SG atoms sit within DISULFIDE_MAX_A:
     # a contact the model predicts but the chemistry does not support (--exclude-disulfide).
     exclude_disulfides: tuple = ()
+    overwrite: bool = False  # replace the outputs of an earlier build in `out` (--overwrite); otherwise such a directory is refused
+    overwrite_restart: bool = False  # also allow it when checkpoints or trajectories of a simulation are there (--overwrite-restart)
     work: Path | None = None
     timings: dict = field(default_factory=dict)
     record: dict = field(default_factory=dict)
@@ -277,7 +279,7 @@ def refuse_frame_protein_in_slice(cg_protein: list, slab: tuple, box: list, plac
         raise SystemExit(f"the slice window ({cut['box'][0]:.2f} x {cut['box'][1]:.2f} nm) comes within "
                          f"{FRAME_PROTEIN_CLEARANCE_NM} nm of {reached} bead(s) of the frame's own protein, so the hole it leaves "
                          "would reach the cut membrane; this complex is too wide to sit clear of it "
-                         "in this frame: use a smaller --xy-buffer or --box, or --embed-site hole")
+                         "in this frame: use a smaller --xy-buffer or --box-nm, or --embed-site hole")
     return reached
 
 
@@ -434,7 +436,7 @@ def finish_system(session: Session, staged: dict) -> str:
     if system["excluded_disulfides"]:
         record["excluded_disulfides"] = [list(spec) for spec in system["excluded_disulfides"]]
     run_stage(session, "solvate", solvate_system, system, topology, gmx, box, session.settings)
-    run_stage(session, "ions", add_ions, system, topology, gmx, box, session.settings)
+    record["ions"] = run_stage(session, "ions", add_ions, system, topology, gmx, box, session.settings)
     overlaps = run_stage(session, "contacts", review_contacts, session, "solv_ions.gro", staged["solute_atoms"], "solv_ions")
     record["contacts_before_em"] = {k: overlaps[k] for k in ("contacts_by_class", "crossings_by_class")}
     run_stage(session, "contacts", refuse_overlaps, overlaps, ("membrane", "solvent"), "before EM")
@@ -559,6 +561,12 @@ def build(session: Session, all_atom: Path | None, coarse_grain: Path | None, me
         protect_inputs(inputs, out, keep=membrane, resources=(session.forcefield, session.data))
     except SystemExit as exc:  # nothing has been touched yet: report without clearing or logging into the directory
         print(f"[{out.name}] ERROR: inputs: {exc}. Inspect: the --out path")
+        print(f"{session.name}\tFAIL\t{exc}")
+        return 1
+    try:  # an earlier build or a simulation's restart files are never replaced without --overwrite (--overwrite-restart)
+        refuse_overwrite(out, keep=membrane, overwrite=session.overwrite, overwrite_restart=session.overwrite_restart)
+    except SystemExit as exc:
+        print(f"[{out.name}] ERROR: output directory: {exc}. Inspect: the --out path")
         print(f"{session.name}\tFAIL\t{exc}")
         return 1
     removed = clear_stale_outputs(out, keep=membrane)

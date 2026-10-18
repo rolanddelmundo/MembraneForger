@@ -682,9 +682,9 @@ class BoxSizing(unittest.TestCase):
     def test_cli_box_parsing(self):
         self.assertIsNone(mf.parse_box("auto"))
         self.assertIsNone(mf.parse_box(None))
-        self.assertEqual(mf.parse_box("11.18,11.18,20.3"), (11.18, 11.18, 20.3))
-        self.assertIn("three positive edge lengths in A", failure(mf.parse_box, "11,20"))
-        self.assertIn("three positive edge lengths in A", failure(mf.parse_box, "a,b,c"))
+        self.assertEqual(mf.parse_box("11.18,11.18,20.3"), (111.8, 111.8, 203.0))   # nm in, A out (Session.box_a)
+        self.assertIn("three positive edge lengths in nm", failure(mf.parse_box, "11,20"))
+        self.assertIn("three positive edge lengths in nm", failure(mf.parse_box, "a,b,c"))
 
 
 class CommandLine(unittest.TestCase):
@@ -700,10 +700,10 @@ class CommandLine(unittest.TestCase):
         self.assertIn("invalid choice", self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--orientation", "maybe")[1])
         self.assertIn("expected 3 arguments", self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--box", "100", "100")[1])
         self.assertIn("three positive edge lengths", self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--box", "100", "-5", "100")[1])
-        self.assertIn("--bilayer-z applies with --orientation none",
+        self.assertIn("--bilayer-z-nm applies with --orientation none",
                       self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--orient-chain", "R", "--bilayer-z", "5")[1])
         self.assertIn("do not apply", self.run_cli("--membrane", AA_PDB, "--orient-chain", "R")[1])
-        self.assertIn("give it or --bilayer-z, not both",
+        self.assertIn("give it or --bilayer-z-nm, not both",
                       self.run_cli("--all-atom", AA_PDB, "--orientation", "none", "--orient-chain", "R", "--orient-residues", "349-376",
                                    "--bilayer-z", "0")[1])
         self.assertIn("places an embedded protein",
