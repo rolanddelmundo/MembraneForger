@@ -17,10 +17,11 @@ from .embedding import CONVERTIBLE, EMBED_SITES, LIPID_NAMES, lipid_name
 from .orientation import NTERM_SIDES, ORIENTATION_MODES, OrientationRequest, parse_residue_ranges
 from .pipeline import Session, build
 from .runtools import find_gromacs
+from .validation import refuse_overwrite
 
 __all__ = ['BUNDLED_MEMBRANES', 'bundled_frames', 'bundled_membrane', 'bundled_series', 'describe_bundled_membranes',
            'make_parser', 'locate_forcefield', 'locate_data', 'parse_chains', 'parse_box', 'parse_disulfide_pair',
-           'orientation_request', 'run_sessions', 'main']
+           'orientation_request', 'resolve_lengths', 'run_sessions', 'angstrom_to_nm', 'nm_to_angstrom', 'default_out', 'main']
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 BUNDLED_DIR = PACKAGE_DIR / "examples" / "preeq_cg_cellmem"
@@ -32,6 +33,28 @@ BUNDLED_FRAME_SUFFIX = "_cg_cellmem.gro"
 RECEPTORS = {"GPR": "GPR139", "KOR": "kappa opioid receptor"}
 # --runs N: the complex is built N times, each time in a different frame of the chosen series (the first N frames of
 # the series, so the set is the same from one invocation to the next); the bound is the number of frames the series holds.
+
+
+ANGSTROM_PER_NM = 10.0
+# Every length on the command line is in nm and its option name says so (--box-nm, --bilayer-z-nm, --fit-max-core-rmsd-nm,
+# --xy-buffer). The unsuffixed spellings of earlier releases (--box, --bilayer-z, --fit-max-core-rmsd) took angstroms; they still
+# work, are converted here, and print which nm option they stand for. Giving both spellings of one option is an error.
+
+
+def angstrom_to_nm(value: float) -> float:
+    """Convert a length in angstrom to nm (1 nm = 10 A)."""
+    return value / ANGSTROM_PER_NM
+
+
+def nm_to_angstrom(value: float) -> float:
+    """Convert a length in nm to angstrom (1 nm = 10 A)."""
+    return value * ANGSTROM_PER_NM
+
+
+def default_out(source: Path, cwd: Path | None = None) -> Path:
+    """The default --out: ./<input structure stem>_membraneforger; the structure is the all-atom input (the assembled
+    system with --membrane), the same for a single build and for --runs, whose frames each take a subfolder."""
+    return Path(cwd or Path.cwd()) / f"{Path(source).stem}_membraneforger"
 
 
 def bundled_frames() -> dict:
@@ -82,6 +105,11 @@ def describe_bundled_membranes() -> str:
 def run_sessions(session: Session, all_atom: Path, frames: list, command: list) -> int:
     """--runs N: build the complex once per frame, each build in its own subdirectory of session.out, and sum up."""
     results = []
+    tags = [frame.name[:-len(BUNDLED_FRAME_SUFFIX)] for frame in frames]
+    if len(set(tags)) != len(tags):
+        raise SystemExit(f"--runs: two frames would share one output folder ({', '.join(tags)})")
+    for tag in tags:  # refuse before the first build rather than after an hour of building when a later run's folder is taken
+        refuse_overwrite(session.out / tag, overwrite=session.overwrite, overwrite_restart=session.overwrite_restart)
     for frame in frames:
         tag = frame.name[:-len(BUNDLED_FRAME_SUFFIX)]
         run = replace(session, out=session.out / tag, name=f"{session.name}_{tag}", work=None, timings={}, record={}, analysis=None)
@@ -104,7 +132,7 @@ def parse_chains(*values: str | None) -> tuple:
 
 
 def parse_box(value: str | None) -> tuple | None:
-    """Parse the BOX header value: 'auto' (None) or three positive edge lengths in A as 'x,y,z'."""
+    """Parse the BOX header value: 'auto' (None) or three positive edge lengths in nm as 'x,y,z'; returned in A (Session.box_a)."""
     text = (value or "auto").strip().lower()
     if text in ("", "auto"):
         return None
@@ -113,8 +141,29 @@ def parse_box(value: str | None) -> tuple | None:
     except ValueError:
         parts = ()
     if len(parts) != 3 or not all(v > 0 for v in parts):
-        raise SystemExit(f"BOX must be 'auto' or three positive edge lengths in A as x,y,z, not {value!r}")
-    return parts
+        raise SystemExit(f"BOX must be 'auto' or three positive edge lengths in nm as x,y,z, not {value!r}")
+    return tuple(nm_to_angstrom(v) for v in parts)
+
+
+def resolve_lengths(args, parser: argparse.ArgumentParser) -> None:
+    """Fold the nm options and the angstrom spellings of earlier releases into args.box, args.bilayer_z and args.fit_max_core_rmsd (A).
+
+    The session and Settings keep their internal lengths in A (the PDB unit); the command line is nm. An unsuffixed legacy option
+    is read as A, converted, and reported once with the nm option it stands for; giving both spellings is an error.
+    """
+    for new, old, scale in (("box_nm", "box", 3), ("bilayer_z_nm", "bilayer_z", 1), ("fit_max_core_rmsd_nm", "fit_max_core_rmsd", 1)):
+        given_new, given_old = getattr(args, new), getattr(args, old)
+        flag_new, flag_old = "--" + new.replace("_", "-"), "--" + old.replace("_", "-")
+        if given_new is not None and given_old is not None:
+            parser.error(f"{flag_new} (nm) and {flag_old} (A, earlier releases) give the same length twice; use {flag_new} only")
+        if given_old is not None:
+            as_nm = [angstrom_to_nm(v) for v in (given_old if scale == 3 else [given_old])]
+            print(f"WARNING: {flag_old} is in angstrom (earlier releases); read as {flag_new} {' '.join(f'{v:g}' for v in as_nm)} nm. "
+                  f"Use {flag_new} (nm)", file=sys.stderr)
+        elif given_new is not None:
+            setattr(args, old, [nm_to_angstrom(v) for v in given_new] if scale == 3 else nm_to_angstrom(given_new))
+    if args.fit_max_core_rmsd is None:
+        args.fit_max_core_rmsd = Settings().fit_max_core_rmsd_a
 
 
 def orientation_request(args) -> OrientationRequest:
@@ -160,12 +209,14 @@ def make_parser() -> argparse.ArgumentParser:
                         help="where an embedded complex goes in the frame: hole = where the frame's own protein was; free = "
                              "the stretch of membrane farthest from that protein, an unbroken bilayer, for a complex much smaller "
                              "than the frame's receptor (e.g. one transmembrane helix) (default: %(default)s)")
-    parser.add_argument("--box", nargs=3, type=float, metavar=("X", "Y", "Z"),
-                        help=f"opt-in box edges in A (default: BOX = {BOX}: the membrane is sliced to the complex plus --xy-buffer "
+    parser.add_argument("--box-nm", nargs=3, type=float, metavar=("X", "Y", "Z"),
+                        help=f"opt-in box edges in nm (default: BOX = {BOX}: the membrane is sliced to the complex plus --xy-buffer "
                              "in x and y, and z is sized around the bilayer midplane); x and y may only be smaller than the "
                              "membrane patch, which is then cut around the complex, z must leave the default water padding")
-    parser.add_argument("--bilayer-z", type=float, metavar="Z",
-                        help="z of the bilayer centre in the all-atom input, in A (default: found from the hydrophobic belt)")
+    parser.add_argument("--box", nargs=3, type=float, metavar=("X", "Y", "Z"), help=argparse.SUPPRESS)  # earlier releases: edges in A
+    parser.add_argument("--bilayer-z-nm", type=float, metavar="Z",
+                        help="z of the bilayer centre in the all-atom input, in nm (default: found from the hydrophobic belt)")
+    parser.add_argument("--bilayer-z", type=float, metavar="Z", help=argparse.SUPPRESS)  # earlier releases: A
     parser.add_argument("--dellipid", action="append", default=[], metavar="LIPID",
                         help=f"remove every molecule of this lipid (repeatable): {', '.join(LIPID_NAMES)}")
     parser.add_argument("--addlipid", metavar="LIPID",
@@ -173,7 +224,14 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--exclude-disulfide", action="append", default=[], metavar="CHAIN:RESID-CHAIN:RESID",
                         help="keep this cysteine pair reduced although its SG atoms are close enough to be bonded "
                              "(repeatable), in the input's own numbering, e.g. A:860-A:1252")
-    parser.add_argument("-o", "--out", type=Path, help="output directory (default: ./<coarse-grain stem>_membraneforger)")
+    parser.add_argument("-o", "--out", type=Path,
+                        help="output directory (default: ./<all-atom input stem>_membraneforger, also with --runs, whose frames each get a "
+                             "subfolder; with --membrane the stem of that file)")
+    parser.add_argument("--overwrite", action="store_true",
+                        help="build into an --out that already holds the outputs of an earlier build, replacing them (otherwise refused)")
+    parser.add_argument("--overwrite-restart", action="store_true",
+                        help="with --overwrite, also when --out holds checkpoints or trajectories of a simulation started from the build; "
+                             "those files are never deleted, but em.gro, topol.top and the index files they depend on are replaced")
     parser.add_argument("--name", help="system name for logs and [ system ] (default: output directory name)")
     parser.add_argument("--toppar", type=Path, default=os.environ.get("MEMBRANEFORGER_TOPPAR"),
                         help="force-field directory with charmm36.ff/, toppar/, protein_parameters/ "
@@ -185,8 +243,10 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mstool-python", help="python interpreter that can import mstool (default: the one running this)")
     parser.add_argument("--ntomp", type=int, default=os.cpu_count() or 1, help="threads (default: all cores)")
     parser.add_argument("--nsteps", type=int, default=NSTEPS, help="maximum EM steps (default: %(default)s)")
-    parser.add_argument("--fit-max-core-rmsd", type=float, default=defaults.fit_max_core_rmsd_a, metavar="A",
-                        help="largest accepted core RMSD of the AA-on-CG rigid fit (default: %(default)s A)")
+    parser.add_argument("--fit-max-core-rmsd-nm", type=float, default=None, metavar="NM",
+                        help="largest accepted core RMSD of the AA-on-CG rigid fit, in nm "
+                             f"(default: {angstrom_to_nm(defaults.fit_max_core_rmsd_a):g})")
+    parser.add_argument("--fit-max-core-rmsd", type=float, default=None, metavar="A", help=argparse.SUPPRESS)  # earlier releases: A
     parser.add_argument("--fit-min-core-fraction", type=float, default=defaults.fit_min_core_fraction, metavar="F",
                         help="smallest accepted fraction of backbone pairs kept by the fit (default: %(default)s)")
     parser.add_argument("--membrane", type=Path, metavar="PDB",
@@ -215,8 +275,12 @@ def make_parser() -> argparse.ArgumentParser:
     orient.add_argument("--ppm-heteroatoms", action="store_true", help="advanced: submit the anchor chains' heteroatoms to PPM too")
     orient.add_argument("--opm-file", type=Path, metavar="PDB", help="an already downloaded OPM/OPRLM coordinate file (offline use)")
     orient.add_argument("--opm-cache", type=Path, metavar="DIR", help="cache for downloaded OPM files (default: ~/.cache/membraneforger/opm)")
-    parser.add_argument("--xy-buffer", type=float, default=defaults.box_xy_buffer_nm, metavar="NM",
+    parser.add_argument("--xy-buffer", "--xy-buffer-nm", dest="xy_buffer", type=float, default=defaults.box_xy_buffer_nm, metavar="NM",
                         help="membrane kept around the complex on each side in x and y when the box is auto (default: %(default)s nm)")
+    parser.add_argument("--counterion-mode", choices=("additive", "inclusive"), default=defaults.counterion_mode,
+                        help="additive: neutralizing counterions plus the requested 0.15 M NaCl pairs on top; inclusive: the "
+                             "CHARMM-GUI 2017 rule, the counterion species equals the NaCl target and the other ion target - |charge| "
+                             "(default: %(default)s)")
     check = parser.add_argument_group("slice validation (the sliced membrane against the embedded membrane it was cut from)")
     check.add_argument("--apl-validate", choices=("yes", "no"), default="yes" if defaults.apl_validate else "no",
                        help="stop before backmapping when a leaflet's Voronoi APL changes by more than --apl-tolerance (default: %(default)s)")
@@ -227,8 +291,10 @@ def make_parser() -> argparse.ArgumentParser:
     check.add_argument("--cg-validate", choices=("yes", "no"), default="yes" if defaults.cg_validate else "no",
                        help="stop before embedding when the coarse-grained frame has an empty leaflet, a broken molecule, a strongly "
                             "tilted bilayer or pervasive bead overlaps (default: %(default)s)")
-    check.add_argument("--no-slice-offset", action="store_true",
-                       help="keep the slice window centred on the complex instead of choosing the offset that best preserves lipid density")
+    check.add_argument("--slice-offset-search", action="store_true",
+                       help="opt in to shifting the slice window by up to 0.5 nm to the offset that best preserves lipid density "
+                            "(default: the window is centred on the complex, which had the smaller APL deviation in the bundled frames)")
+    check.add_argument("--no-slice-offset", action="store_true", help=argparse.SUPPRESS)  # kept from earlier releases: centring is now the default
     return parser
 
 
@@ -268,6 +334,7 @@ def main(argv: list | None = None) -> int:
     """Run one build from command-line arguments and return its exit code."""
     parser = make_parser()
     args = parser.parse_args(argv)
+    resolve_lengths(args, parser)
     if args.list_membranes:
         print(describe_bundled_membranes())
         return 0
@@ -303,9 +370,9 @@ def main(argv: list | None = None) -> int:
         if path and not path.is_file():
             parser.error(f"missing input file {path}")
     if args.box and (len(args.box) != 3 or min(args.box) <= 0):
-        parser.error("--box needs three positive edge lengths in A")
+        parser.error("--box-nm needs three positive edge lengths in nm")
     if args.membrane and (args.box or args.dellipid or args.addlipid or args.embed or args.embed_site != "hole"):
-        parser.error("--box, --dellipid, --addlipid, --embed and --embed-site need --aa and --cg, not --membrane")
+        parser.error("--box-nm, --dellipid, --addlipid, --embed and --embed-site need --aa and --cg, not --membrane")
     if args.embed_site != "hole" and not embed:
         parser.error("--embed-site applies when the protein is embedded: a bundled membrane (--cg 1, 2 or a frame name) or --embed")
     try:
@@ -336,20 +403,19 @@ def main(argv: list | None = None) -> int:
         parser.error(str(exc))
     if orientation.mode == "none" and orientation.residues and not args.membrane:
         if args.bilayer_z is not None:
-            parser.error("--orient-residues with --orientation none sets the bilayer centre from that segment; give it or --bilayer-z, not both")
+            parser.error("--orient-residues with --orientation none sets the bilayer centre from that segment; give it or --bilayer-z-nm, not both")
         if not embed:
             parser.error("--orient-residues with --orientation none places an embedded protein (a bundled membrane or --embed); "
                          "a fitted frame takes the coarse-grained protein's own pose")
     if orientation.mode != "none" and args.bilayer_z is not None and not args.membrane:
-        parser.error("--bilayer-z applies with --orientation none; an oriented complex has its bilayer centre at z = 0")
+        parser.error("--bilayer-z-nm applies with --orientation none; an oriented complex has its bilayer centre at z = 0")
     if args.membrane and (orientation.mode != "none" and (orientation.chains or orientation.residues or args.orientation or args.pdb_id)):
         parser.error("--membrane starts from an assembled system; membrane orientation options do not apply to it")
     if args.membrane:
         orientation = OrientationRequest(mode="none")
     if orientation.opm_file and not orientation.opm_file.is_file():
         parser.error(f"missing --opm-file {orientation.opm_file}")
-    source = args.all_atom if args.runs > 1 else (args.membrane or args.coarse_grain)
-    out = (args.out or Path.cwd() / f"{source.stem}_membraneforger").resolve()
+    out = (args.out or default_out(args.all_atom or args.membrane)).resolve()
     if not args.xy_buffer > 0:
         parser.error("--xy-buffer must be positive")
     if not args.apl_tolerance > 0:
@@ -357,11 +423,13 @@ def main(argv: list | None = None) -> int:
     settings = Settings(fit_max_core_rmsd_a=args.fit_max_core_rmsd, fit_min_core_fraction=args.fit_min_core_fraction,
                         box_xy_buffer_nm=args.xy_buffer, apl_validate=args.apl_validate == "yes", apl_slice_tolerance_percent=args.apl_tolerance,
                         rdf_validate=args.rdf_validate == "yes", cg_validate=args.cg_validate == "yes",
-                        slice_optimize_offset=not args.no_slice_offset)
+                        slice_optimize_offset=args.slice_offset_search and not args.no_slice_offset,
+                        counterion_mode=args.counterion_mode)
     session = Session(out=out, name=args.name or out.name, gmx=gmx, forcefield=forcefield, data=data, python=python,
                       ntomp=args.ntomp, nsteps=args.nsteps, settings=settings, embed=embed, embed_site=args.embed_site,
                       box_a=box, bilayer_z_a=args.bilayer_z, delete_lipids=list(args.dellipid), add_lipid=args.addlipid,
-                      exclude_disulfides=exclude_disulfides, orientation=orientation)
+                      exclude_disulfides=exclude_disulfides, orientation=orientation,
+                      overwrite=args.overwrite, overwrite_restart=args.overwrite_restart)
     resolved = [p.resolve() if p else None for p in (args.all_atom, args.coarse_grain, args.membrane)]
     if args.runs > 1:
         return run_sessions(session, resolved[0], frames, [sys.executable] + sys.argv)
