@@ -1,11 +1,11 @@
 #!/bin/bash
-# MembraneForger on Gemini (City of Hope): slurm/run_membraneforger.sbatch with blocks 1 to 3 filled in for that
+# MembraneForger on Gemini (City of Hope): membraneforger/slurm/run_membraneforger.sbatch with blocks 1 to 3 filled in for that
 # cluster. It builds the bundled example complex (6WHC) in the first five kappa opioid receptor membrane frames (KOR1, KOR2, KOR3, KOR5, KOR6), as a check of the
 # installation and a worked example of RUNS > 1.
 #
-#   bash ~/MembraneForger/slurm/setup.sh            # once, on a login node (Python, OpenMM, mstool; GROMACS is a module)
+#   bash ~/MembraneForger/membraneforger/slurm/setup.sh            # once, on a login node (Python, OpenMM, mstool; GROMACS is a module)
 #   mkdir -p ~/mforger_test && cd ~/mforger_test
-#   cp ~/MembraneForger/slurm/examples/gemini_6WHC.sbatch .
+#   cp ~/MembraneForger/membraneforger/slurm/examples/gemini_6WHC.sbatch .
 #   sbatch gemini_6WHC.sbatch
 #
 # Expected: mforger_gemini_<job>_0.log ends with "[6WHC] 5 of 5 runs passed", one "KOR<n>: ... PASS ..." line per
@@ -71,9 +71,9 @@ fi
 # Fail in seconds, not after an hour of backmapping, when something is missing.
 [ -d "$REPO/membraneforger" ] || die "REPO=$REPO does not contain the membraneforger package (block 2)"
 command -v "${PY%% *}" >/dev/null 2>&1 || [ -x "$PY" ] \
-    || die "Python '$PY' not found: run 'bash $REPO/slurm/setup.sh' on a login node first, or set PY (block 2)"
+    || die "Python '$PY' not found: run 'bash $REPO/membraneforger/slurm/setup.sh' on a login node first, or set PY (block 2)"
 "$PY" -c "import numpy, scipy, networkx, pandas, openmm, mstool" 2>/dev/null \
-    || die "Python '$PY' lacks the requirements (numpy scipy networkx pandas openmm mstool): see slurm/README.md"
+    || die "Python '$PY' lacks the requirements (numpy scipy networkx pandas openmm mstool): see membraneforger/slurm/README.md"
 if [ "$task" -ge "${#NAMES[@]}" ]; then
     echo "task $task: NAMES has only ${#NAMES[@]} entries, nothing to do"
     exit 0
@@ -86,7 +86,7 @@ fi
 name="${NAMES[$task]%.pdb}"
 pdb="$WORK/$name.pdb"
 if [ ! -f "$pdb" ] && [ "$name" = 6WHC ]; then
-    cp "$REPO/examples/preeq_cg_cellmem/6WHC_MTZP_prot-lig.pdb" "$pdb" && echo "copied the bundled example to $pdb"
+    cp "$REPO/membraneforger/examples/preeq_cg_cellmem/6WHC_MTZP_prot-lig.pdb" "$pdb" && echo "copied the bundled example to $pdb"
 fi
 [ -f "$pdb" ] || die "input $pdb not found (NAMES, block 3)"
 version=$($GMX --version 2>/dev/null | grep "GROMACS version") || die "GROMACS command '$GMX' does not run (block 2)"
@@ -96,7 +96,7 @@ read -ra extra <<<"$EXTRA"
 args=(--aa "$pdb" --cg "$MEMBRANE" --out "$WORK/$name" --gmx "$GMX" --ntomp "${SLURM_CPUS_PER_TASK:-8}")
 [ "${RUNS:-1}" -gt 1 ] && args+=(--runs "$RUNS")
 if [[ " $ORIENT $EXTRA " != *" --orientation none "* && " $ORIENT $EXTRA " != *" --orientation opm "* ]]; then
-    [ -x "$PPM" ] || die "PPM 3.0 executable $PPM not found (block 2; see $REPO/slurm/README.md)"
+    [ -x "$PPM" ] || die "PPM 3.0 executable $PPM not found (block 2; see $REPO/membraneforger/slurm/README.md)"
     [ -f "$(dirname "$PPM")/res.lib" ] || die "res.lib must sit next to $PPM"
     args+=(--ppm-exe "$PPM")
 fi

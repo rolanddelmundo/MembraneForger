@@ -517,7 +517,7 @@ def check_disulfide_geometry(run: Path, structure: str) -> tuple[dict, list]:
     return report, fails
 
 
-DEFAULT_DATA = Path(__file__).resolve().parents[1] / "backmap_data"  # map.dat: the GM3 chirality definitions the stereo check uses
+DEFAULT_DATA = Path(__file__).resolve().parent / "backmap_data"  # map.dat: the GM3 chirality definitions the stereo check uses
 
 
 def audit_run(run: Path, gmx: str, structure: str = "em.gro", settings: Settings = Settings(), data: Path | None = None) -> dict:

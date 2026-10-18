@@ -22,10 +22,10 @@ __all__ = ['BUNDLED_MEMBRANES', 'bundled_frames', 'bundled_membrane', 'bundled_s
            'make_parser', 'locate_forcefield', 'locate_data', 'parse_chains', 'parse_box', 'parse_disulfide_pair',
            'orientation_request', 'run_sessions', 'main']
 
-REPOSITORY = Path(__file__).resolve().parents[1]
-BUNDLED_DIR = REPOSITORY / "examples" / "preeq_cg_cellmem"
+PACKAGE_DIR = Path(__file__).resolve().parent
+BUNDLED_DIR = PACKAGE_DIR / "examples" / "preeq_cg_cellmem"
 # --cg 1 / --cg 2: one frame drawn at random from the bundled pre-equilibrated membranes of that receptor
-# (examples/preeq_cg_cellmem/README.md lists them); the chosen file is logged and recorded in run_manifest.json.
+# (membraneforger/examples/preeq_cg_cellmem/README.md lists them); the chosen file is logged and recorded in run_manifest.json.
 BUNDLED_MEMBRANES = {"1": "GPR*_cg_cellmem.gro", "2": "KOR*_cg_cellmem.gro"}
 # --cg NAME: one particular bundled frame by name (--list-membranes lists them), for a repeatable build.
 BUNDLED_FRAME_SUFFIX = "_cg_cellmem.gro"
@@ -35,7 +35,7 @@ RECEPTORS = {"GPR": "GPR139", "KOR": "kappa opioid receptor"}
 
 
 def bundled_frames() -> dict:
-    """The bundled frames by name (for example KOR1 or GPR5), each mapped to its file in examples/preeq_cg_cellmem/."""
+    """The bundled frames by name (for example KOR1 or GPR5), each mapped to its file in membraneforger/examples/preeq_cg_cellmem/."""
     return {p.name[:-len(BUNDLED_FRAME_SUFFIX)].upper(): p for p in sorted(BUNDLED_DIR.glob("*" + BUNDLED_FRAME_SUFFIX))
             if p.name[:-len(BUNDLED_FRAME_SUFFIX)][:3].upper() in RECEPTORS}
 
@@ -44,7 +44,7 @@ def bundled_series(code: str) -> list:
     """The bundled frames of --cg 1 (GPR139) or --cg 2 (kappa opioid receptor), in name order."""
     frames = sorted(BUNDLED_DIR.glob(BUNDLED_MEMBRANES[code]))
     if not frames:
-        raise SystemExit(f"no bundled membrane matches examples/preeq_cg_cellmem/{BUNDLED_MEMBRANES[code]}")
+        raise SystemExit(f"no bundled membrane matches membraneforger/examples/preeq_cg_cellmem/{BUNDLED_MEMBRANES[code]}")
     return frames
 
 
@@ -71,7 +71,7 @@ def bundled_membrane(code: str) -> Path | None:
 
 def describe_bundled_membranes() -> str:
     """The text of --list-membranes: every bundled frame by name."""
-    lines = ["bundled Martini 3 cell membranes (examples/preeq_cg_cellmem/, 50 us each; pass a name to --cg):"]
+    lines = ["bundled Martini 3 cell membranes (membraneforger/examples/preeq_cg_cellmem/, 50 us each; pass a name to --cg):"]
     for name, path in bundled_frames().items():
         lines.append(f"  {name:<5} {RECEPTORS[name[:3]]:<22} {path.name}")
     lines.append("--cg 1 picks a GPR139 frame at random and --cg 2 a kappa opioid receptor frame; --runs N builds the complex in "
@@ -177,10 +177,10 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--name", help="system name for logs and [ system ] (default: output directory name)")
     parser.add_argument("--toppar", type=Path, default=os.environ.get("MEMBRANEFORGER_TOPPAR"),
                         help="force-field directory with charmm36.ff/, toppar/, protein_parameters/ "
-                             "(default: $MEMBRANEFORGER_TOPPAR, else forcefield/ in this repository)")
+                             "(default: $MEMBRANEFORGER_TOPPAR, else membraneforger/forcefield/ in this repository)")
     parser.add_argument("--data", type=Path, default=os.environ.get("MEMBRANEFORGER_DATA"),
                         help="backmapping data directory with map.dat and extra force-field XML such as GM3.xml "
-                             "(default: $MEMBRANEFORGER_DATA, else backmap_data/ in this repository)")
+                             "(default: $MEMBRANEFORGER_DATA, else membraneforger/backmap_data/ in this repository)")
     parser.add_argument("--gmx", help="GROMACS command (default: gmx, gmx_mpi or gmx_d on PATH)")
     parser.add_argument("--mstool-python", help="python interpreter that can import mstool (default: the one running this)")
     parser.add_argument("--ntomp", type=int, default=os.cpu_count() or 1, help="threads (default: all cores)")
@@ -231,7 +231,7 @@ def make_parser() -> argparse.ArgumentParser:
 
 def locate_forcefield(requested: Path | None) -> Path:
     """Return the force-field directory, checking it holds what the topology builder reads."""
-    forcefield = requested or next((p for p in (REPOSITORY / "forcefield", REPOSITORY / "modified_pipeline") if p.is_dir()), None)
+    forcefield = requested or next((p for p in (PACKAGE_DIR / "forcefield", PACKAGE_DIR / "modified_pipeline") if p.is_dir()), None)
     if forcefield is None:
         raise SystemExit("cannot find the force-field directory; pass --toppar or set MEMBRANEFORGER_TOPPAR")
     forcefield = Path(forcefield).resolve()
@@ -244,7 +244,7 @@ def locate_forcefield(requested: Path | None) -> Path:
 
 def locate_data(requested: Path | None) -> Path:
     """Return the backmapping data directory (map.dat and extra force-field XML files)."""
-    candidates = (REPOSITORY / "backmap_data", REPOSITORY / "Incretin_backmap")
+    candidates = (PACKAGE_DIR / "backmap_data", PACKAGE_DIR / "Incretin_backmap")
     return Path(requested or next((p for p in candidates if p.is_dir()), candidates[0])).resolve()
 
 

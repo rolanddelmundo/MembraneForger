@@ -43,8 +43,8 @@ periodic in that box: wrapping folds the corners of the rotated square onto its 
 land on top of each other there, the opposite corners stay empty, and the "diamond" one sees when rendering the file
 is real data, not drift. The 18 KOR and GPR139 frames first bundled (30 us) were shipped like that, each with its own angle (3 to
 83 degrees; the 6WHC example frame was not), and were rotated back onto their boxes with
-`examples/align_frames.py` (coordinates and velocities, same names, same formatting). The bundled frames are the 50 us
-frames of the simulations as written by GROMACS; `examples/align_frames.py` finds no rotation in any of them.
+`membraneforger/examples/align_frames.py` (coordinates and velocities, same names, same formatting). The bundled frames are the 50 us
+frames of the simulations as written by GROMACS; `membraneforger/examples/align_frames.py` finds no rotation in any of them.
 
 MembraneForger detects this when it reads a frame (`validation.align_frame_to_box`): it counts bead pairs of
 different lipids closer than 0.30 nm after wrapping (an equilibrated Martini membrane has none; a rotated frame has
@@ -359,7 +359,7 @@ lipid topologies, and for GM3 (GLPA) those 23 rows cover only the ceramide C2/C3
 ring chairs and sialic acid C7/C8; a sugar carbon with an inverted configuration can sit in a correct chair and pass
 them. The audit therefore also tests, geometrically, all 16 sugar stereocentres (glucose C1-C5, galactose C1-C5,
 sialic acid C2 and C4-C8) and the two ceramide trans bonds of every GM3 with the chirality definitions of
-`backmap_data/map.dat` (`membraneforger/stereo.py`, the same test as `examples/check_gm3_stereo.py`), and fails the
+`membraneforger/backmap_data/map.dat` (`membraneforger/stereo.py`, the same test as `membraneforger/examples/check_gm3_stereo.py`), and fails the
 build on any inverted centre or cis bond: a configuration never corrects itself in MD. The same test runs on
 `membrane.pdb` right after backmapping, where a wrong GM3 counts as a wrong configuration in the backmap verdict and
 another seed is tried, so a build only reaches the audit with a GM3 that was wrong on every attempt.
@@ -526,7 +526,7 @@ the build's own checks). Where the thresholds live: `Settings` in `config.py`
   and only needed to read xtc/trr directly (write frames with `gmx trjconv -sep` otherwise).
 - No GIPR build or trajectory is part of this repository; the before/after numbers above are from the bundled
   frames and the 6WHC example, which show the same defect with the old rule and the same repair.
-- The bundled frame files were rotated back onto their boxes in place (`examples/align_frames.py`); the reader still
+- The bundled frame files were rotated back onto their boxes in place (`membraneforger/examples/align_frames.py`); the reader still
   checks every frame, corrects a rotated user frame the same way, and refuses one whose coordinates do not fit its
   box at all rather than guessing.
 

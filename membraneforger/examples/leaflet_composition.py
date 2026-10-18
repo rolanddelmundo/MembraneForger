@@ -1,6 +1,6 @@
 """Per-leaflet lipid composition of Martini 3 membrane frames, averaged over all the frames given.
 
-    python examples/leaflet_composition.py examples/preeq_cg_cellmem/*_cg_cellmem.gro
+    python membraneforger/examples/leaflet_composition.py membraneforger/examples/preeq_cg_cellmem/*_cg_cellmem.gro
 
 Lipids are assigned to the upper or lower leaflet by the mean z of their beads relative to the bilayer midplane.
 GM3 (DPG3) is split into consecutive CER/GLC/GAL/NMC residues in Martini 3 frames and is counted by its CER residue.

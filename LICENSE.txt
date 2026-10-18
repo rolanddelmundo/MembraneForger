@@ -20,5 +20,5 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-The files under forcefield/ and backmap_data/ are third-party force-field and
+The files under membraneforger/forcefield/ and membraneforger/backmap_data/ are third-party force-field and
 mapping data and remain under the terms of their own projects.

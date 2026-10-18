@@ -4,16 +4,16 @@
 |---|---|---|
 | `setup.sh` | Builds a self-contained Python environment (plus a CPU GROMACS and gfortran) inside the repository, and compiles PPM 3.0 if its source is present. No Anaconda, modules or root needed. | once per user, on a login node |
 | `run_membraneforger.sbatch` | Builds one all-atom complex per array task in a bundled membrane: orientation, Martini 3 slice, backmapping, validation, energy minimization. Writes `<name>/em.gro` next to the input PDB. | copy next to your PDB files, fill in the three blocks, `sbatch` it |
-| `examples/gemini_6WHC.sbatch` | The same script with the blocks filled in for the Gemini cluster (City of Hope): builds the bundled 6WHC example in five membranes. A worked example and an installation check. | `sbatch` as is on Gemini; adapt on another cluster |
-| `examples/array_cases.sbatch` | An array job driven by a tab-separated case table (name, PDB, membrane, extra options); the older template, moved here from `membraneforger/cpu.submit`. | `sbatch --array=...` with `REPO`, `CASES` and `OUTROOT` set, as described in the script header |
-| `examples/test_contact_gates.sbatch` | Repeats a build that failed, with a branch checked out as a worktree beside the repository (fill in `REPO`, `BRANCH` and `PREVIOUS`; it uses the `gmx` that `setup.sh` built), after running the unit tests. The log ends with the new build's result and its `contacts.json` summary. | from the folder that holds the failed output folder |
+| `membraneforger/examples/gemini_6WHC.sbatch` | The same script with the blocks filled in for the Gemini cluster (City of Hope): builds the bundled 6WHC example in five membranes. A worked example and an installation check. | `sbatch` as is on Gemini; adapt on another cluster |
+| `membraneforger/examples/array_cases.sbatch` | An array job driven by a tab-separated case table (name, PDB, membrane, extra options); the older template, moved here from `membraneforger/cpu.submit`. | `sbatch --array=...` with `REPO`, `CASES` and `OUTROOT` set, as described in the script header |
+| `membraneforger/examples/test_contact_gates.sbatch` | Repeats a build that failed, with a branch checked out as a worktree beside the repository (fill in `REPO`, `BRANCH` and `PREVIOUS`; it uses the `gmx` that `setup.sh` built), after running the unit tests. The log ends with the new build's result and its `contacts.json` summary. | from the folder that holds the failed output folder |
 
 ```bash
 git clone https://github.com/rolanddelmundo/MembraneForger.git ~/MembraneForger
-bash ~/MembraneForger/slurm/setup.sh          # about 5 minutes; needs internet
+bash ~/MembraneForger/membraneforger/slurm/setup.sh          # about 5 minutes; needs internet
 
 mkdir ~/my_project && cd ~/my_project         # put your PDB files here
-cp ~/MembraneForger/slurm/run_membraneforger.sbatch .
+cp ~/MembraneForger/membraneforger/slurm/run_membraneforger.sbatch .
 # fill in blocks 1 to 3 (below)
 sbatch run_membraneforger.sbatch
 ```
@@ -81,8 +81,8 @@ OPM team's program. It is not redistributed with MembraneForger.
 
 1. Get the PPM 3.0 source folder `ppm3_code/` (it contains a Makefile and `res.lib`) from the OPM team, or from a
    lab member who already has it.
-2. Copy it to `~/MembraneForger/ppm3_code/` and run `bash slurm/setup.sh` again: it compiles `immers` with the
-   environment's gfortran. For a source folder elsewhere: `PPM_SRC=/path/to/ppm3_code bash slurm/setup.sh`.
+2. Copy it to `~/MembraneForger/ppm3_code/` and run `bash membraneforger/slurm/setup.sh` again: it compiles `immers` with the
+   environment's gfortran. For a source folder elsewhere: `PPM_SRC=/path/to/ppm3_code bash membraneforger/slurm/setup.sh`.
 3. The default `PPM` in block 2 then works. A lab can share one compiled copy: point `PPM` at it (`res.lib` must
    stay next to `immers`).
 

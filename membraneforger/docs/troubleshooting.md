@@ -18,7 +18,7 @@ the stage is recorded in `run_manifest.json` (`error.stage`).
 
 | Symptom | Likely cause | What to do |
 |---|---|---|
-| `ERROR` in stage `inputs` | water, bulk ions, an insertion code, duplicate atoms, or a residue with no topology | Remove the offending records. A ligand needs its `.itp` in `forcefield/toppar/`. |
+| `ERROR` in stage `inputs` | water, bulk ions, an insertion code, duplicate atoms, or a residue with no topology | Remove the offending records. A ligand needs its `.itp` in `membraneforger/forcefield/toppar/`. |
 | `Multiple protein chains were detected` (stage `orient`) | several protein chains and no anchor chain named | Add `--orient-chain` with the chain the error suggests. |
 | The build asks for `--nterm-side` | PPM is orienting the protein and no OPM entry gives the side | Add `--nterm-side in` or `out` for residue 1 of that chain as it is in your file. |
 | Protein upside down in `int/oriented.pdb` | `--nterm-side` wrong for this file, often because a signal peptide is still attached | Rerun with the other side. The extracellular domain must end up at +z. |

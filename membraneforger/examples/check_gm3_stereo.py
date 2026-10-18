@@ -5,18 +5,18 @@
 #//=============================================================
 """Report GM3 ganglioside sugar stereocentres and ceramide trans bonds with the wrong configuration in a .gro or .pdb.
 
-    python examples/check_gm3_stereo.py em.gro            # or any frame of a trajectory, e.g. from gmx trjconv
-    python examples/check_gm3_stereo.py membrane.pdb
+    python membraneforger/examples/check_gm3_stereo.py em.gro            # or any frame of a trajectory, e.g. from gmx trjconv
+    python membraneforger/examples/check_gm3_stereo.py membrane.pdb
 
 The same test the build's audit runs (membraneforger/stereo.py): all 16 sugar stereocentres (glucose C1-C5, galactose
-C1-C5, sialic acid C2 and C4-C8) with the chirality definitions of backmap_data/map.dat, and the ceramide C4=C5 double
+C1-C5, sialic acid C2 and C4-C8) with the chirality definitions of membraneforger/backmap_data/map.dat, and the ceramide C4=C5 double
 bond and amide with its [ trans ] definitions. Neither a stereocentre nor a C=C bond can invert in a classical MD
 run, so the result for the first frame holds for the whole trajectory. Exit code 1 when any molecule is wrong.
 """
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 from membraneforger.stereo import check_gm3_stereo  # noqa: E402
 
@@ -26,7 +26,7 @@ def main() -> int:
         print(__doc__)
         return 2
     path = Path(sys.argv[1])
-    report, fails = check_gm3_stereo(path, REPO / "backmap_data")
+    report, fails = check_gm3_stereo(path, REPO / "membraneforger" / "backmap_data")
     if not report["molecules"]:
         print(f"{path}: no GLPA or GM3 residues")
         return 0

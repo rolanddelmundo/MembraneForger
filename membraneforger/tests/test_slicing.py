@@ -15,8 +15,8 @@ import numpy as np
 from .common import AA_PDB, CG_GRO, FORCEFIELD, MAPPING, REPO, failure, mf
 
 OPM_6WHC = Path(__file__).parent / "data" / "6whc_opm_chainR.pdb"
-KOR_FRAME = REPO / "examples" / "preeq_cg_cellmem" / "KOR1_cg_cellmem.gro"
-GPR139_FRAME = REPO / "examples" / "preeq_cg_cellmem" / "GPR5_cg_cellmem.gro"
+KOR_FRAME = REPO / "membraneforger" / "examples" / "preeq_cg_cellmem" / "KOR1_cg_cellmem.gro"
+GPR139_FRAME = REPO / "membraneforger" / "examples" / "preeq_cg_cellmem" / "GPR5_cg_cellmem.gro"
 CELL = [20.0, 20.0, 12.0]
 MIDPLANE = 6.0
 

@@ -14,13 +14,13 @@
 # build is repeated from its own run_manifest.json command into a new output folder.
 #
 #   1. edit the USER-DEFINED block (REPO, BRANCH, PREVIOUS)
-#   2. from the folder that holds the failed output folder:   sbatch $REPO/slurm/examples/test_contact_gates.sbatch
+#   2. from the folder that holds the failed output folder:   sbatch $REPO/membraneforger/slurm/examples/test_contact_gates.sbatch
 #
 # The log ends with the new build's PASS/FAIL line and the contact-gate summary (contacts.json by stage).
 
 set -uo pipefail
 # ---------------------------------------------------------------- USER-DEFINED
-REPO="${MFORGER_REPO:-$HOME/MembraneForger}" # the cloned repository (where slurm/setup.sh built env/)
+REPO="${MFORGER_REPO:-$HOME/MembraneForger}" # the cloned repository (where membraneforger/slurm/setup.sh built env/)
 BRANCH="fix/contact-gates"                  # the branch to test
 PREVIOUS="${SLURM_SUBMIT_DIR:-$PWD}/test_out"   # the failed build: its run_manifest.json gives the command to repeat
 OUT="${PREVIOUS}_gates"                     # where the repeated build goes (removed first if it exists)
@@ -32,7 +32,7 @@ RUN_UNIT_TESTS=1                            # 1 = run the unit tests first (abou
 die() { echo "ERROR: $*"; exit 1; }
 PY="$REPO/env/bin/python"
 WORKTREE="$REPO-$(echo "$BRANCH" | tr '/' '-')"
-[ -x "$PY" ] || die "$PY not found: run 'bash $REPO/slurm/setup.sh' on a login node first (or fix REPO)"
+[ -x "$PY" ] || die "$PY not found: run 'bash $REPO/membraneforger/slurm/setup.sh' on a login node first (or fix REPO)"
 [ -f "$PREVIOUS/run_manifest.json" ] || die "$PREVIOUS/run_manifest.json not found: PREVIOUS must be a finished build folder"
 
 echo "host $(hostname) $(date '+%F %T')"
