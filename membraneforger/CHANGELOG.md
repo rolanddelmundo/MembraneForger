@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **The coarse-grained frame is graded before embedding** (gate 0, `membrane_validation.md`): both leaflets populated, absolute
+  leaflet APL and bilayer thickness, bilayer tilt, lipids on the wrong leaflet, broken molecules and lipid-protein bead
+  overlaps, as PASS / WARNING / FAIL records. The eight bundled frames pass. A FAIL stops the build
+  unless `--cg-validate no`.
 - **Repository layout.** The repository root is now `README.md`, `LICENSE.txt`, `AUTHORS`, `CITATION.cff` and the
   `membraneforger/` folder, as in BaNDyT. `forcefield/`, `backmap_data/`, `examples/`, `docs/`, `slurm/`,
   `CHANGELOG.md` and `ruff.toml` moved into `membraneforger/` (`python -m membraneforger` still runs from the root;
@@ -17,11 +21,15 @@
   simulation run, so the numbering has gaps). `KOR4`, `KOR8` and `GPR1` to `GPR4`, `GPR6` to `GPR9` are gone: the
   GPR139 series now holds one frame, so `--cg 1 --runs N` accepts N = 1 only. The earlier frames stay in the git
   history. The leaflet composition is unchanged at the precision of the table.
+- **Tutorial numbers re-measured on the 50 µs frames.** Lipids removed by embedding, pocket volumes, single-helix
+  pockets, seam removals, the slice-offset effect and the construction deviation now come from the eight bundled
+  frames (`membraneforger/examples/measure_tutorial_numbers.py`); on these frames the offset search no longer reduces the whole-cell
+  spread. The `KOR1` stage table and its RDF statements are re-measured as well. Statements about the earlier 30 µs frames are labelled as such.
 - **Series and `--runs` limit come from the frames present.** The nine-frame limit is gone: `--runs` is bounded by
   the number of frames the series holds, and the error message names them; `--list-membranes` and the unknown-name
   error list the names that exist.
 - **`--runs N`** builds the complex in N different bundled membranes, the first N frames of the `--cg 1` or `--cg 2`
-  series (at most the number of frames the series holds), one validated system per run in `<out>/<frame>/`. `RUNS` in `slurm/run_membraneforger.sbatch` passes it.
+  series (at most the number of frames the series holds), one validated system per run in `<out>/<frame>/`. `RUNS` in `membraneforger/slurm/run_membraneforger.sbatch` passes it.
 - **Bundled frames by name.** `--cg NAME` builds in one particular bundled membrane (`--list-membranes` lists the names) instead of a random one. `--cg 1`, `--cg 2` and `--cg FILE`
   are unchanged.
 - **Portable Slurm script.** `slurm/run_membraneforger.sbatch` keeps every cluster-specific value in three marked
