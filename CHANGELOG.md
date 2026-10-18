@@ -5,8 +5,9 @@
 - **Repository layout.** The command-line, tutorial, advanced and troubleshooting guides are back in `docs/` and
   `CITATION.cff` is back in the repository root; both had been moved into `archive/`, which broke the README links.
   `membraneforger/cpu.submit` is now `slurm/examples/array_cases.sbatch` and `membraneforger/example.py` is
-  `examples/build_from_python.py` (same content). The README is shorter, and `archive/CONTENTS.md` describes
-  `archive/`. The module map is `docs/modules.md` (was `membraneforger/README.md`) and
+  `examples/build_from_python.py` (same content). The README is shorter. `archive/` (the unmaintained 0.1/0.2 workflow, with its
+  licence texts and notices for the vendored mstool and Martini files) is removed from main; commit `7e26de9` still
+  holds it. The module map is `docs/modules.md` (was `membraneforger/README.md`) and
   `test_contact_gates.sbatch` is in `slurm/examples/`. No code, option, output or data file changed.
 - **Bundled membranes are now 50 µs frames.** The 18 frames at 30 µs are replaced by the 50 µs frame of every
   simulation that reached 50 µs: `KOR1`, `KOR2`, `KOR3`, `KOR5`, `KOR6`, `KOR7`, `KOR9` and `GPR5` (the number is the
@@ -102,8 +103,8 @@ This is a major version because two defaults changed. Commands written for 1.0.0
 
 Two-input pipeline: an all-atom protein–ligand complex plus one Martini 3 coarse-grained frame of the same complex
 become a validated, energy-minimized CHARMM36/GROMACS system. The earlier four-stage workflow (0.1.0, 0.2.0) is kept
-unchanged under `archive/` and is no longer maintained. Tagged as `v1.0.0` without a GitHub release.
+unchanged under `archive/` (removed after 2.0.0, see git history) and is no longer maintained. Tagged as `v1.0.0` without a GitHub release.
 
 ## 0.2.0 (2026-09-02) and 0.1.0 (2026-07-15)
 
-The earlier four-stage workflow. See the GitHub releases and `archive/`.
+The earlier four-stage workflow. See the GitHub releases.
