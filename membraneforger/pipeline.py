@@ -411,11 +411,15 @@ def review_contacts(session: Session, structure: str, solute_atoms: int, stage: 
     return report
 
 
-def refuse_overlaps(report: dict, classes: tuple, when: str) -> None:
-    """Stop the build when the contact check found an overlap of the given classes, or a bond crossing of any class."""
-    contacts = [c for c in report["contacts"] if c["class"] in classes]
-    if contacts or report["crossings"]:
-        kinds = tuple(sorted(set(classes) | {c["class"] for c in report["crossings"]}))
+def refuse_overlaps(report: dict, classes: tuple, when: str, warn_classes: tuple = ()) -> None:
+    """Stop the build when the contact check found an overlap of the given classes, or a bond crossing of any class.
+
+    Contacts and crossings of warn_classes never stop the build here; the caller logs them and the check after
+    minimization decides."""
+    contacts = [c for c in report["contacts"] if c["class"] in classes and c["class"] not in warn_classes]
+    crossings = [c for c in report["crossings"] if c["class"] not in warn_classes]
+    if contacts or crossings:
+        kinds = tuple(sorted((set(classes) - set(warn_classes)) | {c["class"] for c in crossings}))
         raise SystemExit(f"{describe_contacts(report, kinds)} {when}; minimization cannot be trusted to separate them (contacts.json)")
 
 
@@ -439,7 +443,12 @@ def finish_system(session: Session, staged: dict) -> str:
     record["ions"] = run_stage(session, "ions", add_ions, system, topology, gmx, box, session.settings)
     overlaps = run_stage(session, "contacts", review_contacts, session, "solv_ions.gro", staged["solute_atoms"], "solv_ions")
     record["contacts_before_em"] = {k: overlaps[k] for k in ("contacts_by_class", "crossings_by_class")}
-    run_stage(session, "contacts", refuse_overlaps, overlaps, ("membrane", "solvent"), "before EM")
+    tolerated = ("membrane",) if session.settings.membrane_overlap_before_em == "warn" else ()
+    left = {c: overlaps["contacts_by_class"][c] + overlaps["crossings_by_class"][c] for c in tolerated}
+    if any(left.values()):
+        log(out, f"{left['membrane']} membrane contact(s) and bond crossing(s) go into minimization (membrane_overlap_before_em="
+                 f"'warn'; seeds were retried first); the check after EM stops the build if any remains", "WARN")
+    run_stage(session, "contacts", refuse_overlaps, overlaps, ("membrane", "solvent"), "before EM", tolerated)
     index = run_stage(session, "index", make_index, out, topology)
     log(out, "index_ini.ndx: " + ", ".join(f"{k} {v}" for k, v in index.items()))
     record["box_nm"] = box
@@ -486,7 +495,9 @@ def backmap_verdict(staged: dict, review: dict, settings: Settings, last: bool) 
     if heavy:
         problem = (f"{'-'.join(heavy[0]['bond'])} threads the ring of {heavy[0]['ring'][0]} "
                    f"({len(heavy)} heavy-atom threading(s) involving the membrane; minimization cannot undo this)")
-    elif membrane_overlaps:  # lipids on top of each other or of the solute, by the force field's own measure
+    elif membrane_overlaps and (settings.membrane_overlap_before_em == "stop" or not last):
+        # lipids on top of each other or of the solute, by the force field's own measure: worth another seed; on the last
+        # one minimization is left to separate them and the check after EM decides ("warn", the default)
         problem, stage = describe_contacts(overlaps, ("membrane",), limit=2), "contacts"
     elif wrong:
         problem, stage = f"{wrong} lipid stereocentre(s) or double bond(s) have the wrong configuration", "backmap"
