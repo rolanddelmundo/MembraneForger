@@ -7,8 +7,8 @@
 Slicing, the area-per-lipid analysis and the lateral radial distribution functions all need ONE representative
 in-plane position per lipid. It is the headgroup site, which is what "where does this lipid sit in its leaflet"
 means chemically; tail beads wander by up to a lipid length and must not decide anything. The Martini 3 bead names
-are those of the installed mapping (backmap_data/map.dat, membraneforger/martini.py); the atomistic names are those
-of the CHARMM36 topologies under forcefield/toppar/.
+are those of the installed mapping (membraneforger/backmap_data/map.dat, membraneforger/martini.py); the atomistic names are those
+of the CHARMM36 topologies under membraneforger/forcefield/toppar/.
 
     phospholipids (POPC, DOPC, POPE, DOPE, POPS, DOPS, PSM)   PO4                     <->  P   (the phosphate)
     PIP2 (Martini SAP6, atomistic SAPI25)                     PO4 (the diester, not P4/P5) <->  P
@@ -35,7 +35,7 @@ LIPID_SLICE_ANCHORS = {
     "GM3": ("G1", "G2", "G3", "A1", "A2", "A3", "S1", "S2", "S3", "S4", "S5"),  # DPG3: centroid of the three sugars
 }
 
-# The atomistic site(s) that correspond to each anchor, by CHARMM36 residue name (forcefield/toppar/*.itp).
+# The atomistic site(s) that correspond to each anchor, by CHARMM36 residue name (membraneforger/forcefield/toppar/*.itp).
 LIPID_AA_ANCHORS = {
     "POPC": "P", "DOPC": "P", "POPE": "P", "DOPE": "P", "POPS": "P", "DOPS": "P", "PSM": "P",
     "SAPI25": "P", "SAPI": "P",

@@ -75,7 +75,7 @@ STAGE_LABELS = {"cg_frame": "CG frame", "embed": "Embedded CG membrane (referenc
                 "equilibrated": "Equilibrated (trajectory)", "final": "Final production window"}
 AA_LIPIDS = set(LIPID_AA_ANCHORS) | {"POPC", "DOPC", "POPE", "DOPE", "POPS", "DOPS", "PSM"}
 # Figure colours: the first categorical slots of the validated reference palette, assigned by stage, never cycled.
-# Hard guardrails of the gates (docs/membraneforger_tutorial.md 5.3 and 6): (PASS ceiling, WARNING ceiling).
+# Hard guardrails of the gates (membraneforger/docs/membraneforger_tutorial.md 5.3 and 6): (PASS ceiling, WARNING ceiling).
 CG_GATE = {"thickness_percent": (3.0, 5.0), "tilt_deg": (1.0, 3.0), "depth_A": (0.5, 1.5)}
 AA_GATE = {"thickness_percent": (10.0, 15.0), "tilt_deg": (2.0, 5.0), "depth_A": (1.0, 2.5)}
 # Absolute guardrails of the coarse-grained frame the build starts from (validate_cg_frame). The windows are (PASS low, PASS

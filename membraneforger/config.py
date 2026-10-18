@@ -255,7 +255,7 @@ pbc             = xyz
 
 @dataclass(frozen=True)
 class Settings:
-    """Tunable acceptance criteria; every default is documented in docs/tutorial section 8."""
+    """Tunable acceptance criteria; every default is documented in membraneforger/docs/tutorial section 8."""
     # Largest core RMSD (A) between all-atom backbone centres and CG BB beads after the rigid fit. Martini 3
     # elastic-network proteins stay within 1.2-2.6 A of their all-atom parent over 10 us in the repository
     # examples, so 5 A separates "same fold, thermal drift" from "different conformation or wrong chain".
@@ -360,7 +360,7 @@ class Settings:
     # Slice validation against the membrane that was cut (the embedded membrane). The construction check compares the
     # leaflet APL of the slice with the Voronoi areas of the SAME lipids in the uncut membrane: only the new seam can
     # change it. Measured over the 18 bundled frames cut around the 6WHC complex (36 leaflets): median 0.9 %, 95th
-    # percentile 2.7 %, largest 4.0 % (docs/membraneforger_tutorial.md 5.3), while the earlier all-beads-inside rule
+    # percentile 2.7 %, largest 4.0 % (membraneforger/docs/membraneforger_tutorial.md 5.3), while the earlier all-beads-inside rule
     # gave +12 to +32 %. So: PASS up to apl_slice_warning_percent, WARNING up to apl_slice_tolerance_percent, beyond
     # that FAIL and (apl_validate) the build stops before backmapping. The RDF check compares the all-anchor headgroup
     # g(r) of each leaflet with the reference's: first-shell position shift PASS within rdf_peak_warning_a, WARNING

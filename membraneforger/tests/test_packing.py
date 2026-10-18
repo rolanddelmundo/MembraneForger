@@ -284,7 +284,7 @@ class RealFrameGate(unittest.TestCase):
     """The real 6WHC frame: embedded membrane -> slice -> gate, with the report written to a temporary directory."""
 
     def test_the_6whc_slice_passes_the_gate_and_writes_the_report(self):
-        aa, _ = mf.read_all_atom(REPO / "examples/preeq_cg_cellmem/6WHC_MTZP_prot-lig.pdb", REPO / "forcefield")
+        aa, _ = mf.read_all_atom(REPO / "membraneforger/examples/preeq_cg_cellmem/6WHC_MTZP_prot-lig.pdb", REPO / "membraneforger" / "forcefield")
         raw, box = mf.read_cg(CG_GRO)
         cg = mf.classify_cg(raw, MAPPING)
         slab = mf.make_membrane_whole(cg["membrane"], box)

@@ -8,7 +8,7 @@ The CHARMM36 GLPA topology restrains, under DIHRES, the ceramide C2/C3 centres, 
 pyranose ring chairs and the sialic acid C7/C8 centres: 23 rows. None of them covers glucose C1-C5, galactose C1-C5
 or sialic acid C2 and C4-C6, and a sugar carbon that is inverted can still sit in a correct chair, so an audit that
 reads only those rows passes it. This module tests the 16 sugar stereocentres and the two ceramide trans bonds
-geometrically, with the chirality definitions of backmap_data/map.dat (the ones backmapping restrains and reviews):
+geometrically, with the chirality definitions of membraneforger/backmap_data/map.dat (the ones backmapping restrains and reviews):
 a centre is wrong when (target - centre) . ((D - C) x (E - D)) < 0 and a trans bond is wrong when its dihedral is
 within 90 degrees of 0. Neither can change in a classical MD run, so one frame decides.
 

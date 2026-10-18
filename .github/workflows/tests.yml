@@ -21,8 +21,8 @@ jobs:
       - name: Install Python requirements
         run: pip install numpy scipy networkx "pandas<3" openmm mstool==0.3.9 matplotlib ruff
       - name: Lint
-        run: ruff check membraneforger examples
+        run: ruff check membraneforger
       - name: Check the Slurm scripts parse
-        run: bash -n slurm/setup.sh slurm/run_membraneforger.sbatch slurm/examples/*.sbatch
+        run: bash -n membraneforger/slurm/setup.sh membraneforger/slurm/run_membraneforger.sbatch membraneforger/slurm/examples/*.sbatch
       - name: Unit, negative and invariance tests
         run: python -m unittest discover -s membraneforger/tests -t .
