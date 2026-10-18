@@ -199,7 +199,7 @@ def check_structure(run: Path, structure: str, settings: Settings) -> tuple[dict
     """Measure what EM did to the system: solute drift, lipid contacts, leaflets, box, solvent and ions."""
     fails = []
     resn, names, xyz, box = gro_table(run_path(run, structure))
-    resn0, names0, xyz0, box0 = gro_table(run_path(run, "solv_ions.gro"))
+    _, names0, xyz0, _ = gro_table(run_path(run, "solv_ions.gro"))
     boxed = gro_table(run_path(run, "boxed.gro"))[3]
     if not np.isfinite(xyz).all():
         return {}, ["non-finite coordinates"]

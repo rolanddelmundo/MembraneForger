@@ -54,10 +54,6 @@ python -m membraneforger --aa examples/preeq_cg_cellmem/6WHC_MTZP_prot-lig.pdb \
     --cg examples/preeq_cg_cellmem/6WHC_MTZP_cg_cellmem.gro --orientation none --out example_out
 ```
 
-History of the KOR/GPR frames: as first committed, their coordinates were rotated about z relative to the box line
-(by 3 to 83 degrees, a different angle per frame, from a rotational fit saved without its box), so they were not
-periodic in their box and rendered as a "diamond" inside it. They were rotated back about the box centre in place,
-coordinates and velocities, with `python examples/align_frames.py examples/preeq_cg_cellmem/*_cg_cellmem.gro`, which
-reports every file as periodic (no bead pairs of different lipids within 0.30 nm once wrapped). MembraneForger runs
-the same check on every frame it reads (`align_frame_to_box`) and corrects a rotated frame with a warning that names
-the angle. `6WHC_MTZP_cg_cellmem.gro` was never affected.
+Every frame is periodic in its box: `python examples/align_frames.py examples/preeq_cg_cellmem/*_cg_cellmem.gro` finds
+no bead pairs of different lipids within 0.30 nm once wrapped. MembraneForger runs the same check on every frame it
+reads (`align_frame_to_box`) and corrects a rotated frame with a warning that names the angle.

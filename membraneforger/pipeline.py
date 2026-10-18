@@ -508,13 +508,6 @@ def refuse_threaded_rings(heavy: list, attempts: int) -> None:
                          f"{'-'.join(heavy[0]['bond'])} through the ring of {heavy[0]['ring'][0]}; minimization cannot undo this")
 
 
-def refuse_wrong_stereochemistry(wrong: int, attempts: int) -> None:
-    """Stop the build when backmapped lipids still have a wrong stereocentre or double-bond configuration."""
-    if wrong:
-        raise SystemExit(f"{wrong} lipid stereocentre(s) or double bond(s) have the wrong configuration after {attempts} "
-                         "backmapping attempt(s); minimization cannot correct a configuration")
-
-
 def build_from_two_inputs(session: Session, all_atom: Path, coarse_grain: Path, hashes: dict) -> dict:
     """Backmap and build up to the boxed system, backmapping again with a new seed while the membrane has a defect."""
     out, attempts = session.out, []
