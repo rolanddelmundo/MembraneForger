@@ -6,9 +6,9 @@ Only the coarse-grained stages run (embedding, slicing, the slice gate): nothing
 minutes. For every bundled frame it records
 
   * `frame`        the frame as read: rotation found about z, overlapping pairs, largest empty pocket of the uncut frame;
-  * `6whc`         the oriented 6WHC complex embedded in the frame (the tutorial's KOR1 table), with the slice centred
-                   by the offset search;
-  * `6whc_centred` the same with --no-slice-offset (the tutorial's offset-search comparison);
+  * `6whc`         the oriented 6WHC complex embedded in the frame (the tutorial's KOR1 table), with the slice window
+                   centred on the complex (the default);
+  * `6whc_search`  the same with --slice-offset-search (the tutorial's offset-search comparison);
   * `helix_free`   TM6 of the 6WHC receptor alone on unbroken membrane (--embed-site free, --xy-buffer 3);
   * `helix_hole`   the same helix in the frame's receptor hole, which the empty-pocket gate is expected to stop.
 
@@ -27,7 +27,7 @@ from pathlib import Path
 
 import numpy as np
 
-CASES = ("6whc", "6whc_centred", "helix_free", "helix_hole")
+CASES = ("6whc", "6whc_search", "helix_free", "helix_hole")
 
 
 def jsonable(value):
@@ -107,8 +107,8 @@ def run_case(mf, args, frame, case, folder):
     kwargs, orientation, aa = {"embed": True}, mf.OrientationRequest(mode="none"), aa_pdb
     if case.startswith("6whc"):
         orientation = mf.OrientationRequest(mode="opm", chains=("R",), pdb_id="6WHC", opm_file=opm)
-        if case == "6whc_centred":
-            kwargs["settings"] = mf.Settings(slice_optimize_offset=False)
+        if case == "6whc_search":
+            kwargs["settings"] = mf.Settings(slice_optimize_offset=True)
     else:
         atoms = mf.read_all_atom(aa_pdb, forcefield)[0]
         aa = folder / "tm6.pdb"
@@ -166,7 +166,7 @@ def span(values):
 def aggregate(results):
     """Across-frame statistics for the tutorial's sentences."""
     agg = {}
-    for case in ("6whc", "6whc_centred"):
+    for case in ("6whc", "6whc_search"):
         rows = [r[case] for r in results.values() if r.get(case, {}).get("ok")]
         construction = [abs(r["slice_check"]["leaflets"][l]["construction_delta_percent"]) for r in rows for l in ("upper", "lower")
                         if r["slice_check"]["leaflets"][l]["construction_delta_percent"] is not None]
@@ -192,7 +192,7 @@ def write_summary(out, results, aggregates):
     """summary.json and a Markdown summary meant to be pasted back."""
     (out / "summary.json").write_text(json.dumps(jsonable({"results": results, "aggregate": aggregates}), indent=1) + "\n")
     lines = ["# Tutorial numbers on the bundled frames", "", "## Across frames", "", "```json", json.dumps(jsonable(aggregates), indent=1), "```", ""]
-    lines += ["## Per frame, oriented 6WHC embedded (slice offset search on)", "",
+    lines += ["## Per frame, oriented 6WHC embedded (slice window centred)", "",
               "| Frame | Removed by embedding | Embedded pocket (nm3) | Uncut pocket (nm3) | Cell (nm) | Lipids kept | "
               "dAPL upper / lower vs uncut (%) | dAPL upper / lower vs embed (%) | Old rule lipids (up / lo) | Slice gate |", "|" + "---|" * 10]
     for name, r in sorted(results.items()):

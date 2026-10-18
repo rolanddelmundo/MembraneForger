@@ -2,18 +2,19 @@
 
 MembraneForger builds an all-atom membrane–protein system for GROMACS from a single structure file.
 
-You give it an all-atom protein (or protein–ligand) PDB. It places the protein in a pre-equilibrated Martini 3
+The user-provided all-atom protein (or protein–ligand) PDB is placed in a pre-equilibrated Martini 3
 coarse-grained cell membrane, converts the membrane to all atoms with [mstool](https://github.com/ksy141/mstool), and
 returns a solvated, energy-minimized CHARMM36 system (`em.gro`) that has passed a set of automated checks.
 
 ## How it works
 
 1. **Orient** the protein in the membrane (from an OPM entry, PPM 3.0, or your own coordinates).
-2. **Embed** it in a bundled coarse-grained cell membrane, or in your own Martini 3 frame.
-3. **Cut** the membrane to the protein plus a margin, and check that the cut kept the lipid packing.
-4. **Backmap** the lipids to all atoms around the fixed protein.
-5. **Build** the CHARMM36 topology, add water and 0.15 M NaCl, and minimize.
-6. **Audit** the result. `em.gro` is written only when every check passes.
+2. **Check** the coarse-grained membrane frame (bundled, or your own Martini 3 CG membrane) before anything is placed in it.
+3. **Embed** the protein in it.
+4. **Cut** the membrane to the protein plus a margin, and check that the cut kept the lipid packing.
+5. **Backmap** the lipids to all atoms around the fixed protein.
+6. **Build** the CHARMM36 topology, add water and 0.15 M NaCl, and minimize.
+7. **Audit** the result. `em.gro` is written only when every check passes.
 
 The output is minimized, not equilibrated. Run restrained equilibration before production.
 
@@ -33,7 +34,7 @@ install.
 ```bash
 git clone https://github.com/rolanddelmundo/MembraneForger.git
 cd MembraneForger
-pip install numpy scipy networkx "pandas<3" openmm mstool==0.3.9 matplotlib
+pip install numpy scipy networkx "pandas<3" openmm "mstool>=0.3.9,<=0.3.10" matplotlib
 ```
 
 On a Slurm cluster, `bash membraneforger/slurm/setup.sh` builds a self-contained environment with GROMACS instead, and
@@ -52,9 +53,6 @@ python -m membraneforger \
     --orientation none \
     --out example_out
 ```
-
-Backmapping takes most of the run time, about 45 minutes on 8 cores. When the build finishes, the last line of
-`example_out/membranebuilder.log` says `PASS` and `example_out/em.gro` exists.
 
 For your own protein in a bundled membrane, name the membrane-spanning chain and the side of its N terminus:
 

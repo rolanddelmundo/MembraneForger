@@ -214,10 +214,13 @@ class CommandLineRefusals(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertRegex(output, r"GPR[0-9]+_cg_cellmem\.gro")  # a bundled GPR139 frame was picked up as input
         self.assertIn("ERROR: mstool:", output)  # and the build stopped at the mstool stage, not at the parser
-        code, output = self.run_cli("--aa", AA_PDB, "--cg", "2", "--out", out, "--gmx", self.gmx, "--mstool-python", self.no_mstool)
+        self.assertIn("already holds the output of an earlier build",                         # the failed run left outputs: refused
+                      self.run_cli("--aa", AA_PDB, "--cg", "2", "--out", out, "--gmx", self.gmx, "--mstool-python", self.no_mstool)[1])
+        code, output = self.run_cli("--aa", AA_PDB, "--cg", "2", "--out", out, "--gmx", self.gmx, "--mstool-python", self.no_mstool,
+                                    "--overwrite")
         self.assertRegex(output, r"KOR[0-9]+_cg_cellmem\.gro")
         code, output = self.run_cli("--aa", AA_PDB, "--cg", f"custom={CG_GRO}", "--out", out, "--gmx", self.gmx,
-                                    "--mstool-python", self.no_mstool)
+                                    "--mstool-python", self.no_mstool, "--overwrite")
         self.assertIn("6WHC_MTZP_cg_cellmem.gro", output)
 
     def test_a_bundled_frame_can_be_named(self):
@@ -293,6 +296,10 @@ class CommandLineRefusals(unittest.TestCase):
         bad = self.tmp / "bad.gro"
         bad.write_text("t\n1\n    1XYZ     Q1    1   1.000   1.000   1.000\n 5 5 5\n")
         code, output = self.run_cli("--all-atom", AA_PDB, "--coarse-grain", bad, "--out", out, "--gmx", self.gmx)
+        self.assertEqual(code, 1)                                                              # an earlier build's files: refused, untouched
+        self.assertIn("already holds the output of an earlier build", output)
+        self.assertEqual((out / "em.gro").read_text(), "old valid-looking")
+        code, output = self.run_cli("--all-atom", AA_PDB, "--coarse-grain", bad, "--out", out, "--gmx", self.gmx, "--overwrite")
         self.assertEqual(code, 1)
         self.assertIn("ERROR: classify:", output)
         self.assertFalse((out / "em.gro").exists())

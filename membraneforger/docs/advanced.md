@@ -1,6 +1,6 @@
 # Advanced options
 
-This page collects the details that used to live in the top-level README. For the full option list see the
+This page collects the details behind the top-level README. For the full option list see the
 [command-line reference](cli_reference.md). For the science behind each stage and every threshold see the
 [tutorial](membraneforger_tutorial.md).
 
@@ -83,8 +83,8 @@ composition in mole percent, averaged over the 8 frames
 
 | Leaflet | CHOL | POPC | DOPC | POPE | DOPE | PSM | DPG3 | POPS | DOPS | SAP6 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Outer | 28 | 19 | 19 | 5 | 5 | 14 | 10 | 0 | 0 | 0 |
-| Inner | 22 | 5 | 5 | 21 | 21 | 0 | 0 | 8 | 7 | 10 |
+| Upper | 28 | 19 | 19 | 5 | 5 | 14 | 10 | 0 | 0 | 0 |
+| Lower | 22 | 5 | 5 | 21 | 21 | 0 | 0 | 8 | 7 | 10 |
 
 Martini and CHARMM36 names differ for two species. GM3 is `DPG3` in the coarse-grained frames (CER16, BGLC, BGAL and
 ANE5A merged into one molecule) and PIP2 is `SAP6` there and `SAPI25` in the all-atom files.
@@ -111,9 +111,8 @@ The runs are sequential, so five runs take about five times as long as one (`RUN
 `membraneforger/slurm/run_membraneforger.sbatch`; raise its time limit). `--cg NAME` builds in one particular frame
 (`--list-membranes` lists them), which is the way to spread the runs over separate jobs.
 
-The bundled frames had been written with their coordinates rotated about z relative to the box, each by its own
-angle. They have been rotated back in place (`membraneforger/examples/align_frames.py`), and MembraneForger checks every frame it
-reads, rotating a frame with the same artefact back onto its periodic cell and logging the angle
+MembraneForger checks every frame it reads, rotating a frame whose coordinates were rotated about z relative to its box
+back onto its periodic cell and logging the angle
 ([tutorial 1.1](membraneforger_tutorial.md#11-a-frame-must-be-periodic-in-its-box)).
 
 ### Changing the lipid composition
@@ -131,10 +130,10 @@ cut. z is sized from the protein height around the bilayer midplane.
 The cut is made lipid by lipid under periodic boundaries. Each lipid is made whole, one headgroup anchor represents it
 (PO4, cholesterol ROH, the GM3 sugar centroid; `membraneforger/lipids.py`), and the complete lipid is kept when the
 periodic image of its anchor falls in the window. The window may shift by up to 0.5 nm to the position that best
-preserves the source's lipid density and composition (`--no-slice-offset` turns this off), and the new periodic seam
+preserves the source's lipid density and composition when `--slice-offset-search` is given (the default window is centred on the complex), and the new periodic seam
 is relaxed in place at the coarse-grained level instead of deleting lipids.
 
-`--box X Y Z` (Å) sets the box instead. x and y may only be smaller than the membrane patch; z must leave the default
+`--box-nm X Y Z` (nm) sets the box instead. x and y may only be smaller than the membrane patch; z must leave the default
 water padding. A z too short for the complex is refused before backmapping.
 
 The default 1.0 nm buffer is small for large complexes. If the slice gate stops the build, rerun with a larger
@@ -172,8 +171,9 @@ from the kept membrane:
 python -m membraneforger --membrane <out>/int/membrane.pdb --out <out>
 ```
 
-Rerunning into the same `<out>` replaces that build's other outputs and intermediates and keeps only
-`int/membrane.pdb`. Give a new `--out` to keep the earlier build as it is.
+Rerunning into an `<out>` that holds an earlier build is refused unless `--overwrite` is given; checkpoints and trajectories
+there also need `--overwrite-restart` and are never deleted otherwise. With `--overwrite` the other outputs and intermediates are
+replaced and only `int/membrane.pdb` is kept. Give a new `--out` to keep the earlier build as it is.
 
 ## Disulfides
 
@@ -189,7 +189,7 @@ the chemistry does not support a disulfide, such as two cysteines of a cytosolic
 
 That pair is then not bonded, not repaired to 2.03 Å and not expected in the topology: `pdb2gmx` is asked before
 linking (`-ss`) and told to leave it, so both cysteines are built as reduced CYS carrying their HG1 thiol hydrogen.
-Every other pair of the same chain is still bonded, and a chain with no excluded pair is built exactly as before.
+Every other pair of the same chain is still bonded.
 Coordinates are never changed, so the two sulfurs start where the model put them and the minimization relaxes the
 contact. The exclusions appear in the build log and in `run_manifest.json` (`excluded_disulfides`).
 

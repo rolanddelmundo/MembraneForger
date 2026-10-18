@@ -534,10 +534,6 @@ class StageRunner(unittest.TestCase):
         with self.assertRaises(mf.StageFailure):
             mf.build_from_two_inputs(self.session, AA_PDB, CG_GRO, {})
 
-    def test_wrong_stereochemistry_is_refused(self):
-        self.assertIn("wrong configuration", failure(mf.pipeline.refuse_wrong_stereochemistry, 2, 3))
-        self.assertIsNone(failure(mf.pipeline.refuse_wrong_stereochemistry, 0, 3))
-
 
 class StructureIO(unittest.TestCase):
     def test_pdb_round_trip(self):

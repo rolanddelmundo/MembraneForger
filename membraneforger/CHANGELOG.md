@@ -1,8 +1,34 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 (2026-10-18)
 
-- **Ligand force-field packages trimmed.** The four packages under `forcefield/` (MTZP, MRTR, MSEM, V6G) keep only the files the build reads (the ligand `.top`, `charmm36.ff/ffbonded.itp`, and for V6G `V6G_gmx.top`, `V6G_base_ff_params.itp` and `charmm36.ff/V6G_ffbonded.itp`) plus their `.pdb` and `posre` files; the unused copies of `charmm36.ff` inside them are gone (`forcefield/` 64 MB to 22 MB). The build uses the shared `forcefield/charmm36.ff/`, so no output changes.
+MembraneForger now needs only an all-atom structure. It orients the complex in the membrane, embeds it in a bundled
+pre-equilibrated Martini 3 cell membrane, cuts the membrane to size, and validates every stage before and after
+backmapping.
+
+Two defaults changed since 1.0.0, and the review decisions below change more. Commands written for 1.0.0 may need updating:
+
+- **Orientation is on by default** (`--orientation auto`). An input with several protein chains now needs
+  `--orient-chain`, and PPM needs `--nterm-side` when no OPM entry matches. Add `--orientation none` to use your
+  coordinates as given, as 1.0.0 did.
+- **Intermediates move to `<out>/int/`.** `oriented.pdb`, `membrane.pdb`, `boxed.gro`, the minimization files and
+  the other steps on the way to `em.gro` are kept there instead of in the top-level output directory.
+
+### Review decisions, 50 µs frames and repository layout
+
+- **Review decisions (defaults changed).**
+  - The slice window is centred by default; the offset search is opt-in (`--slice-offset-search`). Construction deviation median/95th/max on the eight bundled frames: 0.71/1.88/2.19 % centred, 1.55/3.39/4.87 % searched.
+  - Counterions default to `additive` (neutralizing ions plus the requested salt pairs); `--counterion-mode inclusive` restores the old behaviour. The manifest and log report neutralizing ions, salt pairs, Na/Cl totals and ionic strength separately.
+  - The slice-stage thickness record was dropped from the report by a name-collision in `all_records()`; it is now graded (3 % PASS / 5 % WARNING). Protein tilt and insertion depth at the slice are diagnostics (NOT RUN), since slicing does not move the complex.
+  - A build into an `--out` that already holds an earlier build is refused unless `--overwrite` is given; checkpoints and trajectories also need `--overwrite-restart`. Slurm reruns into an existing folder must pass `--overwrite` (for example through `EXTRA`).
+  - The default `--out` is `./<all-atom structure stem>_membraneforger` for a single build and for `--runs`; duplicate run folders are refused.
+  - Geometry options are in nm: `--box-nm`, `--bilayer-z-nm`, `--fit-max-core-rmsd-nm`. The Å spellings still work with a conversion warning. `--no-slice-offset` is a hidden no-op.
+  - New accessible-shell-area normalization of the lateral headgroup RDF (`rdf.lateral_rdf_shell`), reported separately and not used by any gate; `examples/validate_rdf_normalization.py` compares it with the existing curve and with random geometry-matched references.
+
+- **Definitions of the graded quantities** (tutorial 5.13): the formulas the code computes for the Voronoi area, g(r), the
+  protein-density profile, thickness, tilt, core water, interdigitation, ion count, drift, S_CD, MSD, K_A and leaflet
+  tension, with the conventions that were implicit (S_CD sign, fit windows, periodic-cell D, anchor-based APL). The
+  composition distance is written D_comp. The seam-repulsion docstring now states the force and the potential.
 - **The coarse-grained frame is graded before embedding** (gate 0, `membrane_validation.md`): both leaflets populated, absolute
   leaflet APL and bilayer thickness, bilayer tilt, lipids on the wrong leaflet, broken molecules and lipid-protein bead
   overlaps, as PASS / WARNING / FAIL records. The eight bundled frames pass. A FAIL stops the build
@@ -25,7 +51,7 @@
 - **Tutorial numbers re-measured on the 50 µs frames.** Lipids removed by embedding, pocket volumes, single-helix
   pockets, seam removals, the slice-offset effect and the construction deviation now come from the eight bundled
   frames (`membraneforger/examples/measure_tutorial_numbers.py`); on these frames the offset search no longer reduces the whole-cell
-  spread. The `KOR1` stage table and its RDF statements are re-measured as well. Statements about the earlier 30 µs frames are labelled as such.
+  spread. The `KOR1` stage table and its RDF statements are re-measured as well. Remaining 30 µs-frame, GIPR and unmeasured statements in the tutorial were removed or replaced by 50 µs values; gate 0 is now in the tutorial's flow diagram and settings, `advanced.md` uses Upper/Lower like the other guides, and the README mstool pin matches the supported range (0.3.9 or 0.3.10). New tutorial figures and tables: the KOR1 membrane before and after embedding, the per-frame APL table (section 5.3) and the lipid density around the protein (section 5.6a), drawn by `examples/make_tutorial_figures.py`. Removed the unused `pipeline.refuse_wrong_stereochemistry` (the backmapping verdict already stops on a wrong configuration) and two unused variables in `audit.py`; the README steps and the module map now list gate 0, `contacts.py` and `stereo.py`.
 - **Series and `--runs` limit come from the frames present.** The nine-frame limit is gone: `--runs` is bounded by
   the number of frames the series holds, and the error message names them; `--list-membranes` and the unknown-name
   error list the names that exist.
@@ -37,31 +63,10 @@
   blocks (scheduler, software, this run) with working defaults, so only those are edited; submitted as is it builds
   the bundled 6WHC example. `slurm/examples/gemini_6WHC.sbatch` is the filled-in Gemini version.
 
-### Fixed
-
-- The GM3 stereochemistry audit makes every molecule whole across the periodic boundary before testing, using the
-  `.gro` box or the PDB `CRYST1` record. A GPU `mdrun` writes minimization output with molecules wrapped into the
-  cell atom by atom, which the audit read as inverted sugar stereocentres — a false positive that failed correct
-  builds.
-
-## 2.0.0 (2026-10-10)
-
-MembraneForger now needs only an all-atom structure. It orients the complex in the membrane, embeds it in a bundled
-pre-equilibrated Martini 3 cell membrane, cuts the membrane to size, and validates every stage before and after
-backmapping.
-
-This is a major version because two defaults changed. Commands written for 1.0.0 may need updating:
-
-- **Orientation is on by default** (`--orientation auto`). An input with several protein chains now needs
-  `--orient-chain`, and PPM needs `--nterm-side` when no OPM entry matches. Add `--orientation none` to use your
-  coordinates as given, as 1.0.0 did.
-- **Intermediates move to `<out>/int/`.** `oriented.pdb`, `membrane.pdb`, `boxed.gro`, the minimization files and
-  the other steps on the way to `em.gro` are kept there instead of in the top-level output directory.
-
 ### New
 
 - **Single-input builds.** `--cg 1` (default) and `--cg 2` embed the complex in a bundled GPR139 or kappa opioid
-  receptor membrane: 18 frames of an asymmetric ten-species cell membrane, 30 µs of Martini 3 each, in
+  receptor membrane: the 50 µs Martini 3 frames of an asymmetric ten-species cell membrane (eight frames, see below), in
   `examples/preeq_cg_cellmem/`. `--cg FILE --embed` embeds into a frame of your own.
 - **Membrane orientation** from an exact OPM/OPRLM entry or a local PPM 3.0 run, applied to the whole complex as one
   rigid body (`--orientation`, `--orient-chain(s)`, `--nterm-side`, `--pdb-id`, `--ppm-exe`).
@@ -85,6 +90,7 @@ This is a major version because two defaults changed. Commands written for 1.0.0
 
 ### Changed
 
+- **Ligand force-field packages trimmed.** The four packages under `forcefield/` (MTZP, MRTR, MSEM, V6G) keep only the files the build reads (the ligand `.top`, `charmm36.ff/ffbonded.itp`, and for V6G `V6G_gmx.top`, `V6G_base_ff_params.itp` and `charmm36.ff/V6G_ffbonded.itp`) plus their `.pdb` and `posre` files; the unused copies of `charmm36.ff` inside them are gone (`forcefield/` 64 MB to 22 MB). The build uses the shared `forcefield/charmm36.ff/`, so no output changes.
 - Lipids that overlap the embedded complex are pushed aside at the coarse-grained level, and only those still
   overlapping are removed. An empty pocket larger than 1.0 nm³ in a leaflet stops the build.
 - Minimization runs first with the lipid dihedral restraints, then without them, and both are audited.
@@ -97,6 +103,10 @@ This is a major version because two defaults changed. Commands written for 1.0.0
 
 ### Fixed
 
+- The GM3 stereochemistry audit makes every molecule whole across the periodic boundary before testing, using the
+  `.gro` box or the PDB `CRYST1` record. A GPU `mdrun` writes minimization output with molecules wrapped into the
+  cell atom by atom, which the audit read as inverted sugar stereocentres — a false positive that failed correct
+  builds.
 - GM3 backmapping: swapped glucose and galactose bead assignments, six wrong chirality definitions, the missing sialic
   acid C7 chirality definition and the missing ceramide trans definitions. Every GM3 sugar stereocentre is now
   checked in the built membrane.
@@ -115,7 +125,7 @@ This is a major version because two defaults changed. Commands written for 1.0.0
 
 Two-input pipeline: an all-atom protein–ligand complex plus one Martini 3 coarse-grained frame of the same complex
 become a validated, energy-minimized CHARMM36/GROMACS system. The earlier four-stage workflow (0.1.0, 0.2.0) is kept
-unchanged under `archive/` (removed after 2.0.0, see git history) and is no longer maintained. Tagged as `v1.0.0` without a GitHub release.
+unchanged under `archive/` (removed in 1.1.0, see git history) and is no longer maintained. Tagged as `v1.0.0` without a GitHub release.
 
 ## 0.2.0 (2026-09-02) and 0.1.0 (2026-07-15)
 

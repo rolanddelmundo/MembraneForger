@@ -255,7 +255,8 @@ class SliceGate(unittest.TestCase):
         centred = mf.Settings(box_xy_buffer_nm=2.0, slice_optimize_offset=False)
         cut = mf.slice_membrane_cg(membrane, solute, cell, MIDPLANE, centred, reference=reference)
         self.assertEqual(cut["box"][:2], [8.0, 8.0])
-        shifted = mf.slice_membrane_cg(membrane, solute, cell, MIDPLANE, mf.Settings(box_xy_buffer_nm=2.0), reference=reference)
+        shifted = mf.slice_membrane_cg(membrane, solute, cell, MIDPLANE, mf.Settings(box_xy_buffer_nm=2.0, slice_optimize_offset=True),
+                                       reference=reference)
         self.assertLess(abs(shifted["report"]["lipids_after"] - 200), 12)                        # an offset window keeps the density too
         stage = mf.cg_stage("slice", cut["membrane"], cut["placed"], cut["box"], MIDPLANE)
         comparison = mf.compare_packing(embed, stage, 5.0)
@@ -313,6 +314,16 @@ class RealFrameGate(unittest.TestCase):
             records = {(r["metric"], r["leaflet"]): r for r in check["records"]}
             self.assertEqual(records[("slice integrity", None)]["status"], "PASS")
             self.assertTrue(all(records[("headgroup RDF first-shell peak shift", l)]["status"] == "PASS" for l in ("upper", "lower")))
+            slice_records = {r["metric"]: r for r in analysis.all_records() if r["stage"] == "slice" and r["leaflet"] is None}
+            thickness = slice_records["bilayer thickness"]                                        # graded: the lipid set changes
+            self.assertIn(thickness["status"], ("PASS", "WARNING", "FAIL"))
+            self.assertIn("PASS <= 3.0 %, WARNING <= 5.0 %", thickness["reason"])
+            for name in ("protein tilt", "protein insertion depth", "protein inversion"):       # cannot fail by construction: diagnostics
+                self.assertEqual(slice_records[name]["status"], "NOT RUN")
+                self.assertIn("unchanged by construction", slice_records[name]["reason"])
+            self.assertAlmostEqual(slice_records["protein tilt"]["deviation"], 0.0, places=6)
+            self.assertAlmostEqual(slice_records["protein insertion depth"]["deviation"], 0.0, places=6)
+            self.assertEqual(slice_records["protein inversion"]["value"], 0.0)
             files = analysis.write(cut)
             names = {f.name for f in files}
             self.assertTrue({"membrane_validation.json", "membrane_validation.md", "membrane_validation_lipids.tsv"} <= names)
