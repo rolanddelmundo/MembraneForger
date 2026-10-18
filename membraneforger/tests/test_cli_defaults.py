@@ -141,7 +141,7 @@ class RestartSafety(unittest.TestCase):
         self.assertIn("simulation restart files", failure(mf.refuse_overwrite, self.out))
 
     def test_the_minimizations_own_files_are_not_simulation_restart_files(self):
-        self.touch("em.gro", "em.cpt", "em.trr", "emres.cpt", "int/em.trr")
+        self.touch("em.gro", "em.cpt", "em_prev.cpt", "em.trr", "emres.cpt", "emres_prev.cpt", "int/em.trr")
         self.assertEqual(mf.existing_outputs(self.out)["simulation"], [])
         mf.refuse_overwrite(self.out, overwrite=True)
 
