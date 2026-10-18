@@ -495,9 +495,10 @@ def backmap_verdict(staged: dict, review: dict, settings: Settings, last: bool) 
     if heavy:
         problem = (f"{'-'.join(heavy[0]['bond'])} threads the ring of {heavy[0]['ring'][0]} "
                    f"({len(heavy)} heavy-atom threading(s) involving the membrane; minimization cannot undo this)")
-    elif membrane_overlaps and (settings.membrane_overlap_before_em == "stop" or not last):
-        # lipids on top of each other or of the solute, by the force field's own measure: worth another seed; on the last
-        # one minimization is left to separate them and the check after EM decides ("warn", the default)
+    elif membrane_overlaps and settings.membrane_overlap_before_em == "stop":
+        # lipids on top of each other or of the solute, by the force field's own measure: with "warn" (the default) no seed
+        # is retried for them, since another seed gives the same overlaps; minimization separates them and the check after
+        # EM decides
         problem, stage = describe_contacts(overlaps, ("membrane",), limit=2), "contacts"
     elif wrong:
         problem, stage = f"{wrong} lipid stereocentre(s) or double bond(s) have the wrong configuration", "backmap"
