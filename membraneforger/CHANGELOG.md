@@ -120,7 +120,7 @@ Two defaults changed since 1.0.0, and the review decisions below change more. Co
 
 Two-input pipeline: an all-atom protein–ligand complex plus one Martini 3 coarse-grained frame of the same complex
 become a validated, energy-minimized CHARMM36/GROMACS system. The earlier four-stage workflow (0.1.0, 0.2.0) is kept
-unchanged under `archive/` (removed after 2.0.0, see git history) and is no longer maintained. Tagged as `v1.0.0` without a GitHub release.
+unchanged under `archive/` (removed in 1.1.0, see git history) and is no longer maintained. Tagged as `v1.0.0` without a GitHub release.
 
 ## 0.2.0 (2026-09-02) and 0.1.0 (2026-07-15)
 
