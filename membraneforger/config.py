@@ -95,7 +95,7 @@ GENERATED = ("oriented.pdb", "orientation_report.json", "membrane.pdb", "aa_cg_m
              "solv_raw.gro", "solv.gro", "solv_ions.gro", "index_ini.ndx", "genion.ndx", "ions.mdp", "ions.tpr",
              "ions_mdout.mdp", "em.mdp", "mdout.mdp", "em_mdout.mdp", "emres_mdout.mdp", "em.tpr", "em.log", "em.edr",
              "em.trr", "em.gro", "em.unverified.gro", "emres.mdp", "emres.tpr", "emres.log", "emres.edr", "emres.trr",
-             "emres.gro", "em.cpt", "emres.cpt", "toppar",
+             "emres.gro", "em.cpt", "emres.cpt", "em_prev.cpt", "emres_prev.cpt", "toppar",
              "audit.json", "run_manifest.json", "ring_piercing.json", "membrane_validation.json", "membrane_validation.md",
              "membrane_validation_lipids.tsv", "membrane_validation_apl.png", "membrane_validation_species.png",
              "membrane_validation_rdf.png", "membrane_validation_composition.png", "membrane_validation_protein_density.png",
