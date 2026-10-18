@@ -103,7 +103,7 @@ backmapping and minimization, and the thresholds, are described in the
 - [Troubleshooting](docs/troubleshooting.md): common failures and what to check.
 - [Running on Slurm](slurm/README.md) and [the bundled membranes](examples/preeq_cg_cellmem/README.md).
 - [Module map](docs/modules.md) and [Python example](examples/build_from_python.py), for developers.
-- [Contents of `archive/`](archive/CONTENTS.md) and the [changelog](CHANGELOG.md).
+- [Changelog](CHANGELOG.md).
 
 ## Tests
 
