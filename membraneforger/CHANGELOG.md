@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Definitions of the graded quantities** (tutorial 5.13): the formulas the code computes for the Voronoi area, g(r), the
+  protein-density profile, thickness, tilt, core water, interdigitation, ion count, drift, S_CD, MSD, K_A and leaflet
+  tension, with the conventions that were implicit (S_CD sign, fit windows, periodic-cell D, anchor-based APL). The
+  composition distance is written D_comp. The seam-repulsion docstring now states the force and the potential.
 - **The coarse-grained frame is graded before embedding** (gate 0, `membrane_validation.md`): both leaflets populated, absolute
   leaflet APL and bilayer thickness, bilayer tilt, lipids on the wrong leaflet, broken molecules and lipid-protein bead
   overlaps, as PASS / WARNING / FAIL records. The eight bundled frames pass. A FAIL stops the build
