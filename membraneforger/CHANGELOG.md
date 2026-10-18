@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Ligand force-field packages trimmed.** The four packages under `forcefield/` (MTZP, MRTR, MSEM, V6G) keep only the files the build reads (the ligand `.top`, `charmm36.ff/ffbonded.itp`, and for V6G `V6G_gmx.top`, `V6G_base_ff_params.itp` and `charmm36.ff/V6G_ffbonded.itp`) plus their `.pdb` and `posre` files; the unused copies of `charmm36.ff` inside them are gone (`forcefield/` 64 MB to 22 MB). The build uses the shared `forcefield/charmm36.ff/`, so no output changes.
 - **The coarse-grained frame is graded before embedding** (gate 0, `membrane_validation.md`): both leaflets populated, absolute
   leaflet APL and bilayer thickness, bilayer tilt, lipids on the wrong leaflet, broken molecules and lipid-protein bead
   overlaps, as PASS / WARNING / FAIL records. The eight bundled frames pass. A FAIL stops the build
