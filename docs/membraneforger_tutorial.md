@@ -2,7 +2,7 @@
 
 > The bundled membranes are now eight 50 us frames (`KOR1`, `KOR2`, `KOR3`, `KOR5`, `KOR6`, `KOR7`, `KOR9`, `GPR5`). The
 > cross-frame figures of sections 2 and 4 were re-measured on them (6WHC complex, 8 frames). The remaining measurements
-> that name `KOR1`, `GPR1` or `GPR3`, or count "18 frames", were made on the earlier 30 us frames of the same
+> that name `GPR1` or `GPR3`, give a thickness change, or count "18 frames", were made on the earlier 30 us frames of the same
 > simulations and have not been repeated; they illustrate the method and are labelled as
 > 30 us where they appear.
 
@@ -258,20 +258,21 @@ The slice is compared with the embedded membrane in two ways, and only the first
   the build.
 
 Measured on the bundled kappa opioid receptor frame `KOR1` with the oriented glucagon receptor complex (6WHC)
-embedded, cut to 12.7 x 10.6 nm (the values come from `membrane_validation.md`; the old-rule row is the lipid
+embedded, sliced with the default settings (offset search on; the values come from `membrane_validation.md`; the old-rule row is the lipid
 count the all-beads-inside rule keeps in the same window, with the APL that count implies):
 
 | Stage / algorithm | Upper lipids | Lower lipids | Upper APL (A^2) | Lower APL (A^2) | dAPL upper vs embed | dAPL lower vs embed | Verdict |
 |---|---:|---:|---:|---:|---:|---:|---|
-| CG frame (frame's own receptor) | 684 | 618 | 47.0 | 52.0 | | | |
-| Embedded CG membrane (reference) | 661 | 558 | 47.7 | 52.7 | reference | reference | |
-| Old all-beads-inside slice | 211 | 145 | 55.0 | 65.5 | +15.4 % | +24.2 % | FAIL |
-| New anchor slice, offset + relaxed seam | 243 | 184 | 47.8 | 51.6 | +0.2 % | -2.1 % | PASS |
-| same lipids in the uncut membrane | 243 | 184 | 48.1 | 50.5 | construction: -0.7 % | +2.0 % | PASS |
+| CG frame (frame's own receptor) | 671 | 631 | 48.0 | 51.0 | | | |
+| Embedded CG membrane (reference) | 666 | 613 | 47.7 | 48.9 | reference | reference | |
+| Old all-beads-inside slice | 211 | 185 | 56.1 | 54.3 | +17.6 % | +11.0 % | FAIL |
+| New anchor slice, offset + relaxed seam | 249 | 217 | 47.5 | 46.2 | -0.4 % | -5.3 % | PASS |
+| same lipids in the uncut membrane | 249 | 217 | 47.0 | 45.5 | construction: +1.2 % | +1.7 % | PASS |
 
-The old rule deleted 71 lipids whose anchor was inside the window (39 lower, 32 upper) because one tail bead
-crossed the edge. The new slice keeps them; the seam relaxation moved 165 lipids by 0.015 nm on average (0.22 nm at
-most) and removed none. The same build on the 11.2 nm `6WHC` frame (fit, not embedded; one axis cut): old rule
+The old rule deleted 70 lipids whose anchor was inside the window because one tail bead
+crossed the edge. The new slice keeps them; the seam relaxation moved 216 lipids by 0.021 nm on average (0.38 nm at
+most) and removed none. The lower leaflet is 5.3 % denser than the whole embedded cell (percentile 0.61 of 144
+equal-size windows): the construction check passes, the difference is where the window sits. The same build on the 11.2 nm `6WHC` frame (fit, not embedded; one axis cut): old rule
 +11.5 / +13.6 %, new slice +1.8 / -0.7 % against the whole cell and -0.1 / +2.5 % against the same lipids uncut.
 
 Over all 8 bundled 50 us frames (16 leaflets, 6WHC complex, slice offset search on) the construction deviation of the
@@ -313,7 +314,7 @@ Thickness is the distance between the median anchor z of the two leaflets (non-s
 map whose spread is reported. Protein orientation is the tilt of the principal axis of the complex's heavy atoms
 within 1.5 nm of the midplane, its insertion depth (mean z of those atoms relative to the midplane) and an inversion
 flag. Across slicing (gate 1) thickness may change by 3 / 5 % (PASS / WARNING), tilt by 1 / 3 degrees and depth by
-0.5 / 1.5 A; in the examples thickness changes by 0.2 % (KOR1: 42.9 to 42.8 A) and tilt and depth by 0.0, as expected
+0.5 / 1.5 A; in the examples thickness changes by 0.2 % (30 us KOR1: 42.9 to 42.8 A) and tilt and depth by 0.0, as expected
 from a rigid translation.
 
 ### 5.6a Lipids around the protein
@@ -471,12 +472,12 @@ carry the structure (POPC-POPC first peak 7.5 A, DOPC-DOPC 9.5 A, CHOL-CHOL 11.5
 deviation from the whole-cell curve is in addition graded
 against the empirical distribution of the same deviation over equal-size windows cut everywhere in the embedded
 membrane (below its 95th percentile PASS, below the 99th WARNING, above FAIL; a slice that deviates less than the
-parent's windows is never graded down): the slice must look like one of the parent's own windows. In the `KOR1` build the RMS difference against the same lipids uncut is 1.6
-(upper) and 1.4 (lower) noise units, in the `6WHC` build 0.7 / 0.8, and the POPC-POPC and DOPC-DOPC first peaks of
-the slice lie within one 1 A bin of the reference's. The slice therefore keeps the lateral organization of the
-membrane it was cut from. Against the whole embedded cell the `KOR1` upper leaflet sits at the 98.6th percentile of
-the 144 equal-size windows (WARNING, the lower at the 86th): a window around the protein is not a typical window,
-which is representativeness, not a construction error.
+parent's windows is never graded down): the slice must look like one of the parent's own windows. In the `KOR1` build (50 us) the RMS difference against the same lipids uncut is 1.5
+(upper) and 1.4 (lower) noise units, in the earlier 30 us `6WHC` build 0.7 / 0.8, and the POPC-POPC and DOPC-DOPC first peaks of
+the slice lay within one 1 A bin of the reference's. The slice therefore keeps the lateral organization of the
+membrane it was cut from. Against the whole embedded cell the `KOR1` slice sits at the 24th (upper) and 61st (lower) percentile of
+the 144 equal-size windows (PASS); on the earlier 30 us frame the upper leaflet reached the 98.6th (WARNING), since a
+window around the protein is not a typical window, which is representativeness, not a construction error.
 
 Across resolutions the anchors change from Martini beads to atoms, and the atomistic force field has its own
 excluded-volume distances. Backmapping preserves the lateral topology inherited from the equilibrated Martini
