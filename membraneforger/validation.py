@@ -16,8 +16,13 @@ from .martini import MARTINI3_PROTEIN, MARTINI3_PROTEIN_ALIASES
 from .runtools import LOG_NAME, sha256
 from .structio import read_pdb, xyz_nm
 
-__all__ = ['read_cg', 'read_all_atom', 'protect_inputs', 'clear_stale_outputs', 'check_inputs_unchanged', 'frame_overlaps',
-           'align_frame_to_box']
+__all__ = ['read_cg', 'read_all_atom', 'protect_inputs', 'SIMULATION_PATTERNS', 'existing_outputs', 'refuse_overwrite',
+           'clear_stale_outputs', 'check_inputs_unchanged', 'frame_overlaps', 'align_frame_to_box']
+
+# Files a GROMACS simulation started from a build leaves in its directory: checkpoints (mdrun -cpi continues from them, with
+# -append or -noappend) and trajectories. The build itself runs steepest-descent minimizations only; it never reads, writes or
+# deletes these files, but a rerun would replace the em.gro, topol.top and index files such a simulation depends on.
+SIMULATION_PATTERNS = ("*.cpt", "*.xtc", "*.tng", "*.trr")
 
 def read_cg(path: Path) -> tuple[list[dict], list[float]]:
     """Read a coarse-grained .gro or .pdb into beads (nm) and an orthorhombic box (nm)."""
@@ -107,6 +112,48 @@ def protect_inputs(inputs: list[Path], out: Path, keep: Path | None = None, reso
     for resource in resources:
         if resource is not None and (out == resource or resource in out.parents or out in resource.parents):
             raise SystemExit(f"--out {out} overlaps the installation directory {resource}; choose another --out")
+
+
+def existing_outputs(out: Path, keep: Path | None = None) -> dict:
+    """What an output directory already holds: {"build": outputs of an earlier build, "simulation": checkpoints and trajectories}.
+
+    "build" lists the config.GENERATED names present (the --membrane source `keep`, and int/ when it holds nothing else, do not
+    count). "simulation" lists checkpoint and trajectory files that are not themselves GENERATED (the minimizations' em.cpt,
+    em.trr and the like are), anywhere below the directory.
+    """
+    out = Path(out)
+    build = []
+    for name in GENERATED:
+        target = out / name
+        if target == keep or not (target.exists() or target.is_symlink()):
+            continue
+        if keep is not None and target.is_dir() and target in Path(keep).parents:
+            if not any(child != keep for child in target.iterdir()):
+                continue
+        build.append(name)
+    simulation = sorted({str(p.relative_to(out)) for pattern in SIMULATION_PATTERNS for p in out.rglob(pattern)
+                         if p.is_file() and p.relative_to(out).parts[0] not in GENERATED and p.name not in GENERATED}) if out.is_dir() else []
+    return {"build": build, "simulation": simulation}
+
+
+def refuse_overwrite(out: Path, keep: Path | None = None, overwrite: bool = False, overwrite_restart: bool = False) -> None:
+    """Refuse an output directory that holds an earlier build or a simulation's restart files unless the matching flag is given.
+
+    A rerun deletes the earlier build's outputs (clear_stale_outputs), among them the em.gro, topol.top and index files a running
+    or continued simulation reads. So an earlier build needs --overwrite, and checkpoints or trajectories need
+    --overwrite-restart as well. The build never deletes those simulation files and never starts an mdrun with -cpi: GROMACS
+    continuation (mdrun -cpi state.cpt, with -append or -noappend) in that directory is not affected by anything here.
+    """
+    found = existing_outputs(out, keep)
+    if found["simulation"] and not (overwrite and overwrite_restart):
+        shown = ", ".join(found["simulation"][:4]) + (f" and {len(found['simulation']) - 4} more" if len(found["simulation"]) > 4 else "")
+        raise SystemExit(f"--out {out} holds simulation restart files ({shown}); a rerun would replace the em.gro, topol.top and index "
+                         "files a simulation continued from them depends on. Choose another --out, or pass --overwrite and "
+                         "--overwrite-restart to replace the build outputs (the simulation files themselves are never deleted)")
+    if found["build"] and not overwrite:
+        shown = ", ".join(found["build"][:5]) + (f" and {len(found['build']) - 5} more" if len(found["build"]) > 5 else "")
+        raise SystemExit(f"--out {out} already holds the output of an earlier build ({shown}); choose another --out, or pass "
+                         "--overwrite to replace it")
 
 
 def clear_stale_outputs(out: Path, keep: Path | None = None) -> list[str]:

@@ -35,7 +35,7 @@ from .runtools import log, run_command
 from .structio import element, read_gro, wrap, write_gro, xyz_nm
 
 __all__ = ['rebox_system', 'solute_geometry', 'solute_types', 'solvate_system', 'salt_volume', 'ion_counts',
-           'water_volume_for_salt', 'shortfall_warning', 'salt_summary', 'ion_census', 'check_ion_counts', 'add_ions',
+           'water_volume_for_salt', 'shortfall_warning', 'salt_summary', 'ion_report', 'ion_census', 'check_ion_counts', 'add_ions',
            'make_index']
 
 def rebox_system(system: dict, topology: dict, requested_z_nm: float | None = None, z_pad_nm: float = SLAB_Z_PAD_NM) -> list[float]:
@@ -161,11 +161,11 @@ def salt_volume(basis: str, box: list[float], nwater: int) -> float:
     raise SystemExit(f'Settings.salt_volume must be "water" or "box", not {basis!r}')
 
 
-def ion_counts(volume_nm3: float, charge: int, salt_m: float = SALT_M, mode: str = "inclusive") -> tuple:
+def ion_counts(volume_nm3: float, charge: int, salt_m: float = SALT_M, mode: str = "additive") -> tuple:
     """(target, Na+, Cl-, shortfall): the ions for salt_m NaCl in volume_nm3 and a system of the given charge.
 
-    target = round(salt_m * N_A * volume). "additive" adds target pairs and then |charge| counterions on top, so the
-    counterion species ends at target + |charge|. "inclusive" (the CHARMM-GUI 2017 convention) makes the counterion
+    target = round(salt_m * N_A * volume). "additive" (the default) adds target pairs and then |charge| counterions on
+    top, so the counterion species ends at target + |charge|. "inclusive" (the CHARMM-GUI 2017 convention) makes the counterion
     species equal target and the other species target - |charge|. When |charge| exceeds target the reduced species would be
     negative: it is set to 0, only the neutralizing ions are added, and shortfall = |charge| - target tells the caller
     the water cannot hold the requested concentration (0 otherwise).
@@ -197,12 +197,33 @@ def salt_summary(nwater: int, n_pos: int, n_neg: int) -> dict:
             "ionic_strength_M": 0.5 * (conc(n_pos) + conc(n_neg))}
 
 
+def ion_report(nwater: int, charge: int, n_pos: int, n_neg: int, target: int, mode: str, basis: str, volume: float) -> dict:
+    """Every ion category of a build, counted apart, with the concentrations they give in the aqueous phase.
+
+    neutralizing = |n_pos - n_neg| ions of the species that balances the system charge; salt_pairs = min(n_pos, n_neg)
+    NaCl ion pairs. With nwater waters (before the ions replace any) the aqueous volume is V_aq = nwater / 33.46 nm^-3
+    and a count n is the concentration c = n / (N_A V_aq) = n / (0.602214 nm^-3 per M x V_aq). Ionic strength is
+    I = 1/2 sum_i c_i z_i^2 = (c_Na + c_Cl) / 2 for the monovalent ions, so it exceeds the salt concentration by half
+    the neutralizing concentration: I = c_salt + c_neutralizing / 2.
+    """
+    summary = salt_summary(nwater, n_pos, n_neg)
+    neutralizing_species = "Na+" if n_pos > n_neg else "Cl-" if n_neg > n_pos else None
+    to_molar = lambda n: n / (summary["aqueous_nm3"] * MOLAR_PER_NM3)
+    return {"mode": mode, "volume_basis": basis, "volume_nm3": volume, "aqueous_nm3": summary["aqueous_nm3"],
+            "system_charge_e": charge, "salt_target_pairs": target, "salt_requested_M": SALT_M,
+            "neutralizing_ions": {"species": neutralizing_species, "count": abs(n_pos - n_neg)},
+            "salt_pairs": min(n_pos, n_neg), "na_total": n_pos, "cl_total": n_neg,
+            "salt_M": summary["nacl_added_M"], "neutralizing_M": to_molar(abs(n_pos - n_neg)),
+            "na_M": summary["na_M"], "cl_M": summary["cl_M"], "ionic_strength_M": summary["ionic_strength_M"]}
+
+
 def shortfall_warning(basis: str, volume: float, box: list[float], charge: int, target: int, short: int) -> str:
     """The warning for a system whose charge leaves no room for the requested salt: the shortfall and the box that fixes it."""
     needed = water_volume_for_salt(charge)
     return (f"WARNING: {SALT_M} M NaCl is {abs(charge)} ions of each kind only in {needed:.0f} nm^3 of {basis} volume; there are "
             f"{volume:.0f} nm^3 ({short} ions short of the {target} requested), so only the {abs(charge)} neutralizing ions are added; "
-            f"a box {(needed - volume) / (box[0] * box[1]):.2f} nm taller at fixed xy (z = {box[2]:.2f} nm now) reaches the target")
+            f"a box {(needed - volume) / (box[0] * box[1]):.2f} nm taller at fixed xy (z = {box[2]:.2f} nm now) reaches the target; "
+            f"counterion_mode additive (--counterion-mode additive) adds the target pairs on top of the neutralizing ions at any box height")
 
 
 def ion_census(names: list[str]) -> dict:
@@ -219,8 +240,10 @@ def check_ion_counts(census: dict, molecules: list) -> list[str]:
             if name is not None and rows.get(name, 0) != count] + ([] if water else ["no water row in [ molecules ]"])
 
 
-def add_ions(system: dict, topology: dict, gmx: str, box: list[float], settings: Settings = Settings()) -> None:
-    """Add 0.15 M NaCl plus counterions, retrying genion until no ion lands in the bilayer or on the solute or a lipid."""
+def add_ions(system: dict, topology: dict, gmx: str, box: list[float], settings: Settings = Settings()) -> dict:
+    """Add 0.15 M NaCl plus counterions, retrying genion until no ion lands in the bilayer or on the solute or a lipid.
+
+    Returns the ion_report of the build (neutralizing ions, salt pairs and concentrations, each counted apart)."""
     out, charge = system["out"], round(topology["charge"])
     if abs(topology["charge"] - charge) > 1e-3:
         raise SystemExit(f"non-integer system charge {topology['charge']:.4f}")
@@ -273,11 +296,14 @@ def add_ions(system: dict, topology: dict, gmx: str, box: list[float], settings:
     problems = check_ion_counts(ion_census([a["atom"] for a in atoms]), topology_molecules(out / "topol.top"))
     if problems:
         raise SystemExit("solv_ions.gro and topol.top disagree after genion: " + "; ".join(problems))
-    salt = salt_summary(kept, n_pos, n_neg)
-    log(out, f"ions: {SALT_M} M NaCl target {target} ions of each kind ({settings.salt_volume} volume {volume:.1f} nm^3; box "
-             f"{box[0] * box[1] * box[2]:.1f} nm^3, water {salt['aqueous_nm3']:.1f} nm^3; counterion_mode {settings.counterion_mode}) "
-             f"-> {n_pos} SOD + {n_neg} CLA, which neutralize {charge:+d} e; in the water {salt['na_M']:.3f} M Na+, "
-             f"{salt['cl_M']:.3f} M Cl-, ionic strength {salt['ionic_strength_M']:.3f} M; {nwater} TIP3 remain")
+    report = ion_report(kept, charge, n_pos, n_neg, target, settings.counterion_mode, settings.salt_volume, volume)
+    neutralizing = report["neutralizing_ions"]
+    log(out, f"ions: {SALT_M} M NaCl target {target} pairs ({settings.salt_volume} volume {volume:.1f} nm^3; box "
+             f"{box[0] * box[1] * box[2]:.1f} nm^3, water {report['aqueous_nm3']:.1f} nm^3; counterion_mode {settings.counterion_mode}) "
+             f"-> {neutralizing['count']} {neutralizing['species'] or 'no'} neutralizing ions ({charge:+d} e) + {report['salt_pairs']} NaCl pairs "
+             f"= {n_pos} SOD + {n_neg} CLA; in the water salt {report['salt_M']:.3f} M, neutralizing {report['neutralizing_M']:.3f} M, "
+             f"Na+ {report['na_M']:.3f} M, Cl- {report['cl_M']:.3f} M, ionic strength {report['ionic_strength_M']:.3f} M; {nwater} TIP3 remain")
+    return report
 
 
 def make_index(out: Path, topology: dict) -> dict:
