@@ -437,6 +437,20 @@ after EM (nothing may remain). Every gate's findings are written to `contacts.js
 by stage, and an Fmax failure names the culprit's element, its force-field overlaps before and after EM and the stage a
 lipid first clashed in (`em_clash_trace.json`).
 
+Five builds on the code of this release, default settings, show the behaviour: no seed is retried for the membrane pairs, and
+every build recovers under plain EM.
+
+| Build | Attempts | Membrane pairs and crossings warned before EM | Fmax after EM (steps) | Audit | Closest membrane pair after EM (Rmin) |
+|---|---|---|---|---|---|
+| KOR (6WHC in the KOR1 frame) | 1 | 3 | 430 (6) | PASS | 0.686 |
+| GPR (6WHC in the GPR5 frame) | 1 | 3 | 319 (9) | PASS | 0.685 |
+| prot-cgmemb (the README example, own CG membrane) | 2 (seed 1 had a ring threading) | 144 | 287 (13) | PASS | 0.694 |
+| V6G (GLP1R with orforglipron) | 1 | 163 | 424 (6) | PASS | 0.680 |
+| TIR (GLP1R with tirzepatide) | 1 | 122 | 417 (7) | PASS | 0.687 |
+
+After EM no build has a contact or crossing of any class. The closest pair of any class is the GDP O3B to Mg2+ coordination
+contact at 0.601 to 0.610 of Rmin, just above the 0.6 limit.
+
 Known limitation of the gate: atoms within `nrexcl` bonds of each other are all treated as excluded, but force-field
 topologies reintroduce some of them as explicit 1-4 interactions (`[ pairs ]`, `[ pairtypes ]`). A badly overlapping
 intramolecular 1-4 pair is therefore not examined, and the gate relies on backmapping and EM for it. No validated build
