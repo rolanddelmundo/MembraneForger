@@ -26,7 +26,7 @@ the stage is recorded in `run_manifest.json` (`error.stage`).
 | Empty pocket stops the build after embedding | the protein is much smaller than the frame's receptor hole | Use `--embed-site free` with a larger `--xy-buffer`, or your own membrane frame. |
 | `ERROR` in stage `slice_check` | the cut changed the lipid packing beyond `--apl-tolerance` | Read `membrane_validation.md`. Rerun with a larger `--xy-buffer` (2.0 or more). |
 | `ERROR` in stage `mstool` | the interpreter cannot import mstool | Install mstool 0.3.9 or 0.3.10, or point `--mstool-python` at a Python that has it. |
-| Backmapping fails after all seeds | ring threading or a clash that every seed reproduces | Read the `backmap` lines of the log and `int/work/mstool/`. |
+| Backmapping fails after all seeds | ring threading or a stereochemistry error that every seed reproduces | Read the `backmap` lines of the log and `int/work/mstool/`. |
 | `ERROR` in stage `validate` after minimization | the largest force stayed above the target, or a clash remained | The log names the atom and its neighbours. `em_clash_trace.json` traces a lipid culprit back to the first stage it clashes. |
 | GROMACS error | `gmx` not found, or a topology problem | Pass `--gmx`. Read the GROMACS message in the log. |
 | `input ... would be overwritten by the build` | the input file lives in the output directory under a generated name | Choose another `--out`. |

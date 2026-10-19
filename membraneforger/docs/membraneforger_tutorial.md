@@ -164,7 +164,7 @@ x, y cell.
 ## 4. Backmapping and the rest of the build
 
 mstool backmaps the sliced membrane around the complex held as a rigid obstacle, the structure is checked for ring
-threading, stereochemistry and clashes (another seed is tried when needed), the topology is built, the box is set in
+threading and stereochemistry (another seed is tried when needed; contact findings between the membrane and the complex are logged as a warning and left to the minimization), the topology is built, the box is set in
 z, water and 0.15 M NaCl (in the water, see below) are added, the system is minimized with and then without the lipid dihedral restraints, and
 an independent audit must pass before `em.gro` appears. Every intermediate is kept: at the end of each build, passed
 or failed, the steps on the way to `em.gro` (`config.INTERMEDIATES`) are moved into `<out>/int/`, beside the working
