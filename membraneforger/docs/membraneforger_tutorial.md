@@ -112,7 +112,7 @@ give a lower-leaflet APL of 57.3 A^2 with the CG protein and 48.3 A^2 with the f
 ![KOR before and after embedding: the bundled 50 us frame, the embedded membrane with GCGR, and the slice](figures/KOR_Membrane1_before_after.png)
 
 *Figure 1. The coarse-grained membrane of the KOR build at its three coarse-grained stages: the bundled 50 us frame
-with its own receptor, the membrane after embedding the GCGR complex, and the slice cut around it (1302, 1279 and 466
+with its own receptor, the membrane after embedding the GCGR complex, and the slice cut around it (1302, 1279 and 469
 lipids). Top-down view of each leaflet and side view (x-z), coloured by the Voronoi area per lipid. "After" means after
 embedding and slicing: the build does not equilibrate the coarse-grained membrane, and the figure is drawn by
 `membraneforger/examples/make_tutorial_figures.py`.*
