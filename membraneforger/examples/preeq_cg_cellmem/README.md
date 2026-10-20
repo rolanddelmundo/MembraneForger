@@ -2,14 +2,14 @@
 
 Eight frames of a single GPCR in an asymmetric, ten-species cell-membrane model, each taken at 50 µs of a
 Martini 3 simulation (seven kappa opioid receptor frames and one GPR139 frame). They are the bundled membranes of MembraneForger: `--cg 1` picks one of the GPR139 frames (currently one), `--cg 2`
-one of the kappa opioid receptor frames, and `--cg NAME` (for example `--cg KOR5`) a particular frame.
+one of the kappa opioid receptor frames, and `--cg NAME` (for example `--cg KOR_Membrane5`) a particular frame.
 `python -m membraneforger --list-membranes` lists them, and `--runs N` builds one complex in the first N frames of a
 series (at most as many as the series holds: seven for KOR, one for GPR139), giving N replicate systems that differ in
 their lipid arrangement.
 
 | Files | Receptor | Replicates |
 |---|---|---|
-| `KOR1`, `KOR2`, `KOR3`, `KOR5`, `KOR6`, `KOR7`, `KOR9` (`KORn_cg_cellmem.gro`) | kappa opioid receptor (PDB 8F7W) | 7 |
+| `KOR_Membrane1`, `KOR_Membrane2`, `KOR_Membrane3`, `KOR_Membrane5`, `KOR_Membrane6`, `KOR_Membrane7`, `KOR_Membrane9` (`KOR_Membranen_cg_cellmem.gro`) | kappa opioid receptor (PDB 8F7W) | 7 |
 | `GPR5_cg_cellmem.gro` | GPR139 (PDB 7F6G) | 1 |
 
 The number in a name is the replicate (run) of the simulation the frame was taken from, so it is kept even though the
@@ -20,7 +20,7 @@ Each frame holds about 60,000 beads in a cell of about 18.3 × 18.3 × 19.2 nm: 
 about 1,300 lipids, water and ions. The membranes were built with INSANE at CHOL:POPC:DOPC:POPE:DOPE:PSM:DPG3 =
 25:20:20:5:5:15:10 (upper leaflet) and CHOL:POPC:DOPC:POPE:DOPE:POPS:DOPS:SAP6 = 25:5:5:20:20:8:7:10 (lower
 leaflet). Composition at 50 µs, mole percent of each leaflet averaged over the 8 frames
-(`python examples/leaflet_composition.py examples/preeq_cg_cellmem/KOR?_cg_cellmem.gro examples/preeq_cg_cellmem/GPR?_cg_cellmem.gro`):
+(`python examples/leaflet_composition.py examples/preeq_cg_cellmem/KOR_Membrane?_cg_cellmem.gro examples/preeq_cg_cellmem/GPR139_Membrane?_cg_cellmem.gro`):
 
 | Leaflet | CHOL | POPC | DOPC | POPE | DOPE | PSM | DPG3 | POPS | DOPS | SAP6 |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -37,8 +37,8 @@ means no lipid of that species contacted the receptor in that leaflet.
 
 | Simulation | Figure |
 |---|---|
-| 8F7W (kappa opioid receptor), run 5, the run of `KOR5` | [KOR5_lipid_contacts_0-50us.svg](figures/KOR5_lipid_contacts_0-50us.svg) |
-| 7F6G (GPR139), run 5, the run of `GPR5` | [GPR5_lipid_contacts_0-50us.svg](figures/GPR5_lipid_contacts_0-50us.svg) |
+| 8F7W (kappa opioid receptor), run 5, the run of `KOR_Membrane5` | [KOR_Membrane5_lipid_contacts_0-50us.svg](figures/KOR_Membrane5_lipid_contacts_0-50us.svg) |
+| 7F6G (GPR139), run 5, the run of `GPR139_Membrane5` | [GPR5_lipid_contacts_0-50us.svg](figures/GPR5_lipid_contacts_0-50us.svg) |
 
 Each is a single replicate, so differences between species are not averaged over runs.
 
@@ -46,12 +46,12 @@ The figures come from the simulation trajectories, which are not part of the rep
 residue counts once per frame when any of its beads is within the cutoff of any receptor bead; segments `run5` to `run50`
 at 5 µs each, every 10th frame). The text in the SVGs is editable Arial, 12 pt and larger.
 
-`6WHC_MTZP_cg_cellmem.gro` and `6WHC_MTZP_prot-lig.pdb` are a complete input pair (glucagon receptor–tirzepatide–Gs
+`GCGR_MTZP_cg_cellmem.gro` and `GCGR_MTZP_prot-lig.pdb` are a complete input pair (glucagon receptor–tirzepatide–Gs
 in the same membrane model, 11.2 × 11.2 nm) used by the tests:
 
 ```bash
-python -m membraneforger --aa examples/preeq_cg_cellmem/6WHC_MTZP_prot-lig.pdb \
-    --cg examples/preeq_cg_cellmem/6WHC_MTZP_cg_cellmem.gro --orientation none --out example_out
+python -m membraneforger --aa examples/preeq_cg_cellmem/GCGR_MTZP_prot-lig.pdb \
+    --cg examples/preeq_cg_cellmem/GCGR_MTZP_cg_cellmem.gro --orientation none --out example_out
 ```
 
 Every frame is periodic in its box: `python examples/align_frames.py examples/preeq_cg_cellmem/*_cg_cellmem.gro` finds

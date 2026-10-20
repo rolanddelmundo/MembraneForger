@@ -1,15 +1,15 @@
 #!/bin/bash
 # MembraneForger on Gemini (City of Hope): membraneforger/slurm/run_membraneforger.sbatch with blocks 1 to 3 filled in for that
-# cluster. It builds the bundled example complex (6WHC) in the first five kappa opioid receptor membrane frames (KOR1, KOR2, KOR3, KOR5, KOR6), as a check of the
+# cluster. It builds the bundled example complex (GCGR) in the first five kappa opioid receptor membrane frames (KOR_Membrane1, KOR_Membrane2, KOR_Membrane3, KOR_Membrane5, KOR_Membrane6), as a check of the
 # installation and a worked example of RUNS > 1.
 #
 #   bash ~/MembraneForger/membraneforger/slurm/setup.sh            # once, on a login node (Python, OpenMM, mstool; GROMACS is a module)
 #   mkdir -p ~/mforger_test && cd ~/mforger_test
-#   cp ~/MembraneForger/membraneforger/slurm/examples/gemini_6WHC.sbatch .
-#   sbatch gemini_6WHC.sbatch
+#   cp ~/MembraneForger/membraneforger/slurm/examples/gemini_GCGR.sbatch .
+#   sbatch gemini_GCGR.sbatch
 #
-# Expected: mforger_gemini_<job>_0.log ends with "[6WHC] 5 of 5 runs passed", one "KOR<n>: ... PASS ..." line per
-# membrane and "exit 0"; the systems are ~/mforger_test/6WHC/KOR1/em.gro, KOR2, KOR3, KOR5 and KOR6/em.gro.
+# Expected: mforger_gemini_<job>_0.log ends with "[GCGR] 5 of 5 runs passed", one "KOR_Membrane<n>: ... PASS ..." line per
+# membrane and "exit 0"; the systems are ~/mforger_test/GCGR/KOR_Membrane1/em.gro, KOR_Membrane2, KOR_Membrane3, KOR_Membrane5 and KOR_Membrane6/em.gro.
 # For your own structures, change NAMES and ORIENT in block 3 and RUNS back to 1 (or keep it, with a longer --time).
 #
 # ============================ 1. SCHEDULER: your cluster's queue ==============================================
@@ -20,7 +20,7 @@
 #SBATCH --cpus-per-task=8             # cores for backmapping (OpenMM) and GROMACS; about 1 hour per build on 8
 #SBATCH --mem=70G                     # what a build of a GPCR complex in a bundled membrane needs
 #SBATCH --time=12:00:00               # five sequential runs, about 1 hour each on 8 cores
-#SBATCH --array=0-0                   # one task: the bundled 6WHC complex, built in five membranes
+#SBATCH --array=0-0                   # one task: the bundled GCGR complex, built in five membranes
 #SBATCH --mail-type=NONE
 #SBATCH --partition=fast,all          # Gemini partitions
 ##SBATCH --account=ACCOUNT            # uncomment and fill in if your cluster bills jobs to an account
@@ -41,16 +41,16 @@ PY=""                                          # Python with the requirements in
 
 # ============================ 3. THIS RUN: your structures and build options ==================================
 WORK="${SLURM_SUBMIT_DIR:-$PWD}"               # folder with the input PDBs; results go to $WORK/<name>/
-NAMES=(6WHC)                                   # $WORK/<name>.pdb for each entry, e.g. (receptor_A receptor_B);
-                                               # keep --array in block 1 in step. 6WHC is the bundled example
+NAMES=(GCGR)                                   # $WORK/<name>.pdb for each entry, e.g. (receptor_A receptor_B);
+                                               # keep --array in block 1 in step. GCGR is the bundled example
                                                # complex and is copied here if the file is absent
-ORIENT="--orientation none"                    # already oriented (OPM, CHARMM-GUI, the bundled 6WHC): as is.
+ORIENT="--orientation none"                    # already oriented (OPM, CHARMM-GUI, the bundled GCGR): as is.
                                                # a model or any structure not yet in a membrane: name the chain
                                                # that crosses the membrane and the side of its N terminus, e.g.
                                                # "--orient-chain R --nterm-side out" (GPCRs: out); uses PPM
 MEMBRANE=2                                     # 1 = a random bundled GPR139 frame, 2 = a random KOR frame, or
                                                # one frame by name for every model (python -m membraneforger --list-membranes)
-RUNS=5                                         # build 6WHC once in each of KOR1, KOR2, KOR3, KOR5, KOR6
+RUNS=5                                         # build GCGR once in each of KOR_Membrane1, KOR_Membrane2, KOR_Membrane3, KOR_Membrane5, KOR_Membrane6
 EXTRA=""                                       # other options, e.g. "--xy-buffer 2.0" for production systems
 # ==============================================================================================================
 
@@ -85,8 +85,8 @@ if [ -n "${SLURM_ARRAY_TASK_MAX:-}" ] && [ "$SLURM_ARRAY_TASK_MAX" -lt $(( ${#NA
 fi
 name="${NAMES[$task]%.pdb}"
 pdb="$WORK/$name.pdb"
-if [ ! -f "$pdb" ] && [ "$name" = 6WHC ]; then
-    cp "$REPO/membraneforger/examples/preeq_cg_cellmem/6WHC_MTZP_prot-lig.pdb" "$pdb" && echo "copied the bundled example to $pdb"
+if [ ! -f "$pdb" ] && [ "$name" = GCGR ]; then
+    cp "$REPO/membraneforger/examples/preeq_cg_cellmem/GCGR_MTZP_prot-lig.pdb" "$pdb" && echo "copied the bundled example to $pdb"
 fi
 [ -f "$pdb" ] || die "input $pdb not found (NAMES, block 3)"
 version=$($GMX --version 2>/dev/null | grep "GROMACS version") || die "GROMACS command '$GMX' does not run (block 2)"

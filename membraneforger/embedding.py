@@ -31,12 +31,12 @@ BELT_NM = 3.0  # hydrophobic thickness of the bilayer: the window that locates t
 # away at the coarse-grained level (repulsion range OVERLAP_NM + PUSH_MARGIN_NM, so restrained beads settle at about
 # OVERLAP_NM) for at most RELAX_STEPS steps, without creating inter-lipid contacts closer than SEAM_CONTACT_NM
 # (config.Settings.seam_min_bead_nm). Only lipids still closer than HARD_CORE_NM afterwards are removed: the complex
-# occupies their place. On the 6WHC receptor-Gs complex the earlier rule (remove every lipid with any bead within
+# occupies their place. On the GCGR receptor-Gs complex the earlier rule (remove every lipid with any bead within
 # OVERLAP_NM) deleted about 99 lipids per bundled frame, 39 of them only for touching the Ggamma geranylgeranyl chain
 # or the Galpha N-terminus, and left an empty column of about 4 nm^3 in the inner leaflet. Removing lipids whose
 # headgroup anchor the complex occupies was also tried and rejected: next to a thin lipid anchor it still deletes
-# lipids whose volume nothing replaces (3 nm^3 pocket on GPR1). Over the 18 bundled frames this embedding removes
-# 24-41 lipids instead of 88-110. RELAX_STEPS: the largest pocket stops shrinking after about 1200 steps on GPR1
+# lipids whose volume nothing replaces (3 nm^3 pocket on GPR139_Membrane5). Over the 18 bundled frames this embedding removes
+# 24-41 lipids instead of 88-110. RELAX_STEPS: the largest pocket stops shrinking after about 1200 steps on GPR139_Membrane5
 # (600 steps: 1.5 nm^3, 1200: 0.44, 4000: 0.44); one embedding takes about a minute.
 OVERLAP_NM = 0.40
 PUSH_MARGIN_NM = 0.05
@@ -45,7 +45,7 @@ RELAX_STEPS = 1200
 SEAM_CONTACT_NM = 0.30
 # Empty pockets in the acyl region (membrane_voids): grid points farther than VOID_EMPTY_NM from every lipid bead and
 # solute atom, on a VOID_GRID_NM grid between VOID_MARGIN_NM off the midplane and VOID_MARGIN_NM inside the PO4 plane.
-# The embedding stops when a pocket exceeds MAX_VOID_NM3, less than the volume of one phospholipid. With the 6WHC
+# The embedding stops when a pocket exceeds MAX_VOID_NM3, less than the volume of one phospholipid. With the GCGR
 # complex in the 18 bundled frames: the uncut frames' largest pocket is 0.00-0.20 nm^3, this embedding leaves
 # 0.02-0.76 nm^3, and the earlier remove-on-contact rule left 1.2-6.8 nm^3 in the inner leaflet.
 # Where the complex goes in the frame (embed_complex site): "hole", where the frame's own protein was, or "free", the
@@ -53,7 +53,7 @@ SEAM_CONTACT_NM = 0.30
 EMBED_SITES = ("hole", "free")
 FREE_SITE_GRID_NM = 0.25
 # With the free site, the slice window must keep this far from every bead of the frame's receptor. In the bundled
-# frames no lipid bead comes closer than 0.35-0.37 nm to a receptor bead (GPR1, KOR1, GPR5), so the hole reaches that
+# frames no lipid bead comes closer than 0.35-0.37 nm to a receptor bead (KOR_Membrane1, GPR139_Membrane5), so the hole reaches that
 # far past the bead centres; 1.0 nm keeps the cut edge a further ~0.6 nm (about one lipid bead) off it.
 FRAME_PROTEIN_CLEARANCE_NM = 1.0
 VOID_GRID_NM = 0.1

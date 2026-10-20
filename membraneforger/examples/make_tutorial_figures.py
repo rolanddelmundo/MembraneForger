@@ -5,7 +5,7 @@
 
 Writes, per figure, a PNG and a CSV with the numbers behind it, and two tables:
 
-    kor1_membrane_before_after.png / .csv   KOR1 as bundled, embedded and sliced: Voronoi area per lipid, top-down and side views
+    KOR_Membrane1_before_after.png / .csv   KOR_Membrane1 as bundled, embedded and sliced: Voronoi area per lipid, top-down and side views
     protein_density_by_frame.png / .csv     density of all lipids within R of the protein over the leaflet mean, every frame
     table_apl.csv                           leaflet APL by stage, same lipids uncut, head-plane APL, every frame and leaflet
     table_protein_density.csv               the 10 A first-shell ratio, embedded and slice, every frame and leaflet
@@ -41,14 +41,14 @@ def write_csv(path, header, rows):
 
 
 def before_after(src, out):
-    """KOR1: the bundled frame, the membrane after embedding the 6WHC complex, and the slice cut around it."""
-    case = src / "cases/KOR1__6whc"
+    """KOR_Membrane1: the bundled frame, the membrane after embedding the GCGR complex, and the slice cut around it."""
+    case = src / "cases/KOR_Membrane1__6whc"
     lipids = list(csv.DictReader(open(case / "membrane_validation_lipids.tsv"), delimiter="\t"))
     for r in lipids:
         for key in ("x_A", "y_A", "z_A", "voronoi_area_A2"):
             r[key] = float(r[key])
     stages = {s["name"]: s for s in json.load(open(case / "membrane_validation.json"))["stages"]}
-    columns = [("cg_frame", "CG frame (50 µs,\nframe's own receptor)"), ("embed", "Embedded\n(6WHC complex)"), ("slice", "Slice\n(cut around 6WHC)")]
+    columns = [("cg_frame", "CG frame (50 µs,\nframe's own receptor)"), ("embed", "Embedded\n(GCGR complex)"), ("slice", "Slice\n(cut around GCGR)")]
     fig = plt.figure(figsize=(13, 12))
     grid = fig.add_gridspec(3, 4, width_ratios=[1, 1, 1, 0.06], height_ratios=[1, 1, 0.55], hspace=0.28, wspace=0.12)
     scatter = None
@@ -93,10 +93,10 @@ def before_after(src, out):
             ax.set_yticklabels([])
     colourbar = fig.colorbar(scatter, cax=fig.add_subplot(grid[0:2, 3]))
     colourbar.set_label("Voronoi area per lipid (Å$^2$)")
-    fig.suptitle("KOR1: the bundled 50 µs frame and the membrane it becomes in the build", fontsize=15, fontweight="bold", y=0.94)
-    fig.savefig(out / "kor1_membrane_before_after.png")
+    fig.suptitle("KOR_Membrane1: the bundled 50 µs frame and the membrane it becomes in the build", fontsize=15, fontweight="bold", y=0.94)
+    fig.savefig(out / "KOR_Membrane1_before_after.png")
     plt.close(fig)
-    write_csv(out / "kor1_membrane_before_after.csv", ["stage", "leaflet", "resid", "resname", "x_A", "y_A", "z_A", "voronoi_area_A2"],
+    write_csv(out / "KOR_Membrane1_before_after.csv", ["stage", "leaflet", "resid", "resname", "x_A", "y_A", "z_A", "voronoi_area_A2"],
               [[r["stage"], r["leaflet"], r["resid"], r["resname"], r["x_A"], r["y_A"], r["z_A"], r["voronoi_area_A2"]] for r in lipids])
 
 

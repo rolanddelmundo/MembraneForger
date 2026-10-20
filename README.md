@@ -48,8 +48,8 @@ The structure is already oriented, so PPM is not needed.
 
 ```bash
 python -m membraneforger \
-    --aa membraneforger/examples/preeq_cg_cellmem/6WHC_MTZP_prot-lig.pdb \
-    --cg membraneforger/examples/preeq_cg_cellmem/6WHC_MTZP_cg_cellmem.gro \
+    --aa membraneforger/examples/preeq_cg_cellmem/GCGR_MTZP_prot-lig.pdb \
+    --cg membraneforger/examples/preeq_cg_cellmem/GCGR_MTZP_cg_cellmem.gro \
     --orientation none \
     --out example_out
 ```
@@ -64,14 +64,14 @@ python -m membraneforger --aa complex.pdb --orient-chain R --nterm-side out --ou
 usually needs `in`. The [tutorial](membraneforger/docs/membraneforger_tutorial.md) walks through a full build.
 
 To build the same protein in five different membranes, add `--runs 5` with `--cg 2`: one system per bundled kappa opioid receptor frame, in
-`my_build/KOR1/`, `my_build/KOR2/`, `my_build/KOR3/`, `my_build/KOR5/` and `my_build/KOR6/` (see [Advanced options](membraneforger/docs/advanced.md#several-membranes-for-one-complex)).
+`my_build/KOR_Membrane1/`, `my_build/KOR_Membrane2/`, `my_build/KOR_Membrane3/`, `my_build/KOR_Membrane5/` and `my_build/KOR_Membrane6/` (see [Advanced options](membraneforger/docs/advanced.md#several-membranes-for-one-complex)).
 
 ## Inputs and outputs
 
 You provide an all-atom structure (`--aa complex.pdb`: every chain you want simulated, each with a unique chain ID;
 no water, ions, crystallization additives or insertion codes; ligands need a topology in `membraneforger/forcefield/toppar/`) and,
 optionally, a membrane: `--cg 1` (default, a bundled GPR139 membrane), `--cg 2` (kappa opioid receptor), `--cg NAME`
-such as `KOR5` (`--list-membranes` lists them), or `--cg FILE` for a Martini 3 frame of your own complex. The
+such as `KOR_Membrane5` (`--list-membranes` lists them), or `--cg FILE` for a Martini 3 frame of your own complex. The
 orientation options (`--orient-chain`, `--nterm-side`, `--orientation`) say which chain sits in the membrane. Every
 option is in the [command-line reference](membraneforger/docs/cli_reference.md).
 
