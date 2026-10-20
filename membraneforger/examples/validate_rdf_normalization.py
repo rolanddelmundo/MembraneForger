@@ -1,8 +1,9 @@
 """Compare the existing headgroup g(r) with the accessible-shell-area normalization on the embedded and sliced bundled membranes.
 
-    python membraneforger/examples/validate_rdf_normalization.py --repo . --out rdf_shell_out [--frames KOR1 KOR5] [--centred|--search]
+    python membraneforger/examples/validate_rdf_normalization.py --repo . --out rdf_shell_out
+        [--frames KOR_Membrane1 KOR_Membrane5] [--centred|--search]
 
-For every frame the oriented 6WHC complex is embedded and the membrane sliced (the CG stages only, as in
+For every frame the oriented GCGR complex is embedded and the membrane sliced (the CG stages only, as in
 measure_tutorial_numbers.py). Per leaflet it reports
 
   * the existing g(r) (area = the Voronoi lipid-accessible area) and the accessible-shell g(r) of the embedded membrane and
@@ -46,9 +47,9 @@ def rms_difference(a, b, band=(0.3, 2.0)):
 
 
 def stages_for(mf, repo, frame, out, search, gmx):
-    """Embed 6WHC in the frame and slice it; returns the MembraneValidation holding the embed and slice stages."""
+    """Embed GCGR in the frame and slice it; returns the MembraneValidation holding the embed and slice stages."""
     forcefield = repo / "membraneforger/forcefield"
-    aa = repo / "membraneforger/examples/preeq_cg_cellmem/6WHC_MTZP_prot-lig.pdb"
+    aa = repo / "membraneforger/examples/preeq_cg_cellmem/GCGR_MTZP_prot-lig.pdb"
     opm = repo / "membraneforger/tests/data/6whc_opm_chainR.pdb"
     out.mkdir(parents=True, exist_ok=True)
     (out / "work").mkdir(exist_ok=True)
@@ -122,7 +123,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--repo", default=".", help="the MembraneForger repository (default: the current folder)")
     parser.add_argument("--out", required=True, help="output folder (created)")
-    parser.add_argument("--frames", nargs="*", help="bundled frame names (default: KOR1)")
+    parser.add_argument("--frames", nargs="*", help="bundled frame names (default: KOR_Membrane1)")
     parser.add_argument("--search", action="store_true", help="slice with the offset search instead of centred")
     parser.add_argument("--replicates", type=int, default=100, help="random placements per reference (default: %(default)s)")
     parser.add_argument("--gmx", default="gmx")
@@ -132,7 +133,7 @@ def main(argv=None):
     import membraneforger as mf
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    frames = {n: p for n, p in mf.bundled_frames().items() if n in {f.upper() for f in (args.frames or ["KOR1"])}}
+    frames = {n: p for n, p in mf.bundled_frames().items() if n.upper() in {f.upper() for f in (args.frames or ["KOR_Membrane1"])}}
     if not frames:
         raise SystemExit("no bundled frame matches --frames")
     results = {}

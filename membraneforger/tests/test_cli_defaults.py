@@ -72,7 +72,7 @@ class OutputNaming(unittest.TestCase):
 
     def test_the_default_is_named_after_the_structure_whatever_the_membrane(self):
         outs = set()
-        for cg in ("1", "2", "KOR1", "GPR5"):
+        for cg in ("1", "2", "KOR_Membrane1", "GPR139_Membrane5"):
             code, session, cwd = self.build_with("--cg", cg)
             outs.add(session.out.name)
             self.assertEqual(session.out.parent, cwd)
@@ -84,14 +84,14 @@ class OutputNaming(unittest.TestCase):
 
     def test_an_explicit_path_wins(self):
         with tempfile.TemporaryDirectory() as tmp:
-            code, session, _ = self.build_with("--cg", "KOR1", "--out", str(Path(tmp) / "mine"))
+            code, session, _ = self.build_with("--cg", "KOR_Membrane1", "--out", str(Path(tmp) / "mine"))
             self.assertEqual(session.out, (Path(tmp) / "mine").resolve())
 
     def test_default_out_helper(self):
         self.assertEqual(mf.default_out(Path("/data/6WHC.pdb"), Path("/work")), Path("/work/6WHC_membraneforger"))
 
     def test_runs_refuse_two_frames_with_one_folder(self):
-        frames = [Path("/x/KOR1_cg_cellmem.gro"), Path("/y/KOR1_cg_cellmem.gro")]
+        frames = [Path("/x/KOR_Membrane1_cg_cellmem.gro"), Path("/y/KOR_Membrane1_cg_cellmem.gro")]
         session = mf.Session(out=Path("/nonexistent/out"), name="t", gmx="gmx", forcefield=FORCEFIELD, data=None, python=sys.executable,
                              ntomp=1, nsteps=1)
         self.assertIn("share one output folder", failure(mf.run_sessions, session, AA_PDB, frames, []))
@@ -170,10 +170,10 @@ class RestartSafety(unittest.TestCase):
         self.assertEqual((self.out / "em.gro").read_text(), "x")
 
     def test_runs_check_every_folder_before_the_first_build(self):
-        (self.out / "KOR2").mkdir()
-        (self.out / "KOR2" / "em.gro").write_text("x")
+        (self.out / "KOR_Membrane2").mkdir()
+        (self.out / "KOR_Membrane2" / "em.gro").write_text("x")
         session = mf.Session(out=self.out, name="t", gmx="gmx", forcefield=FORCEFIELD, data=None, python=sys.executable, ntomp=1, nsteps=1)
-        frames = [Path("/x/KOR1_cg_cellmem.gro"), Path("/x/KOR2_cg_cellmem.gro")]
+        frames = [Path("/x/KOR_Membrane1_cg_cellmem.gro"), Path("/x/KOR_Membrane2_cg_cellmem.gro")]
         with mock.patch.object(mf.cli, "build", return_value=0) as built:
             self.assertIn("earlier build", failure(mf.run_sessions, session, AA_PDB, frames, []))
             built.assert_not_called()
@@ -181,9 +181,9 @@ class RestartSafety(unittest.TestCase):
     def test_the_cli_flags_reach_the_session(self):
         sessions = []
         with mock.patch.object(mf.cli, "build", side_effect=lambda session, *a: sessions.append(session) or 0):
-            mf.main(["--aa", str(AA_PDB), "--cg", "KOR1", "--gmx", sys.executable, "--orientation", "none",
+            mf.main(["--aa", str(AA_PDB), "--cg", "KOR_Membrane1", "--gmx", sys.executable, "--orientation", "none",
                      "--out", str(self.out), "--overwrite", "--overwrite-restart"])
-            mf.main(["--aa", str(AA_PDB), "--cg", "KOR1", "--gmx", sys.executable, "--orientation", "none", "--out", str(self.out)])
+            mf.main(["--aa", str(AA_PDB), "--cg", "KOR_Membrane1", "--gmx", sys.executable, "--orientation", "none", "--out", str(self.out)])
         self.assertEqual([(s.overwrite, s.overwrite_restart) for s in sessions], [(True, True), (False, False)])
 
     def test_a_gromacs_continuation_in_the_directory_is_not_blocked_by_this_code(self):

@@ -352,7 +352,7 @@ class Settings:
     # A user box must leave at least this much membrane on each side of the complex.
     box_xy_min_buffer_nm: float = 0.5
     # Seam contact threshold between beads of different lipids that only the new periodicity brings together. The
-    # closest inter-molecule bead pair in the equilibrated 6WHC frame is 0.342 nm (Martini sigma is 0.47 nm), so
+    # closest inter-molecule bead pair in the equilibrated GCGR frame is 0.342 nm (Martini sigma is 0.47 nm), so
     # 0.30 nm separates real near-contacts from overlap. Such pairs are relaxed in place (slicing.relax_seam, at most
     # seam_relax_steps steepest-descent steps); a lipid is removed only if a pair closer than seam_hard_core_nm
     # survives the relaxation (beads that close would put atoms of two lipids on top of each other).
@@ -362,7 +362,7 @@ class Settings:
     # Crop position. Default: the window is centred on the complex. Opt-in (--slice-offset-search): the window may be
     # shifted on a cropped axis by up to slice_offset_search_nm (never past the minimum margin) in steps of
     # slice_offset_step_nm, and the offset whose lipid counts best reproduce the reference leaflet density and
-    # composition is used (slicing.choose_offset). Over the 8 bundled KOR frames cut around 6WHC the construction
+    # composition is used (slicing.choose_offset). Over the 8 bundled KOR frames cut around GCGR the construction
     # deviation of the leaflet APL (median / 95th percentile / largest) is 0.71 / 1.87 / 2.18 % centred and
     # 1.55 / 3.39 / 4.87 % with the search, so the search is off unless asked for.
     slice_optimize_offset: bool = False
@@ -370,7 +370,7 @@ class Settings:
     slice_offset_step_nm: float = 0.1
     # Slice validation against the membrane that was cut (the embedded membrane). The construction check compares the
     # leaflet APL of the slice with the Voronoi areas of the SAME lipids in the uncut membrane: only the new seam can
-    # change it. Measured over the 18 bundled frames cut around the 6WHC complex (36 leaflets): median 0.9 %, 95th
+    # change it. Measured over the 18 bundled frames cut around the GCGR complex (36 leaflets): median 0.9 %, 95th
     # percentile 2.7 %, largest 4.0 % (membraneforger/docs/membraneforger_tutorial.md 5.3), while the earlier all-beads-inside rule
     # gave +12 to +32 %. So: PASS up to apl_slice_warning_percent, WARNING up to apl_slice_tolerance_percent, beyond
     # that FAIL and (apl_validate) the build stops before backmapping. The RDF check compares the all-anchor headgroup

@@ -9,7 +9,7 @@ from scipy.spatial import cKDTree
 
 from .common import AA_PDB, CG_GRO, FORCEFIELD, MAPPING, REPO, failure, mf, residue, small_system
 
-KOR1 = REPO / "membraneforger/examples/preeq_cg_cellmem/KOR1_cg_cellmem.gro"
+KOR_Membrane1 = REPO / "membraneforger/examples/preeq_cg_cellmem/KOR_Membrane1_cg_cellmem.gro"
 
 
 def load(cg_path):
@@ -42,7 +42,7 @@ class HydrophobicBelt(unittest.TestCase):
         self.assertIn("fewer than 10 protein residues", failure(mf.hydrophobic_belt, one))
 
 
-GPR1 = REPO / "membraneforger/examples/preeq_cg_cellmem/GPR5_cg_cellmem.gro"
+GPR139_FRAME = REPO / "membraneforger/examples/preeq_cg_cellmem/GPR139_Membrane5_cg_cellmem.gro"
 FAST = {"relax_steps": 0, "max_void_nm3": float("inf")}  # placement only: no push, no pocket gate
 
 
@@ -59,7 +59,7 @@ def lipid_anchor_segments(atom):
 class Embedding(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.aa, cls.cg, cls.box, cls.slab = load(KOR1)
+        cls.aa, cls.cg, cls.box, cls.slab = load(KOR_Membrane1)
         cls.result = mf.embed_complex(cls.aa, cls.cg["protein"], cls.cg["membrane"], cls.box, cls.slab)
 
     def test_complex_is_placed_in_the_frames_protein_hole_and_room_is_made(self):
@@ -97,7 +97,7 @@ class Embedding(unittest.TestCase):
         self.assertLessEqual(result["metrics"]["voids"]["largest_pocket_nm3"], mf.MAX_VOID_NM3)
 
     def test_input_membrane_is_not_modified(self):
-        fresh = load(KOR1)[1]["membrane"]
+        fresh = load(KOR_Membrane1)[1]["membrane"]
         self.assertEqual(len(fresh), len(self.cg["membrane"]))
         for a, b in zip(fresh, self.cg["membrane"]):
             self.assertTrue(np.allclose(a["xyz"], b["xyz"]))
@@ -123,7 +123,7 @@ class LipidAnchoredComplex(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.aa, cls.cg, cls.box, cls.slab = load(GPR1)
+        cls.aa, cls.cg, cls.box, cls.slab = load(GPR139_FRAME)
         cls.result = mf.embed_complex(cls.aa, cls.cg["protein"], cls.cg["membrane"], cls.box, cls.slab)
         cls.midplane = cls.result["metrics"]["midplane_nm"]
         cls.heavy, cls.tree = heavy_tree(cls.result["placed"], cls.box)
@@ -186,7 +186,7 @@ class SinglePassProteinAwayFromTheHole(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        aa, cls.cg, cls.box, cls.slab = load(GPR1)
+        aa, cls.cg, cls.box, cls.slab = load(GPR139_FRAME)
         cls.helix, cls.centre_a = single_helix(aa)
         cls.result = mf.embed_complex(cls.helix, cls.cg["protein"], cls.cg["membrane"], cls.box, cls.slab,
                                       bilayer_z_a=cls.centre_a, site="free")

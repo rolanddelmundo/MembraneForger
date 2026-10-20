@@ -54,7 +54,7 @@ class BundledFrames(unittest.TestCase):
 class DamagedFrame(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        atoms, cls.box = mf.read_cg(mf.bundled_frames()["GPR5"])
+        atoms, cls.box = mf.read_cg(mf.bundled_frames()["GPR139_Membrane5"])
         cls.cg = mf.classify_cg(atoms, MAPPING)
         slab = mf.make_membrane_whole(cls.cg["membrane"], cls.box)
         cls.midplane, _, cls.detail = mf.bilayer_midplane(cls.cg["membrane"], slab)

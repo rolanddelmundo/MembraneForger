@@ -58,8 +58,9 @@ def default_out(source: Path, cwd: Path | None = None) -> Path:
 
 
 def bundled_frames() -> dict:
-    """The bundled frames by name (for example KOR1 or GPR5), each mapped to its file in membraneforger/examples/preeq_cg_cellmem/."""
-    return {p.name[:-len(BUNDLED_FRAME_SUFFIX)].upper(): p for p in sorted(BUNDLED_DIR.glob("*" + BUNDLED_FRAME_SUFFIX))
+    """The bundled frames by name (for example KOR_Membrane1 or GPR139_Membrane5), each mapped to its file in
+    membraneforger/examples/preeq_cg_cellmem/."""
+    return {p.name[:-len(BUNDLED_FRAME_SUFFIX)]: p for p in sorted(BUNDLED_DIR.glob("*" + BUNDLED_FRAME_SUFFIX))
             if p.name[:-len(BUNDLED_FRAME_SUFFIX)][:3].upper() in RECEPTORS}
 
 
@@ -75,7 +76,8 @@ def bundled_membrane(code: str) -> Path | None:
     """Resolve a --cg value that names a bundled membrane; None when it is not one (a file path).
 
     "1" picks one of the GPR139 frames at random and "2" one of the kappa opioid receptor frames; a frame name such as
-    "GPR1" or "KOR5" (any case, with or without the _cg_cellmem.gro suffix) picks that frame.
+    "GPR139_Membrane5" or "KOR_Membrane5" (any case, with or without the _cg_cellmem.gro suffix) picks that frame; the
+    names of earlier versions ("GPR5", "KOR5") still work.
     """
     if code in BUNDLED_MEMBRANES:
         return random.choice(bundled_series(code))
@@ -84,10 +86,14 @@ def bundled_membrane(code: str) -> Path | None:
     name = code.strip().upper()
     for suffix in (BUNDLED_FRAME_SUFFIX.upper(), ".GRO"):
         name = name[:-len(suffix)] if name.endswith(suffix) else name
+    old = re.fullmatch(r"(GPR|KOR)(\d+)", name)  # the names of earlier versions: KOR5 is KOR_Membrane5, GPR5 is GPR139_Membrane5
+    if old:
+        name = f"{'GPR139' if old.group(1) == 'GPR' else 'KOR'}_MEMBRANE{old.group(2)}"
     frames = bundled_frames()
-    if name in frames:
-        return frames[name]
-    if name[:3] in RECEPTORS and name[3:].isdigit():  # looks like a frame name, but no such frame is bundled
+    by_upper = {frame.upper(): path for frame, path in frames.items()}
+    if name in by_upper:
+        return by_upper[name]
+    if re.fullmatch(r"(GPR|KOR)(139)?_MEMBRANE\d+", name):  # looks like a frame name, but no such frame is bundled
         raise SystemExit(f"no bundled membrane named {code}: the bundled frames are {', '.join(frames)} (--list-membranes)")
     return None  # a file path
 
@@ -96,7 +102,7 @@ def describe_bundled_membranes() -> str:
     """The text of --list-membranes: every bundled frame by name."""
     lines = ["bundled Martini 3 cell membranes (membraneforger/examples/preeq_cg_cellmem/, 50 us each; pass a name to --cg):"]
     for name, path in bundled_frames().items():
-        lines.append(f"  {name:<5} {RECEPTORS[name[:3]]:<22} {path.name}")
+        lines.append(f"  {name:<18} {RECEPTORS[name[:3].upper()]:<22} {path.name}")
     lines.append("--cg 1 picks a GPR139 frame at random and --cg 2 a kappa opioid receptor frame; --runs N builds the complex in "
                  "the first N frames of that series, one system each")
     return "\n".join(lines)

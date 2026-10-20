@@ -6,8 +6,8 @@ import numpy as np
 
 from .common import CG_GRO, REPO, failure, mf
 
-KOR1 = REPO / "membraneforger" / "examples" / "preeq_cg_cellmem" / "KOR1_cg_cellmem.gro"
-GPR5 = REPO / "membraneforger" / "examples" / "preeq_cg_cellmem" / "GPR5_cg_cellmem.gro"
+KOR_Membrane1 = REPO / "membraneforger" / "examples" / "preeq_cg_cellmem" / "KOR_Membrane1_cg_cellmem.gro"
+GPR139_Membrane5 = REPO / "membraneforger" / "examples" / "preeq_cg_cellmem" / "GPR139_Membrane5_cg_cellmem.gro"
 
 
 def liquid_frame(box=18.0, spacing=0.42, rotate_deg=0.0, seed=0):
@@ -78,7 +78,7 @@ class FrameAlignment(unittest.TestCase):
                 self.assertIs(fixed, atoms)
 
     def test_a_rotated_copy_of_a_shipped_frame_is_recovered(self):
-        atoms, box = mf.read_cg(KOR1)
+        atoms, box = mf.read_cg(KOR_Membrane1)
         c, s = math.cos(math.radians(48.0)), math.sin(math.radians(48.0))
         cx, cy = 0.5 * box[0], 0.5 * box[1]
         turned = [dict(a, x=cx + (a["x"] - cx) * c - (a["y"] - cy) * s, y=cy + (a["x"] - cx) * s + (a["y"] - cy) * c) for a in atoms]

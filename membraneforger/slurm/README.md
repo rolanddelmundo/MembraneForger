@@ -4,7 +4,7 @@
 |---|---|---|
 | `setup.sh` | Builds a self-contained Python environment (plus a CPU GROMACS and gfortran) inside the repository, and compiles PPM 3.0 if its source is present. No Anaconda, modules or root needed. | once per user, on a login node |
 | `run_membraneforger.sbatch` | Builds one all-atom complex per array task in a bundled membrane: orientation, Martini 3 slice, backmapping, validation, energy minimization. Writes `<name>/em.gro` next to the input PDB. | copy next to your PDB files, fill in the three blocks, `sbatch` it |
-| `membraneforger/examples/gemini_6WHC.sbatch` | The same script with the blocks filled in for the Gemini cluster (City of Hope): builds the bundled 6WHC example in five membranes. A worked example and an installation check. | `sbatch` as is on Gemini; adapt on another cluster |
+| `membraneforger/examples/gemini_GCGR.sbatch` | The same script with the blocks filled in for the Gemini cluster (City of Hope): builds the bundled GCGR example in five membranes. A worked example and an installation check. | `sbatch` as is on Gemini; adapt on another cluster |
 | `membraneforger/examples/array_cases.sbatch` | An array job driven by a tab-separated case table (name, PDB, membrane, extra options); the older template, moved here from `membraneforger/cpu.submit`. | `sbatch --array=...` with `REPO`, `CASES` and `OUTROOT` set, as described in the script header |
 | `membraneforger/examples/test_contact_gates.sbatch` | Repeats a build that failed, with a branch checked out as a worktree beside the repository (fill in `REPO`, `BRANCH` and `PREVIOUS`; it uses the `gmx` that `setup.sh` built), after running the unit tests. The log ends with the new build's result and its `contacts.json` summary. | from the folder that holds the failed output folder |
 
@@ -18,7 +18,7 @@ cp ~/MembraneForger/membraneforger/slurm/run_membraneforger.sbatch .
 sbatch run_membraneforger.sbatch
 ```
 
-Submitted unchanged, the script builds the bundled example complex (6WHC), so the first submission checks the
+Submitted unchanged, the script builds the bundled example complex (GCGR), so the first submission checks the
 installation. Each task writes `<name>/` next to the PDB files and a log `mforger_<job>_<task>.log` in the submit
 folder; the last line of the log, and of `<name>/membranebuilder.log`, says `PASS` or `FAIL`. The script checks the
 environment, the input file, GROMACS and PPM before it starts, so a mistake fails in seconds and the error names the
@@ -67,11 +67,11 @@ Typical setups:
 | `NAMES` | the PDB files in the submit folder, without `.pdb`: `(receptor_A receptor_B)`. Keep `--array` in block 1 in step |
 | `ORIENT` | `"--orientation none"` for a structure already placed in a membrane (OPM, CHARMM-GUI). Otherwise the chain that crosses the membrane and the side of its N terminus, `"--orient-chain R --nterm-side out"` (GPCRs: out); this uses PPM |
 | `MEMBRANE` | `1` for a random GPR139 frame, `2` for a random KOR frame, or one frame by name (`python -m membraneforger --list-membranes` lists them) |
-| `RUNS` | build each structure this many times, once in each of the first `RUNS` frames of the series (`MEMBRANE=2`: `<name>/KOR1/em.gro`, `KOR2`, `KOR3`, `KOR5`, `KOR6`; the GPR139 series has one frame, so `RUNS` above 1 needs `MEMBRANE=2`). Sequential, about 1 hour each |
+| `RUNS` | build each structure this many times, once in each of the first `RUNS` frames of the series (`MEMBRANE=2`: `<name>/KOR_Membrane1/em.gro`, `KOR_Membrane2`, `KOR_Membrane3`, `KOR_Membrane5`, `KOR_Membrane6`; the GPR139 series has one frame, so `RUNS` above 1 needs `MEMBRANE=2`). Sequential, about 1 hour each |
 | `EXTRA` | any other option from the [command-line reference](../docs/cli_reference.md), for example `"--xy-buffer 2.0"` for production box sizes; to rebuild into an existing work folder add `--overwrite` (checkpoints and trajectories also need `--overwrite-restart`), otherwise the build refuses |
 
 `RUNS=5` gives five replicate systems that differ in their lipid arrangement. To build them in parallel instead,
-give each array task its own frame by name (`MEMBRANE=KOR1`, `KOR2`, ...; `python -m membraneforger --list-membranes`
+give each array task its own frame by name (`MEMBRANE=KOR_Membrane1`, `KOR_Membrane2`, ...; `python -m membraneforger --list-membranes`
 lists the 8).
 
 ## PPM 3.0
