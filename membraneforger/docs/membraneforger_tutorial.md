@@ -265,7 +265,7 @@ count the all-beads-inside rule keeps in the same window, with the APL that coun
 | same lipids in the uncut membrane | 249 | 220 | 47.6 | 45.5 | construction: -0.15 % | +0.16 % | PASS |
 
 The old rule deleted 69 lipids whose anchor was inside the window because one tail bead
-crossed the edge. The new slice keeps them; the seam relaxation moved 217 lipids by 0.021 nm on average (0.39 nm at
+crossed the edge. The new slice keeps them; the seam relaxation moved 219 lipids by 0.021 nm on average (0.39 nm at
 most) and removed none. The lower leaflet is 6.6 % denser than the whole embedded cell (percentile 0.75 of 144
 equal-size windows): the construction check passes, the difference is where the window sits. With the offset search
 (`--slice-offset-search`) the same frame gives 249 / 217 lipids, -0.4 % / -5.3 % against the whole cell and
