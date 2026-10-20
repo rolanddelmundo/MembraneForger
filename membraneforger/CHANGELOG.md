@@ -43,6 +43,9 @@ Two defaults changed since 1.0.0, and the review decisions below change more. Co
   `slurm/examples/array_cases.sbatch`, `membraneforger/example.py` is `examples/build_from_python.py`, the module map
   is `docs/modules.md` and `test_contact_gates.sbatch` is in `slurm/examples/`. The README is shorter. No code logic,
   option, output or data file changed; only the folders the program looks in for its bundled files.
+- **Bundled frames and example files have clearer names.** `KOR1` to `KOR9` are now `KOR_Membrane1` to `KOR_Membrane9`,
+  `GPR5` is `GPR139_Membrane5`, and `6WHC_MTZP_*` is `GCGR_MTZP_*`; the tutorial and guides call the example complex
+  GCGR. `--cg` still accepts the old names (`KOR5`, `GPR5`). Output folders of `--runs` take the new names.
 - **Bundled membranes are now 50 µs frames.** The 18 frames at 30 µs are replaced by the 50 µs frame of every
   simulation that reached 50 µs: `KOR1`, `KOR2`, `KOR3`, `KOR5`, `KOR6`, `KOR7`, `KOR9` and `GPR5` (the number is the
   simulation run, so the numbering has gaps). `KOR4`, `KOR8` and `GPR1` to `GPR4`, `GPR6` to `GPR9` are gone: the

@@ -212,25 +212,25 @@ class CommandLineRefusals(unittest.TestCase):
         out = self.tmp / "bundled"
         code, output = self.run_cli("--aa", AA_PDB, "--out", out, "--gmx", self.gmx, "--mstool-python", self.no_mstool)
         self.assertEqual(code, 1)
-        self.assertRegex(output, r"GPR[0-9]+_cg_cellmem\.gro")  # a bundled GPR139 frame was picked up as input
+        self.assertRegex(output, r"GPR139_Membrane[0-9]+_cg_cellmem\.gro")  # a bundled GPR139 frame was picked up as input
         self.assertIn("ERROR: mstool:", output)  # and the build stopped at the mstool stage, not at the parser
         self.assertIn("already holds the output of an earlier build",                         # the failed run left outputs: refused
                       self.run_cli("--aa", AA_PDB, "--cg", "2", "--out", out, "--gmx", self.gmx, "--mstool-python", self.no_mstool)[1])
         code, output = self.run_cli("--aa", AA_PDB, "--cg", "2", "--out", out, "--gmx", self.gmx, "--mstool-python", self.no_mstool,
                                     "--overwrite")
-        self.assertRegex(output, r"KOR[0-9]+_cg_cellmem\.gro")
+        self.assertRegex(output, r"KOR_Membrane[0-9]+_cg_cellmem\.gro")
         code, output = self.run_cli("--aa", AA_PDB, "--cg", f"custom={CG_GRO}", "--out", out, "--gmx", self.gmx,
                                     "--mstool-python", self.no_mstool, "--overwrite")
-        self.assertIn("6WHC_MTZP_cg_cellmem.gro", output)
+        self.assertIn("GCGR_MTZP_cg_cellmem.gro", output)
 
     def test_a_bundled_frame_can_be_named(self):
         out = self.tmp / "named"
         code, output = self.run_cli("--aa", AA_PDB, "--cg", "kor5", "--out", out, "--gmx", self.gmx, "--mstool-python", self.no_mstool)
         self.assertEqual(code, 1)
-        self.assertIn("KOR5_cg_cellmem.gro", output)  # that frame, and no other, was the input
-        self.assertNotRegex(output, r"(GPR[0-9]+|KOR[0-46-9])_cg_cellmem\.gro")
+        self.assertIn("KOR_Membrane5_cg_cellmem.gro", output)  # that frame, and no other, was the input
+        self.assertNotRegex(output, r"(GPR139_Membrane[0-9]+|KOR_Membrane[0-46-9])_cg_cellmem\.gro")
         self.assertIn("ERROR: mstool:", output)  # the build went on to the mstool stage, i.e. the frame was embedded into
-        self.assertIn("no bundled membrane named GPR12", self.run_cli("--aa", AA_PDB, "--cg", "GPR12")[1])
+        self.assertIn("no bundled membrane named GPR139_Membrane12", self.run_cli("--aa", AA_PDB, "--cg", "GPR139_Membrane12")[1])
         code, output = self.run_cli("--list-membranes")
         self.assertEqual(code, 0)
         for name in mf.bundled_frames():
@@ -254,7 +254,7 @@ class CommandLineRefusals(unittest.TestCase):
         self.assertIn(f"--runs must be between 1 and {len(mf.bundled_series('1'))}",
                       self.run_cli("--aa", AA_PDB, "--cg", "1", "--runs", too_many)[1])
         self.assertIn("--runs must be at least 1", self.run_cli("--aa", AA_PDB, "--runs", "0")[1])
-        self.assertIn("use it with --cg 1 or --cg 2", self.run_cli("--aa", AA_PDB, "--cg", "KOR1", "--runs", "2")[1])
+        self.assertIn("use it with --cg 1 or --cg 2", self.run_cli("--aa", AA_PDB, "--cg", "KOR_Membrane1", "--runs", "2")[1])
         self.assertIn("use it with --cg 1 or --cg 2", self.run_cli("--aa", AA_PDB, "--cg", CG_GRO, "--runs", "2")[1])
 
     def test_lipid_and_box_options_are_checked(self):

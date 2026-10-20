@@ -6,7 +6,7 @@
 #   2. copy this file next to your PDB files and fill in blocks 1 to 3 below
 #   3. from that folder:         sbatch run_membraneforger.sbatch
 #
-# Submitted as is, it builds the bundled example complex (6WHC) as a check of the installation.
+# Submitted as is, it builds the bundled example complex (GCGR) as a check of the installation.
 # The last line of each task's log, and of <name>/membranebuilder.log, says PASS or FAIL.
 # Any #SBATCH line can also be overridden at submission time: sbatch -p PARTITION -A ACCOUNT run_membraneforger.sbatch
 #
@@ -42,10 +42,10 @@ PY=""                                          # Python with the requirements in
 
 # ============================ 3. THIS RUN: your structures and build options ==================================
 WORK="${SLURM_SUBMIT_DIR:-$PWD}"               # folder with the input PDBs; results go to $WORK/<name>/
-NAMES=(6WHC)                                   # $WORK/<name>.pdb for each entry, e.g. (receptor_A receptor_B);
-                                               # keep --array in block 1 in step. 6WHC is the bundled example
+NAMES=(GCGR)                                   # $WORK/<name>.pdb for each entry, e.g. (receptor_A receptor_B);
+                                               # keep --array in block 1 in step. GCGR is the bundled example
                                                # complex and is copied here if the file is absent
-ORIENT="--orientation none"                    # already oriented (OPM, CHARMM-GUI, the bundled 6WHC): as is.
+ORIENT="--orientation none"                    # already oriented (OPM, CHARMM-GUI, the bundled GCGR): as is.
                                                # a model or any structure not yet in a membrane: name the chain
                                                # that crosses the membrane and the side of its N terminus, e.g.
                                                # "--orient-chain R --nterm-side out" (GPCRs: out); uses PPM
@@ -88,8 +88,8 @@ if [ -n "${SLURM_ARRAY_TASK_MAX:-}" ] && [ "$SLURM_ARRAY_TASK_MAX" -lt $(( ${#NA
 fi
 name="${NAMES[$task]%.pdb}"
 pdb="$WORK/$name.pdb"
-if [ ! -f "$pdb" ] && [ "$name" = 6WHC ]; then
-    cp "$REPO/membraneforger/examples/preeq_cg_cellmem/6WHC_MTZP_prot-lig.pdb" "$pdb" && echo "copied the bundled example to $pdb"
+if [ ! -f "$pdb" ] && [ "$name" = GCGR ]; then
+    cp "$REPO/membraneforger/examples/preeq_cg_cellmem/GCGR_MTZP_prot-lig.pdb" "$pdb" && echo "copied the bundled example to $pdb"
 fi
 [ -f "$pdb" ] || die "input $pdb not found (NAMES, block 3)"
 version=$($GMX --version 2>/dev/null | grep "GROMACS version") || die "GROMACS command '$GMX' does not run (block 2)"

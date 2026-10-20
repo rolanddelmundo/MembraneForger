@@ -1,15 +1,16 @@
 """Recompute the frame-dependent numbers of the MembraneForger tutorial on the bundled membranes.
 
-    python membraneforger/examples/measure_tutorial_numbers.py --repo . --out tutorial50_out [--gmx env/bin/gmx] [--frames KOR1 GPR5]
+    python membraneforger/examples/measure_tutorial_numbers.py --repo . --out tutorial50_out [--gmx env/bin/gmx]
+        [--frames KOR_Membrane1 GPR139_Membrane5]
 
 Only the coarse-grained stages run (embedding, slicing, the slice gate): nothing is backmapped, so a frame takes
 minutes. For every bundled frame it records
 
   * `frame`        the frame as read: rotation found about z, overlapping pairs, largest empty pocket of the uncut frame;
-  * `6whc`         the oriented 6WHC complex embedded in the frame (the tutorial's KOR1 table), with the slice window
+  * `6whc`         the oriented 6WHC complex embedded in the frame (the tutorial's KOR_Membrane1 table), with the slice window
                    centred on the complex (the default);
   * `6whc_search`  the same with --slice-offset-search (the tutorial's offset-search comparison);
-  * `helix_free`   TM6 of the 6WHC receptor alone on unbroken membrane (--embed-site free, --xy-buffer 3);
+  * `helix_free`   TM6 of the GCGR receptor alone on unbroken membrane (--embed-site free, --xy-buffer 3);
   * `helix_hole`   the same helix in the frame's receptor hole, which the empty-pocket gate is expected to stop.
 
 Every case keeps its folder under <out>/cases/ (log, membrane_validation.md/json); a finished case is skipped when the
@@ -99,7 +100,7 @@ def run_case(mf, args, frame, case, folder):
     """Run prepare_inputs for one frame and case; returns the summary or the failure."""
     repo = Path(args.repo).resolve()
     forcefield = repo / "membraneforger/forcefield"
-    aa_pdb = repo / "membraneforger/examples/preeq_cg_cellmem/6WHC_MTZP_prot-lig.pdb"
+    aa_pdb = repo / "membraneforger/examples/preeq_cg_cellmem/GCGR_MTZP_prot-lig.pdb"
     opm = repo / "membraneforger/tests/data/6whc_opm_chainR.pdb"
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "work").mkdir(exist_ok=True)
@@ -192,7 +193,7 @@ def write_summary(out, results, aggregates):
     """summary.json and a Markdown summary meant to be pasted back."""
     (out / "summary.json").write_text(json.dumps(jsonable({"results": results, "aggregate": aggregates}), indent=1) + "\n")
     lines = ["# Tutorial numbers on the bundled frames", "", "## Across frames", "", "```json", json.dumps(jsonable(aggregates), indent=1), "```", ""]
-    lines += ["## Per frame, oriented 6WHC embedded (slice window centred)", "",
+    lines += ["## Per frame, oriented GCGR embedded (slice window centred)", "",
               "| Frame | Removed by embedding | Embedded pocket (nm3) | Uncut pocket (nm3) | Cell (nm) | Lipids kept | "
               "dAPL upper / lower vs uncut (%) | dAPL upper / lower vs embed (%) | Old rule lipids (up / lo) | Slice gate |", "|" + "---|" * 10]
     for name, r in sorted(results.items()):
@@ -206,14 +207,14 @@ def write_summary(out, results, aggregates):
                      f"{lv['upper']['construction_delta_percent']} / {lv['lower']['construction_delta_percent']} | "
                      f"{lv['upper']['representativeness_delta_percent']} / {lv['lower']['representativeness_delta_percent']} | "
                      f"{get(old, 'leaflets', 'upper', 'lipids')} / {get(old, 'leaflets', 'lower', 'lipids')} | {c['slice_check']['status']} |")
-    lines += ["", "## Single helix (TM6 of 6WHC)", "", "| Frame | free site: distance to frame receptor (nm) | removed lipids | pocket (nm3) | "
+    lines += ["", "## Single helix (TM6 of GCGR)", "", "| Frame | free site: distance to frame receptor (nm) | removed lipids | pocket (nm3) | "
               "window clear of receptor | hole site stopped? | hole message |", "|" + "---|" * 7]
     for name, r in sorted(results.items()):
         free, hole = r.get("helix_free", {}), r.get("helix_hole", {})
         lines.append(f"| {name} | {get(free, 'embedding', 'distance_to_frame_protein_nm')} | {get(free, 'embedding', 'removed_total')} | "
                      f"{get(free, 'embedding', 'largest_pocket_nm3')} | {get(free, 'slice', 'membrane_margin_around_complex_nm')} | "
                      f"{'yes' if hole and not hole.get('ok') else 'no'} | {str(hole.get('message', ''))[:160]} |")
-    lines += ["", "## Seam and offset search (6WHC embedded)", ""]
+    lines += ["", "## Seam and offset search (GCGR embedded)", ""]
     for name, r in sorted(results.items()):
         c = r.get("6whc", {})
         lines.append(f"- {name}: seam {json.dumps(jsonable(c.get('seam')))}; offset {json.dumps(jsonable(c.get('crop_offset')))}")
@@ -234,7 +235,7 @@ def main(argv=None):
     out = Path(args.out).resolve()
     (out / "cases").mkdir(parents=True, exist_ok=True)
     mapping = json.loads((Path(args.repo).resolve() / "membraneforger/tests/data/mapping_residues.json").read_text())
-    frames = {n: p for n, p in mf.bundled_frames().items() if not args.frames or n in {f.upper() for f in args.frames}}
+    frames = {n: p for n, p in mf.bundled_frames().items() if not args.frames or n.upper() in {f.upper() for f in args.frames}}
     if not frames:
         raise SystemExit("no bundled frame matches --frames")
     results = {}
