@@ -288,8 +288,8 @@ deviation is the slice against them. Head-plane is the area per phosphate/amide 
 
 | Frame | Leaflet | CG frame | Embedded | Slice | Uncut | Construction | Head-plane embedded | Head-plane slice | Construction, offset search |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| KOR | upper | 47.99 | 47.72 | 47.54 | 47.61 | -0.15 % | 65.72 | 63.80 | +1.17 % |
-| KOR | lower | 51.04 | 48.87 | 45.62 | 45.55 | +0.16 % | 63.47 | 59.00 | +1.73 % |
+| KOR1 | upper | 47.99 | 47.72 | 47.54 | 47.61 | -0.15 % | 65.72 | 63.80 | +1.17 % |
+| KOR1 | lower | 51.04 | 48.87 | 45.62 | 45.55 | +0.16 % | 63.47 | 59.00 | +1.73 % |
 | KOR2 | upper | 47.87 | 47.64 | 45.95 | 45.64 | +0.69 % | 65.84 | 62.48 | +2.90 % |
 | KOR2 | lower | 51.66 | 49.29 | 44.14 | 43.82 | +0.73 % | 63.47 | 55.90 | -0.58 % |
 | KOR3 | upper | 47.36 | 47.24 | 45.82 | 45.65 | +0.38 % | 66.06 | 63.00 | +1.65 % |
@@ -302,8 +302,8 @@ deviation is the slice against them. Head-plane is the area per phosphate/amide 
 | KOR7 | lower | 52.72 | 50.38 | 43.26 | 42.71 | +1.30 % | 63.24 | 55.72 | +2.26 % |
 | KOR9 | upper | 47.75 | 47.64 | 46.52 | 46.63 | -0.25 % | 66.35 | 63.94 | +1.70 % |
 | KOR9 | lower | 51.89 | 50.33 | 44.89 | 45.07 | -0.41 % | 64.16 | 57.91 | -0.65 % |
-| GPR139 | upper | 46.86 | 46.95 | 47.03 | 46.25 | +1.69 % | 65.80 | 65.07 | +2.09 % |
-| GPR139 | lower | 51.39 | 49.70 | 46.02 | 46.52 | -1.08 % | 63.66 | 59.51 | +0.52 % |
+| GPR5 | upper | 46.86 | 46.95 | 47.03 | 46.25 | +1.69 % | 65.80 | 65.07 | +2.09 % |
+| GPR5 | lower | 51.39 | 49.70 | 46.02 | 46.52 | -1.08 % | 63.66 | 59.51 | +0.52 % |
 
 The KOR rows are the stage table above. With the centred window no leaflet crosses the 3 % construction warning level; with
 the search `KOR5` lower (+4.87 %) is the one that does (PASS WITH WARNINGS).
@@ -367,14 +367,14 @@ Ratio at 10 A, with the lipids in the shell and in the leaflet in brackets:
 
 | Frame | Upper, embedded | Upper, slice | Lower, embedded | Lower, slice |
 |---|---|---|---|---|
-| KOR | 1.12 (28/666) | 1.14 (28/249) | 1.37 (70/613) | 1.28 (70/220) |
+| KOR1 | 1.12 (28/666) | 1.14 (28/249) | 1.37 (70/613) | 1.28 (70/220) |
 | KOR2 | 1.15 (29/671) | 1.14 (29/258) | 1.44 (73/611) | 1.34 (73/225) |
 | KOR3 | 1.35 (34/677) | 1.32 (34/260) | 1.33 (67/600) | 1.29 (68/217) |
 | KOR5 | 1.30 (33/676) | 1.27 (33/262) | 1.55 (79/606) | 1.36 (79/236) |
 | KOR6 | 1.14 (29/676) | 1.16 (29/252) | 1.46 (74/603) | 1.32 (74/228) |
 | KOR7 | 0.98 (25/684) | 0.97 (25/261) | 1.51 (75/597) | 1.24 (74/234) |
 | KOR9 | 1.24 (31/672) | 1.22 (31/255) | 1.35 (67/599) | 1.24 (67/224) |
-| GPR139 | 0.83 (21/672) | 0.85 (21/251) | 1.31 (66/597) | 1.30 (66/215) |
+| GPR5 | 0.83 (21/672) | 0.85 (21/251) | 1.31 (66/597) | 1.30 (66/215) |
 
 The lower leaflet is enriched next to the protein in every frame (1.24-1.55) and the upper leaflet ranges from depleted
 (GPR139, 0.83) to enriched (KOR3, 1.35). Figure 2 was drawn from slices made with the offset search; the slice values in this table, from the default
