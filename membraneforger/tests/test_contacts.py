@@ -248,10 +248,10 @@ class ContactGates(unittest.TestCase):
     def staged(self, report):
         return {"rings": {"pierced": []}, "solute_atoms": 2, "contact": {"distance_nm": 0.3, "atoms": ["a", "b"]}, "overlaps": report}
 
-    def test_backmap_verdict_retries_on_a_membrane_overlap_and_tolerates_the_input_itself(self):
+    def test_backmap_verdict_can_retry_on_a_membrane_overlap_and_tolerates_the_input_itself(self):
         build(self.out, self.crossed())
         report = mf.check_contacts(self.out, "boxed.gro", 2)
-        verdict = mf.backmap_verdict(self.staged(report), {}, mf.Settings(), last=False)
+        verdict = mf.backmap_verdict(self.staged(report), {}, mf.Settings(membrane_overlap_before_em="stop"), last=False)
         self.assertFalse(verdict["accept"])
         self.assertEqual(verdict["stage"], "contacts")
         self.assertIn("bond crossing", verdict["problem"])
@@ -263,6 +263,23 @@ class ContactGates(unittest.TestCase):
                                 "limit_A": 2.4, "rmin_A": 4.0, "molecules": [1, 1]}], "crossings": []}
         self.assertTrue(mf.backmap_verdict(self.staged(solute), {}, mf.Settings(), last=False)["accept"])
         self.assertTrue(mf.backmap_verdict({**self.staged(solute), "overlaps": None}, {}, mf.Settings(), last=False)["accept"])
+
+    def test_a_membrane_overlap_retries_no_seed_unless_asked_to_stop(self):
+        build(self.out, self.crossed())
+        report = mf.check_contacts(self.out, "boxed.gro", 2)
+        self.assertTrue(mf.backmap_verdict(self.staged(report), {}, mf.Settings(), last=True)["accept"])
+        self.assertTrue(mf.backmap_verdict(self.staged(report), {}, mf.Settings(), last=False)["accept"])
+        stop = mf.Settings(membrane_overlap_before_em="stop")
+        self.assertFalse(mf.backmap_verdict(self.staged(report), {}, stop, last=True)["accept"])
+
+    def test_membrane_overlaps_before_em_can_be_tolerated_but_other_classes_still_stop(self):
+        build(self.out, self.crossed(), "solv_ions.gro")
+        report = mf.check_contacts(self.out, "solv_ions.gro", 2)
+        self.assertIn("before EM", failure(mf.refuse_overlaps, report, ("membrane", "solvent"), "before EM"))
+        self.assertIsNone(failure(mf.refuse_overlaps, report, ("membrane", "solvent"), "before EM", ("membrane",)))
+        solvent = dict(report, contacts=[{"class": "solvent", "atoms": ["a", "b"], "distance_A": 1.0, "limit_A": 1.8, "rmin_A": 3.0,
+                                          "molecules": [1, 2]}], crossings=[])
+        self.assertIn("before EM", failure(mf.refuse_overlaps, solvent, ("membrane", "solvent"), "before EM", ("membrane",)))
 
     def test_refuse_overlaps_before_em(self):
         build(self.out, self.crossed(), "solv_ions.gro")

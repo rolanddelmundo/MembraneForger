@@ -164,7 +164,7 @@ x, y cell.
 ## 4. Backmapping and the rest of the build
 
 mstool backmaps the sliced membrane around the complex held as a rigid obstacle, the structure is checked for ring
-threading, stereochemistry and clashes (another seed is tried when needed), the topology is built, the box is set in
+threading and stereochemistry (another seed is tried when needed; contact findings between the membrane and the complex are logged as a warning and left to the minimization), the topology is built, the box is set in
 z, water and 0.15 M NaCl (in the water, see below) are added, the system is minimized with and then without the lipid dihedral restraints, and
 an independent audit must pass before `em.gro` appears. Every intermediate is kept: at the end of each build, passed
 or failed, the steps on the way to `em.gro` (`config.INTERMEDIATES`) are moved into `<out>/int/`, beside the working
@@ -427,12 +427,29 @@ heavy-atom pair is thousands of kJ/mol/nm, while hydrogen bonds and packed tails
 two solvent molecules are not judged: `gmx genion` puts an ion on a water's site, whose neighbours then sit at
 water-water distances (0.6-0.7 of the chloride-oxygen Rmin), and a free water or ion relaxes in the first EM steps; a
 solvent molecule caught in the protein or a lipid is what the gate is for. The gates: `boxed.gro` right after
-backmapping (a finding that involves a lipid rejects the seed, like a ring threading), the water and ion placement (a
+backmapping (a membrane finding is logged as a warning and no seed is retried for it: a fit-mode complex such as the quick
+start has 20 to 600 membrane pairs below 0.6 Rmin and up to 30 crossings at this stage whatever the seed, and plain EM removes
+them; `membrane_overlap_before_em = "stop"` refuses
+the seed and finally the build instead), the water and ion placement (a
 water is dropped, an ion placement retried, when any of its atoms is inside the limit of a protein, ligand or lipid
-atom), `solv_ions.gro` before EM (a lipid or solvent finding, or any crossing, stops the build), and `em.unverified.gro`
+atom), `solv_ions.gro` before EM (a solvent finding stops the build; a membrane finding or crossing only when `membrane_overlap_before_em` is `stop`), and `em.unverified.gro`
 after EM (nothing may remain). Every gate's findings are written to `contacts.json`,
 by stage, and an Fmax failure names the culprit's element, its force-field overlaps before and after EM and the stage a
 lipid first clashed in (`em_clash_trace.json`).
+
+Five builds on the code of this release, default settings, show the behaviour: no seed is retried for the membrane pairs, and
+every build recovers under plain EM.
+
+| Build | Attempts | Membrane pairs and crossings warned before EM | Fmax after EM (steps) | Audit | Closest membrane pair after EM (Rmin) |
+|---|---|---|---|---|---|
+| KOR (6WHC in the KOR1 frame) | 1 | 3 | 430 (6) | PASS | 0.686 |
+| GPR (6WHC in the GPR5 frame) | 1 | 3 | 319 (9) | PASS | 0.685 |
+| prot-cgmemb (the README example, own CG membrane) | 2 (seed 1 had a ring threading) | 144 | 287 (13) | PASS | 0.694 |
+| V6G (GLP1R with orforglipron) | 1 | 163 | 424 (6) | PASS | 0.680 |
+| TIR (GLP1R with tirzepatide) | 1 | 122 | 417 (7) | PASS | 0.687 |
+
+After EM no build has a contact or crossing of any class. The closest pair of any class is the GDP O3B to Mg2+ coordination
+contact at 0.601 to 0.610 of Rmin, just above the 0.6 limit.
 
 Known limitation of the gate: atoms within `nrexcl` bonds of each other are all treated as excluded, but force-field
 topologies reintroduce some of them as explicit 1-4 interactions (`[ pairs ]`, `[ pairtypes ]`). A badly overlapping

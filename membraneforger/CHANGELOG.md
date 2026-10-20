@@ -90,6 +90,10 @@ Two defaults changed since 1.0.0, and the review decisions below change more. Co
 
 ### Changed
 
+- A membrane contact or bond crossing found before EM no longer rejects a backmapping seed or stops the build: it is logged as a
+  warning and the check after EM (0.6 of Rmin, no crossings) decides. Another seed leaves the same overlaps (the quick start and 28
+  GLP1R builds start with 23 to 585 such pairs) and plain EM removes them, so retrying only added minutes.
+  `membrane_overlap_before_em = "stop"` restores the earlier behaviour.
 - **Ligand force-field packages trimmed.** The four packages under `forcefield/` (MTZP, MRTR, MSEM, V6G) keep only the files the build reads (the ligand `.top`, `charmm36.ff/ffbonded.itp`, and for V6G `V6G_gmx.top`, `V6G_base_ff_params.itp` and `charmm36.ff/V6G_ffbonded.itp`) plus their `.pdb` and `posre` files; the unused copies of `charmm36.ff` inside them are gone (`forcefield/` 64 MB to 22 MB). The build uses the shared `forcefield/charmm36.ff/`, so no output changes.
 - Lipids that overlap the embedded complex are pushed aside at the coarse-grained level, and only those still
   overlapping are removed. An empty pocket larger than 1.0 nm³ in a leaflet stops the build.
