@@ -20,7 +20,7 @@ Each frame holds about 60,000 beads in a cell of about 18.3 × 18.3 × 19.2 nm: 
 about 1,300 lipids, water and ions. The membranes were built with INSANE at CHOL:POPC:DOPC:POPE:DOPE:PSM:DPG3 =
 25:20:20:5:5:15:10 (upper leaflet) and CHOL:POPC:DOPC:POPE:DOPE:POPS:DOPS:SAP6 = 25:5:5:20:20:8:7:10 (lower
 leaflet). Composition at 50 µs, mole percent of each leaflet averaged over the 8 frames
-(`python examples/leaflet_composition.py examples/preeq_cg_cellmem/KOR_Membrane?_cg_cellmem.gro examples/preeq_cg_cellmem/GPR139_Membrane?_cg_cellmem.gro`):
+(`python membraneforger/examples/leaflet_composition.py membraneforger/examples/preeq_cg_cellmem/KOR_Membrane?_cg_cellmem.gro membraneforger/examples/preeq_cg_cellmem/GPR139_Membrane?_cg_cellmem.gro`):
 
 | Leaflet | CHOL | POPC | DOPC | POPE | DOPE | PSM | DPG3 | POPS | DOPS | SAP6 |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -50,10 +50,10 @@ at 5 µs each, every 10th frame). The text in the SVGs is editable Arial, 12 pt 
 in the same membrane model, 11.2 × 11.2 nm) used by the tests:
 
 ```bash
-python -m membraneforger --aa examples/preeq_cg_cellmem/GCGR_MTZP_prot-lig.pdb \
-    --cg examples/preeq_cg_cellmem/GCGR_MTZP_cg_cellmem.gro --orientation none --out example_out
+python -m membraneforger --aa membraneforger/examples/preeq_cg_cellmem/GCGR_MTZP_prot-lig.pdb \
+    --cg membraneforger/examples/preeq_cg_cellmem/GCGR_MTZP_cg_cellmem.gro --orientation none --out example_out
 ```
 
-Every frame is periodic in its box: `python examples/align_frames.py examples/preeq_cg_cellmem/*_cg_cellmem.gro` finds
+Every frame is periodic in its box: `python membraneforger/examples/align_frames.py membraneforger/examples/preeq_cg_cellmem/*_cg_cellmem.gro` finds
 no bead pairs of different lipids within 0.30 nm once wrapped. MembraneForger runs the same check on every frame it
 reads (`align_frame_to_box`) and corrects a rotated frame with a warning that names the angle.
