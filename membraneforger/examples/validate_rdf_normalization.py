@@ -133,7 +133,7 @@ def main(argv=None):
     import membraneforger as mf
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    frames = {n: p for n, p in mf.bundled_frames().items() if n in {f.upper() for f in (args.frames or ["KOR_Membrane1"])}}
+    frames = {n: p for n, p in mf.bundled_frames().items() if n.upper() in {f.upper() for f in (args.frames or ["KOR_Membrane1"])}}
     if not frames:
         raise SystemExit("no bundled frame matches --frames")
     results = {}

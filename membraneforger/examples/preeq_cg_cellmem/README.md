@@ -10,7 +10,7 @@ their lipid arrangement.
 | Files | Receptor | Replicates |
 |---|---|---|
 | `KOR_Membrane1`, `KOR_Membrane2`, `KOR_Membrane3`, `KOR_Membrane5`, `KOR_Membrane6`, `KOR_Membrane7`, `KOR_Membrane9` (`KOR_Membranen_cg_cellmem.gro`) | kappa opioid receptor (PDB 8F7W) | 7 |
-| `GPR5_cg_cellmem.gro` | GPR139 (PDB 7F6G) | 1 |
+| `GPR139_Membrane5_cg_cellmem.gro` | GPR139 (PDB 7F6G) | 1 |
 
 The number in a name is the replicate (run) of the simulation the frame was taken from, so it is kept even though the
 series has gaps: the frames are the 50 µs frame of runs 1, 2, 3, 5, 6, 7 and 9 of 8F7W and of run 5 of 7F6G, the
@@ -38,7 +38,7 @@ means no lipid of that species contacted the receptor in that leaflet.
 | Simulation | Figure |
 |---|---|
 | 8F7W (kappa opioid receptor), run 5, the run of `KOR_Membrane5` | [KOR_Membrane5_lipid_contacts_0-50us.svg](figures/KOR_Membrane5_lipid_contacts_0-50us.svg) |
-| 7F6G (GPR139), run 5, the run of `GPR139_Membrane5` | [GPR5_lipid_contacts_0-50us.svg](figures/GPR5_lipid_contacts_0-50us.svg) |
+| 7F6G (GPR139), run 5, the run of `GPR139_Membrane5` | [GPR139_Membrane5_lipid_contacts_0-50us.svg](figures/GPR139_Membrane5_lipid_contacts_0-50us.svg) |
 
 Each is a single replicate, so differences between species are not averaged over runs.
 

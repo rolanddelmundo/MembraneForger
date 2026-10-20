@@ -92,7 +92,7 @@ ANE5A merged into one molecule) and PIP2 is `SAP6` there and `SAPI25` in the all
 
 Lipid contacts around the receptor over the 50 µs of the simulations behind `KOR_Membrane5` and `GPR139_Membrane5` (lipids within 5 and
 5-10 Å of the receptor, per leaflet): [KOR_Membrane5](../examples/preeq_cg_cellmem/figures/KOR_Membrane5_lipid_contacts_0-50us.svg),
-[GPR139_Membrane5](../examples/preeq_cg_cellmem/figures/GPR5_lipid_contacts_0-50us.svg).
+[GPR139_Membrane5](../examples/preeq_cg_cellmem/figures/GPR139_Membrane5_lipid_contacts_0-50us.svg).
 
 ### Several membranes for one complex
 

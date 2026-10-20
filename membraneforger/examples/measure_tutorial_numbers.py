@@ -235,7 +235,7 @@ def main(argv=None):
     out = Path(args.out).resolve()
     (out / "cases").mkdir(parents=True, exist_ok=True)
     mapping = json.loads((Path(args.repo).resolve() / "membraneforger/tests/data/mapping_residues.json").read_text())
-    frames = {n: p for n, p in mf.bundled_frames().items() if not args.frames or n in {f.upper() for f in args.frames}}
+    frames = {n: p for n, p in mf.bundled_frames().items() if not args.frames or n.upper() in {f.upper() for f in args.frames}}
     if not frames:
         raise SystemExit("no bundled frame matches --frames")
     results = {}
