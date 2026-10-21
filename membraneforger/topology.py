@@ -33,6 +33,7 @@ from .config import (
     LIPID_SCAN_A,
     LIPIDATED,
     LYS_BACKBONE,
+    N_ACYLATED,
     N_CAP,
     RENAME_ATOM,
     RENAME_MOLECULE,
@@ -288,7 +289,7 @@ def charmm_patches(forcefield: Path) -> dict:
 def chain_termini(residues: list) -> tuple[str, str]:
     """Work out each chain's termini from the atoms on its first and last residues."""
     first, last = {a["atom"] for a in residues[0][2]}, {a["atom"] for a in residues[-1][2]}
-    nterm = "ACE" if set(N_CAP) <= first else "NTER"
+    nterm = "ACE" if set(N_CAP) <= first else "NONE" if residues[0][1] in N_ACYLATED else "NTER"
     if first & set(N_CAP) and nterm != "ACE":
         raise SystemExit(f"incomplete ACE cap on {residues[0][1]}{residues[0][0]}")
     if set(C_CAP) <= last:

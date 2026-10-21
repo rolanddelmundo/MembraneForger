@@ -6,7 +6,7 @@
 from dataclasses import dataclass
 
 __all__ = ['ORIENTATION', 'ORIENT_CHAINS', 'ORIENT_RESIDUES', 'NTERM_SIDE', 'PDB_ID', 'PPM_MEMBRANE', 'BOX',
-           'AMINO', 'SOLVENT', 'N_CAP', 'C_CAP', 'RENAME_RESIDUE', 'RENAME_ATOM', 'RENAME_MOLECULE', 'TERMINUS_MENU',
+           'AMINO', 'SOLVENT', 'N_CAP', 'C_CAP', 'RENAME_RESIDUE', 'RENAME_ATOM', 'RENAME_MOLECULE', 'TERMINUS_MENU', 'N_ACYLATED',
            'DEFAULT_LIGANDS', 'NSTEPS', 'DISULFIDE_MAX_A', 'DISULFIDE_OK_A', 'SLAB_Z_PAD_NM', 'MIN_Z_PAD_TOTAL_NM',
            'SALT_M', 'MOLAR_PER_NM3', 'WATERS_PER_NM3', 'ION_RMIN_NM', 'GENION_ATTEMPTS', 'WATER_PROTECT_NM', 'LIPID_SCAN_A',
            'LIPID_DELETE_A', 'GENERATED', 'INTERMEDIATES', 'INDEX_GROUPS', 'FMAX_TARGET', 'H_BOND_RANGE', 'GLPA_MAX_BOND_A',
@@ -52,7 +52,7 @@ RDF_VALIDATE = "yes"       # yes | no   (the RDF comparison is part of the slice
 # pervasive bead overlaps); every other finding is a WARNING. "no" only logs the result.
 CG_VALIDATE = "yes"        # yes | no
 
-AMINO = {"ALA", "ARG", "ASN", "ASP", "CYS", "CYSG", "CYSP", "GLN", "GLU", "GLY", "HIS", "HSD", "HSE", "HSP", "ILE",
+AMINO = {"ALA", "ARG", "ASN", "ASP", "CYS", "CYSG", "CYSP", "GLN", "GLU", "GLY", "GLYP", "HIS", "HSD", "HSE", "HSP", "ILE",
          "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL", "AIB", "LEM", "KTZ", "KRT", "KSM"}
 
 
@@ -74,7 +74,12 @@ RENAME_ATOM = {"ILE": {"CD1": "CD"}}
 RENAME_MOLECULE = {"SAPI": "SAPI25", "GM3": "GLPA"}  # structure resname -> toppar ITP
 
 
-TERMINUS_MENU = {"NTER": "NH3+", "ACE": "None", "CTER": "COO-", "CT2": "CT2", "CT3": "None"}
+TERMINUS_MENU = {"NTER": "NH3+", "ACE": "None", "NONE": "None", "CTER": "COO-", "CT2": "CT2", "CT3": "None"}
+
+
+# N-acylated first residues (CHARMM36 lipidated-protein residues with the acyl chain on the backbone N, e.g. the
+# N-palmitoyl glycine of a Galpha N-terminus after Met1 removal): pdb2gmx gets the "None" N-terminus for them.
+N_ACYLATED = ("GLYP",)
 
 
 DEFAULT_LIGANDS = frozenset({"GDP", "MG", "V6G"})  # non-protein residues treated as ligands when no all-atom input says so
@@ -126,7 +131,7 @@ LYS_BACKBONE = {"N": ("NH1", -.47), "HN": ("H", .31), "HA": ("HB1", .09), "C": (
 ONE_LETTER = {"ALA": "A", "ARG": "R", "ASN": "N", "ASP": "D", "CYS": "C", "GLN": "Q", "GLU": "E", "GLY": "G",
               "HIS": "H", "ILE": "I", "LEU": "L", "LYS": "K", "MET": "M", "PHE": "F", "PRO": "P", "SER": "S",
               "THR": "T", "TRP": "W", "TYR": "Y", "VAL": "V", "HSD": "H", "HSE": "H", "HSP": "H", "CYSG": "C",
-              "CYSP": "C", "KTZ": "K", "KRT": "K", "KSM": "K"}  # anything else aligns as X
+              "CYSP": "C", "GLYP": "G", "KTZ": "K", "KRT": "K", "KSM": "K"}  # anything else aligns as X
 
 
 # Step-4 GM3 (GM3.xml names) -> GLPA.itp names, in GLPA.itp order. Verbatim from finalize-templates
