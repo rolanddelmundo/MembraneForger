@@ -197,3 +197,14 @@ contact. The exclusions appear in the build log and in `run_manifest.json` (`exc
 
 `membraneforger/examples/build_from_python.py` shows how to call the build from Python, and
 [modules.md](modules.md) maps each module to its role.
+
+## Lipidated residues
+
+The force field carries three lipidated protein residues that the input may use by name, with every heavy atom of the
+lipid present in the input (the build never places a lipid chain itself): `CYSG` (S-geranylgeranyl cysteine, the Ggamma
+C terminus), `CYSP` (S-palmitoyl cysteine) and `GLYP` (N-palmitoyl glycine, a Galpha N terminus after Met1 removal; its
+backbone N carries the chain, so a chain that starts with `GLYP` gets the `None` N terminus). Hydrogens are rebuilt by
+pdb2gmx from `merged.hdb`. `GLYP` is CHARMM's `GLYM` (N-myristoyl glycine, `toppar_all36_lipid_prot.str`) with the chain
+extended from C14 to C16 using the palmitate atom types and charges of `CYSP`; no new parameters are involved. The
+lipidated lysines of the peptide agonists (`KTZ`, `KRT`, `KSM`) are different: their CGenFF side chains are taken from the
+ligand packages in `forcefield/toppar/` and the input must carry all their hydrogens.

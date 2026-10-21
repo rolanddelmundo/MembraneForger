@@ -101,8 +101,8 @@ LIPID_TYPES = {
     "GM3": ("GM3 GLPA CER1 CER16 CER160 BGLC BGAL ANE5 ANE5A ANE5AC", "GLC GAL NMC CER", "Peach Pearl"),
 }
 SAME_RESIDUE = {"HSD": "HIS", "HSE": "HIS", "HSP": "HIS", "HID": "HIS", "HIE": "HIS", "HIP": "HIS",
-                "CYSG": "CYS", "CYSP": "CYS", "CYS2": "CYS", "CYX": "CYS"}  # one residue under different force-field names
-PROTEIN = "(protein or resname HSD HSE HSP CYSG CYSP CYS2 AIB LEM KTZ KRT KSM)"
+                "CYSG": "CYS", "CYSP": "CYS", "CYS2": "CYS", "CYX": "CYS", "GLYP": "GLY"}  # one residue under different force-field names
+PROTEIN = "(protein or resname HSD HSE HSP CYSG CYSP GLYP CYS2 AIB LEM KTZ KRT KSM)"
 WATER, IONS = "resname TIP3 SOL W", "resname SOD CLA ION"
 # Camera orientations as VMD rotate matrices: side = membrane plane horizontal with +z up; top = looking down the normal.
 VIEWS = {"side": [[1, 0, 0, 0], [0, 0, 1, 0], [0, -1, 0, 0], [0, 0, 0, 1]],
