@@ -22,7 +22,7 @@ __all__ = ['gro_table', 'topology_includes', 'topology_molecules', 'itp_atoms', 
            'itp_dihedral_restraints', 'dihedrals_pbc', 'check_dihedral_restraints', 'molecule_rings',
            'ring_piercings', 'check_ring_piercing', 'check_disulfide_geometry', 'audit_run']
 
-PROTEIN = {"ALA", "ARG", "ASN", "ASP", "CYS", "CYS2", "CYSG", "CYSP", "GLN", "GLU", "GLY", "HIS", "HSD", "HSE", "HSP",
+PROTEIN = {"ALA", "ARG", "ASN", "ASP", "CYS", "CYS2", "CYSG", "CYSP", "GLN", "GLU", "GLY", "GLYP", "HIS", "HSD", "HSE", "HSP",
            "ILE", "LEU", "LYS", "MET", "PHE", "PRO", "SER", "THR", "TRP", "TYR", "VAL", "AIB", "LEM", "KTZ", "KRT", "KSM"}
 WATER_IONS = {"TIP3", "SOD", "CLA", "POT"}
 
