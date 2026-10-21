@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **N-acylated N termini and S-palmitoyl cysteine.** `GLYP` (N-palmitoyl glycine: the CHARMM `GLYM` N-myristoyl
+  glycine of `toppar_all36_lipid_prot.str` with the chain extended to C16 using the palmitate atom types and charges of
+  `CYSP`) is a protein residue, and `merged.hdb` gains hydrogen entries for `CYSP` and `GLYP`, so both can be given as
+  heavy atoms in the input and are protonated by pdb2gmx. A chain whose first residue is `GLYP` gets the `None` N
+  terminus (its backbone N carries the acyl chain). Built for the Galpha N terminus of the receptor-Gs complexes
+  (Met1 removed, Gly2 N-palmitoylated, Cys3 S-palmitoylated); the acyl coordinates are the user's, as for `CYSG`.
+
 ## 1.1.0 (2026-10-18)
 
 MembraneForger now needs only an all-atom structure. It orients the complex in the membrane, embeds it in a bundled
