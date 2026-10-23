@@ -308,14 +308,15 @@ def add_ions(system: dict, topology: dict, gmx: str, box: list[float], settings:
 
 
 def make_index(out: Path, topology: dict) -> dict:
-    """Write index_ini.ndx with System, Protein_LIG, MEMB and SOL_ION, plus LIG (the ligand atoms) when there is a ligand."""
+    """Write index_ini.ndx with System, Protein_LIG, MEMB and SOL_ION, plus LIG (the ligand heavy atoms) when there is a ligand."""
     groups, start = {name: [] for name in INDEX_GROUPS}, 1
     ligands = set(topology.get("ligands", ()))
     groups[LIGAND_GROUP] = []
     for mol, count, atoms, group in topology["molecules"]:
         groups[group] += range(start, start + count * len(atoms))
-        if mol in ligands:
-            groups[LIGAND_GROUP] += range(start, start + count * len(atoms))
+        if mol in ligands:  # heavy atoms only: a hydrogen missing from the input is placed on a fixed direction and EM must relax it
+            heavy = [k for k, a in enumerate(atoms) if element(a["atom"]) != "H"]
+            groups[LIGAND_GROUP] += [start + n * len(atoms) + k for n in range(count) for k in heavy]
         start += count * len(atoms)
     groups["System"] = list(range(1, start))
     if not groups[LIGAND_GROUP]:

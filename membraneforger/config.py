@@ -114,8 +114,9 @@ INTERMEDIATES = ("oriented.pdb", "membrane.pdb", "prot-memb.pdb", "topol.pre_gen
 
 
 INDEX_GROUPS = ("System", "Protein_LIG", "MEMB", "SOL_ION")
-# Optional fifth group: the atoms of the ligand molecules (a subset of Protein_LIG, so it is not part of the partition).
-# Both minimizations freeze it, so a ligand keeps its deposited pose and the receptor and lipids relax around it.
+# Optional fifth group: the heavy atoms of the ligand molecules (a subset of Protein_LIG, so it is not part of the partition).
+# Both minimizations freeze it, so a ligand keeps its deposited pose and the receptor and lipids relax around it. Its
+# hydrogens stay free: ones missing from the input are placed on arbitrary directions and EM has to correct them.
 LIGAND_GROUP = "LIG"
 
 

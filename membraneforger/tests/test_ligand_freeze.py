@@ -12,9 +12,9 @@ ATOM = lambda name, charge=0.0: {"atom": name, "type": "C", "charge": charge}
 
 
 def topology(ligands=("LIGX",)):
-    """Protein PROA (3 atoms), ligand LIGX (2 atoms) x1, POPC (2 atoms) x2, TIP3 (3 atoms) x1."""
+    """Protein PROA (3 atoms), ligand LIGX (C1, H1, C2) x2, POPC (2 atoms) x2, TIP3 (3 atoms) x1."""
     return {"molecules": [("PROA", 1, [ATOM("N"), ATOM("CA"), ATOM("C")], "Protein_LIG"),
-                          ("LIGX", 1, [ATOM("C1"), ATOM("C2")], "Protein_LIG"),
+                          ("LIGX", 2, [ATOM("C1"), ATOM("H1"), ATOM("C2")], "Protein_LIG"),
                           ("POPC", 2, [ATOM("C1"), ATOM("C2")], "MEMB"),
                           ("TIP3", 1, [ATOM("OH2"), ATOM("H1"), ATOM("H2")], "SOL_ION")],
             "ligands": list(ligands), "charge": 0.0}
@@ -33,9 +33,9 @@ class IndexGroup(unittest.TestCase):
         sizes = mf.make_index(self.out, topology())
         groups = self.groups()
         self.assertEqual(list(groups), ["System", "Protein_LIG", "MEMB", "SOL_ION", "LIG"])
-        self.assertEqual(groups["LIG"], [4, 5])
-        self.assertEqual(groups["Protein_LIG"], [1, 2, 3, 4, 5])
-        self.assertEqual(sizes["LIG"], 2)
+        self.assertEqual(groups["Protein_LIG"], [1, 2, 3, 4, 5, 6, 7, 8, 9])
+        self.assertEqual(groups["LIG"], [4, 6, 7, 9])  # both copies, heavy atoms only: the hydrogens (5, 8) stay free
+        self.assertEqual(sizes["LIG"], 4)
         self.assertEqual(sizes["Protein_LIG"] + sizes["MEMB"] + sizes["SOL_ION"], sizes["System"])
 
     def test_no_ligand_keeps_the_four_groups(self):
