@@ -708,7 +708,7 @@ def build_topology(system: dict, work: Path, gmx: str) -> dict:
         residues.setdefault(key[0], []).append(atoms)
     for name in ("TIP3", "SOD", "CLA"):
         residues.setdefault(name, [])
-    solvent_itps = {}
+    solvent_itps, frozen_ligands = {}, []
     for name, blocks in residues.items():
         itp = read_itp(molecule_itp(name, toppar, forcefield, ligands))
         group = "Protein_LIG" if name in ligands else "SOL_ION" if name in SOLVENT else "MEMB"
@@ -728,6 +728,8 @@ def build_topology(system: dict, work: Path, gmx: str) -> dict:
             synthetic += n
             coords += [dict(a, resname=a.get("topology_resname", name), segid=name[:4], group=group) for a in mapped]
         molecules.append((itp["mol"], len(blocks), itp["atoms"], group))
+        if name in ligands:
+            frozen_ligands.append(itp["mol"])
         if synthetic:
             notes.append(f"{name}: placed {synthetic} H absent from the input")
     active_ff = work / "charmm36.ff" if protein_names & set(LIPIDATED) else forcefield / "charmm36.ff"
@@ -751,4 +753,4 @@ def build_topology(system: dict, work: Path, gmx: str) -> dict:
     charge = sum(n * sum(a["charge"] for a in atoms) for _, n, atoms, _ in molecules)
     notes.append(f"topol.top: {len(coords)} atoms, net charge {charge:+.3f}; " + ", ".join(f"{m} {n}" for m, n, _, _ in molecules))
     return {"molecules": molecules, "names": expected, "charge": charge, "notes": notes, "coords": coords,
-            "solvent_itps": solvent_itps}
+            "solvent_itps": solvent_itps, "ligands": frozen_ligands}
