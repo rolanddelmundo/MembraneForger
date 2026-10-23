@@ -10,7 +10,7 @@ __all__ = ['ORIENTATION', 'ORIENT_CHAINS', 'ORIENT_RESIDUES', 'NTERM_SIDE', 'PDB
            'DEFAULT_LIGANDS', 'NSTEPS', 'DISULFIDE_MAX_A', 'DISULFIDE_OK_A', 'SLAB_Z_PAD_NM', 'MIN_Z_PAD_TOTAL_NM',
            'SALT_M', 'MOLAR_PER_NM3', 'WATERS_PER_NM3', 'ION_RMIN_NM', 'GENION_ATTEMPTS', 'WATER_PROTECT_NM', 'LIPID_SCAN_A',
            'LIPID_DELETE_A', 'GENERATED', 'INTERMEDIATES', 'INDEX_GROUPS', 'FMAX_TARGET', 'H_BOND_RANGE', 'GLPA_MAX_BOND_A',
-           'LYS_BACKBONE', 'ONE_LETTER', 'GM3_XML_TO_GLPA', 'LIPIDATED', 'CYSG_HDB', 'DIHRES_EM_FC', 'EM_MDP',
+           'LYS_BACKBONE', 'ONE_LETTER', 'GM3_XML_TO_GLPA', 'LIPIDATED', 'CYSG_HDB', 'DIHRES_EM_FC', 'EM_MDP', 'LIGAND_GROUP',
            'APL_VALIDATE', 'APL_SLICE_WARNING_PERCENT', 'APL_SLICE_TOLERANCE_PERCENT', 'RDF_VALIDATE', 'CG_VALIDATE', 'Settings']
 
 # ============================================================
@@ -114,6 +114,10 @@ INTERMEDIATES = ("oriented.pdb", "membrane.pdb", "prot-memb.pdb", "topol.pre_gen
 
 
 INDEX_GROUPS = ("System", "Protein_LIG", "MEMB", "SOL_ION")
+# Optional fifth group: the heavy atoms of the ligand molecules (a subset of Protein_LIG, so it is not part of the partition).
+# Both minimizations freeze it, so a ligand keeps its deposited pose and the receptor and lipids relax around it. Its
+# hydrogens stay free: ones missing from the input are placed on arbitrary directions and EM has to correct them.
+LIGAND_GROUP = "LIG"
 
 
 FMAX_TARGET = 500.0
@@ -255,7 +259,7 @@ rvdw            = 1.2
 pme-order       = 4
 fourierspacing  = 0.12
 pbc             = xyz
-"""
+{freeze}"""
 
 
 @dataclass(frozen=True)
