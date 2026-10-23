@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial import cKDTree
 
-from .config import AMINO, DIHRES_EM_FC, EM_MDP, FMAX_TARGET, Settings
+from .config import AMINO, DIHRES_EM_FC, EM_MDP, FMAX_TARGET, LIGAND_GROUP, Settings
 from .contacts import check_contacts, describe_contacts, record_contacts
 from .runtools import run_command, run_path
 from .solvation import ion_census, salt_summary
@@ -45,21 +45,29 @@ def has_dihedral_restraints(out: Path) -> bool:
     return False
 
 
+def freeze_text(topology: dict) -> str:
+    """The mdp lines that freeze the ligand group (x, y and z), or '' when the system has no ligand."""
+    return f"freezegrps      = {LIGAND_GROUP}\nfreezedim       = Y Y Y\n" if topology.get("ligands") else ""
+
+
 def run_em(out: Path, topology: dict, gmx: str, ntomp: int, nsteps: int) -> None:
-    """Run steepest-descent minimization (PME when neutral), first with the lipid dihedral restraints when present."""
+    """Run steepest-descent minimization (PME when neutral), first with the lipid dihedral restraints when present.
+
+    A ligand is frozen in both minimizations: it keeps its placed coordinates and the receptor and lipids relax around it."""
+    freeze = freeze_text(topology)
     coulomb = "PME" if abs(topology["charge"]) < 1e-3 else "Cut-off"
     start = "solv_ions.gro"
     if has_dihedral_restraints(out):
-        _minimize(out, gmx, "emres", start, coulomb, ntomp, nsteps, f"-DDIHRES -DDIHRES_FC={DIHRES_EM_FC:g}")
+        _minimize(out, gmx, "emres", start, coulomb, ntomp, nsteps, f"-DDIHRES -DDIHRES_FC={DIHRES_EM_FC:g}", freeze)
         start = "emres.gro"
-    _minimize(out, gmx, "em", start, coulomb, ntomp, nsteps)
+    _minimize(out, gmx, "em", start, coulomb, ntomp, nsteps, freeze=freeze)
 
 
-def _minimize(out: Path, gmx: str, name: str, structure: str, coulomb: str, ntomp: int, nsteps: int, define: str = "") -> None:
+def _minimize(out: Path, gmx: str, name: str, structure: str, coulomb: str, ntomp: int, nsteps: int, define: str = "", freeze: str = "") -> None:
     """grompp + mdrun one steepest-descent minimization from structure; em writes em.unverified.gro, others {name}.gro."""
     result = "em.unverified.gro" if name == "em" else f"{name}.gro"
     (out / f"{name}.mdp").write_text(EM_MDP.format(emtol=FMAX_TARGET, nsteps=nsteps, coulombtype=coulomb,
-                                                   define=f"define          = {define}\n" if define else ""))
+                                                   define=f"define          = {define}\n" if define else "", freeze=freeze))
     for stale in (f"{name}.gro", result, f"{name}.log", f"{name}.edr", f"{name}.trr"):
         (out / stale).unlink(missing_ok=True)
     run_command(out, gmx.split() + ["grompp", "-f", f"{name}.mdp", "-c", structure, "-p", "topol.top",
@@ -217,6 +225,22 @@ def overlaps_of_molecule(out: Path, structure: str, solute_atoms: int, resname: 
     return describe_contacts(report, limit=2)
 
 
+def check_ligand_frozen(out: Path, index: dict, xyz: np.ndarray, before: tuple, tolerance_nm: float = 2e-3) -> None:
+    """The ligand atoms must sit where they were before EM (frozen), allowing for the periodic image mdrun writes."""
+    if LIGAND_GROUP not in index:
+        return
+    text = run_path(out, "index_ini.ndx").read_text()
+    block = re.search(rf"(?s)\[ {LIGAND_GROUP} \]\n(.*?)(?=\n\[|\Z)", text)
+    ids = np.array(block.group(1).split(), dtype=int) - 1 if block else np.array([], dtype=int)
+    atoms, box = before
+    start, cell = xyz_nm(atoms)[ids], np.array(box[:3])
+    delta = xyz[ids] - start
+    delta -= cell * np.round(delta / cell)
+    moved = float(np.abs(delta).max()) if len(ids) else 0.0
+    if len(ids) != index[LIGAND_GROUP] or moved > tolerance_nm:
+        raise SystemExit(f"the frozen ligand moved during EM: {len(ids)} of {index[LIGAND_GROUP]} atoms, largest shift {moved:.4f} nm")
+
+
 def validate_em(system: dict, topology: dict, index: dict, settings: Settings = Settings()) -> dict:
     """Check EM converged, left no force-field overlap or bond crossing, and that structure, topology, index and box agree."""
     out = system["out"]
@@ -258,6 +282,7 @@ def validate_em(system: dict, topology: dict, index: dict, settings: Settings = 
         raise SystemExit("minimized atoms do not match topol.top")
     if index["System"] != len(atoms) or index["Protein_LIG"] + index["MEMB"] + index["SOL_ION"] != len(atoms):
         raise SystemExit(f"index groups do not partition the system: {index}")
+    check_ligand_frozen(out, index, xyz, read_gro(run_path(out, "solv_ions.gro")))
     if not index["SOL_ION"] or abs(topology["charge"]) > 1e-3:
         raise SystemExit("EM system is not solvated and neutral")
     if not np.allclose([float(v) for v in gro[-1].split()][:2], read_gro(run_path(out, "boxed.gro"))[1][:2], atol=1e-3):
