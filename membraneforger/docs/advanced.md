@@ -147,7 +147,7 @@ The top level of the output directory holds the final system and the reports:
 |---|---|
 | `em.gro` | minimized coordinates; written only when every check passes |
 | `topol.top`, `toppar/` | GROMACS topology and force-field includes |
-| `index_ini.ndx` | groups `System`, `Protein_LIG`, `MEMB`, `SOL_ION` |
+| `index_ini.ndx` | groups `System`, `Protein_LIG`, `MEMB`, `SOL_ION`, and `LIG` when the system has a ligand |
 | `membranebuilder.log` | build log; its last line says `PASS` or `FAIL` |
 | `audit.json` | independent audit of the minimized system |
 | `membrane_validation.md`, `.json` | stage-by-stage membrane validation |
@@ -197,6 +197,21 @@ contact. The exclusions appear in the build log and in `run_manifest.json` (`exc
 
 `membraneforger/examples/build_from_python.py` shows how to call the build from Python, and
 [modules.md](modules.md) maps each module to its role.
+
+## Ligands during minimization
+
+A ligand here is any non-protein residue of the `--aa` input (GDP, Mg2+, a small molecule), as listed in
+`run_manifest.json`. Both minimizations (`emres` and `em`) freeze the ligand heavy atoms in x, y and z
+(`freezegrps = LIG`, `freezedim = Y Y Y` in `int/emres.mdp` and `int/em.mdp`; the `LIG` group is the last group of
+`index_ini.ndx`, a subset of `Protein_LIG`). A ligand therefore keeps its placed coordinates, and the protein, lipids and
+solvent relax around it. Ligand hydrogens are not frozen, so a hydrogen that was missing from the input and was placed by
+the build can still be corrected. Peptide residues and lipidated residues are protein, not ligands, and are not frozen.
+Systems without a ligand have no `LIG` group and no freeze lines.
+
+Nothing moves a frozen ligand out of a clash. A deep overlap with a ligand shows up as an Fmax or contact failure naming
+the ligand pair, and the fix is in the input pose or in the neighbouring residue, not in the minimization. After EM the
+build checks that no frozen atom moved (beyond 0.002 nm, periodic image allowed for), and the audit checks that `LIG`
+lies inside `Protein_LIG`. The build does not repack or rebuild protein side chains; side chains are only minimized.
 
 ## Lipidated residues
 

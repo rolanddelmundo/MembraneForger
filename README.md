@@ -16,7 +16,10 @@ returns a solvated, energy-minimized CHARMM36 system (`em.gro`) that has passed 
 6. **Build** the CHARMM36 topology, add water and 0.15 M NaCl, and minimize.
 7. **Audit** the result. `em.gro` is written only when every check passes.
 
-The output is minimized, not equilibrated. Run restrained equilibration before production.
+The output is minimized, not equilibrated. Run restrained equilibration before production. Ligands (every non-protein
+residue of the input, such as GDP or Mg2+) are frozen in minimization, so they keep the coordinates you gave and the
+protein, lipids and solvent relax around them; hydrogens of a ligand stay free. Protein side chains are not repacked or
+replaced: the build only minimizes them where they are.
 
 ## Requirements
 
@@ -81,7 +84,7 @@ The main files in the `--out` directory:
 |---|---|
 | `em.gro` | minimized all-atom system, ready for equilibration |
 | `topol.top`, `toppar/` | GROMACS topology and force-field files |
-| `index_ini.ndx` | index groups `Protein_LIG`, `MEMB` and `SOL_ION` |
+| `index_ini.ndx` | index groups `System`, `Protein_LIG`, `MEMB` and `SOL_ION`, plus `LIG` (the heavy atoms of the ligands, frozen in minimization) when the system has a ligand |
 | `membranebuilder.log` | build log; the last line says `PASS` or `FAIL` |
 | `membrane_validation.md` | membrane quality report, with figures |
 | `audit.json`, `run_manifest.json` | audit result, settings, versions and checksums |

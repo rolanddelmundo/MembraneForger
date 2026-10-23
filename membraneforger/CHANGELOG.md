@@ -3,7 +3,7 @@
 ## Unreleased
 
 - **Ligands are frozen during minimization.** `index_ini.ndx` gains a trailing `LIG` group (the heavy atoms of the ligand
-  molecules, a subset of `Protein_LIG`; hydrogens stay free so EM can correct any that were synthesized), and both minimizations (`emres` and `em`) set `freezegrps = LIG` with
+  molecules, i.e. every non-protein residue of the input, a subset of `Protein_LIG`; hydrogens stay free so EM can correct any that were synthesized), and both minimizations (`emres` and `em`) set `freezegrps = LIG` with
   `freezedim = Y Y Y`, so a ligand keeps its placed coordinates and the receptor, lipids and solvent relax around it.
   Validation fails the build if a ligand atom moved during EM, and the audit accepts the optional `LIG` group. Systems
   without a ligand are unchanged. A deep clash with a frozen ligand can no longer be relieved by moving the ligand, so

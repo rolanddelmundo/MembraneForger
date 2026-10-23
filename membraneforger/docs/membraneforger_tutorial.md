@@ -15,7 +15,7 @@ equilibrated Martini membrane (frame)
     -> gate 1: APL, composition, lateral RDF, thickness, protein orientation, integrity (slice_check)
     -> mstool backmapping around the rigid complex                                    (backmap, assemble)
     -> gate 2: the all-atom membrane (membrane.pdb), then the minimized system (em.gro)
-    -> topology, box, water, ions, restrained + free minimization, audit               (publish em.gro)
+    -> topology, box, water, ions, restrained + free minimization (ligands frozen), audit   (publish em.gro)
     -> gate 3 and 4 on the equilibration / production trajectory                       (python -m membraneforger.equilibration)
 ```
 
@@ -165,7 +165,7 @@ x, y cell.
 
 mstool backmaps the sliced membrane around the complex held as a rigid obstacle, the structure is checked for ring
 threading and stereochemistry (another seed is tried when needed; contact findings between the membrane and the complex are logged as a warning and left to the minimization), the topology is built, the box is set in
-z, water and 0.15 M NaCl (in the water, see below) are added, the system is minimized with and then without the lipid dihedral restraints (the heavy atoms of a ligand are frozen in both, so the receptor and lipids relax around it), and
+z, water and 0.15 M NaCl (in the water, see below) are added, the system is minimized with and then without the lipid dihedral restraints (the heavy atoms of every ligand, meaning each non-protein residue of the input, are frozen in both, so the receptor, lipids and solvent relax around it; ligand hydrogens and all protein atoms stay free), and
 an independent audit must pass before `em.gro` appears. Every intermediate is kept: at the end of each build, passed
 or failed, the steps on the way to `em.gro` (`config.INTERMEDIATES`) are moved into `<out>/int/`, beside the working
 files (`int/work`) and the audit's scratch runs (`int/audit`); the top level holds the final outputs and the reports.
@@ -416,7 +416,7 @@ build on any inverted centre or cis bond: a configuration never corrects itself 
 another seed is tried, so a build only reaches the audit with a GM3 that was wrong on every attempt.
 
 Two lipids threaded through each other, or an atom placed on top of another molecule's atom, are the other defects
-minimization cannot repair: steepest descent ends at a finite Fmax on the atom the bonds hold in place (one build ended
+minimization cannot repair (a frozen ligand cannot move away either, so an atom overlapping a ligand fails the same way and the finding names the ligand pair): steepest descent ends at a finite Fmax on the atom the bonds hold in place (one build ended
 at Fmax 20878 kJ/mol/nm on a DOPC carbon 2.4 A from a POPC carbon, unchanged through 50000 steps). The lipid scan and
 the start-contact check only look at lipids against the solute, so the build also tests the structure the way
 GROMACS sees it (`membraneforger/contacts.py`): every non-bonded pair (different molecules, or the same molecule more
