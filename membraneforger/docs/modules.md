@@ -31,8 +31,8 @@ python -m membraneforger --aa prot-lig.pdb --cg system.gro --orient-chain R --ou
 | `equilibration.py` | `python -m membraneforger.equilibration`: gates 3 and 4 on a finished trajectory |
 | `backmapping.py`, `mstool_worker.py` | membrane backmapping; the worker is the only file that imports mstool |
 | `topology.py` | structure repair and CHARMM36 topology construction |
-| `solvation.py` | box (`BOX = auto` around the bilayer midplane, or an opt-in user box), water, ions, index groups |
-| `minimization.py` | EM and its validation |
+| `solvation.py` | box (`BOX = auto` around the bilayer midplane, or an opt-in user box), water, ions, index groups (`LIG`, the ligand heavy atoms, when there is a ligand) |
+| `minimization.py` | EM (ligand heavy atoms frozen) and its validation, including the check that the frozen ligand did not move |
 | `audit.py` | independent audit (own parsers, `grompp -maxwarn 0`, `gmx check`, `gmx energy`, geometry) |
 | `reporting.py` | `run_manifest.json` |
 | `visualization.py` | VMD + Tachyon stage renders (runs in a python that can import `vmd`) |
