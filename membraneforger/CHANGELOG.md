@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Ligands are frozen during minimization.** `index_ini.ndx` gains a trailing `LIG` group (the heavy atoms of the ligand
+  molecules, a subset of `Protein_LIG`; hydrogens stay free so EM can correct any that were synthesized), and both minimizations (`emres` and `em`) set `freezegrps = LIG` with
+  `freezedim = Y Y Y`, so a ligand keeps its placed coordinates and the receptor, lipids and solvent relax around it.
+  Validation fails the build if a ligand atom moved during EM, and the audit accepts the optional `LIG` group. Systems
+  without a ligand are unchanged. A deep clash with a frozen ligand can no longer be relieved by moving the ligand, so
+  it shows up as an Fmax or contact failure that names the ligand pair.
+
 - **N-acylated N termini and S-palmitoyl cysteine.** `GLYP` (N-palmitoyl glycine: the CHARMM `GLYM` N-myristoyl
   glycine of `toppar_all36_lipid_prot.str` with the chain extended to C16 using the palmitate atom types and charges of
   `CYSP`) is a protein residue, and `merged.hdb` gains hydrogen entries for `CYSP` and `GLYP`, so both can be given as

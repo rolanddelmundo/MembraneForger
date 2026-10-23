@@ -217,10 +217,13 @@ def check_structure(run: Path, structure: str, settings: Settings) -> tuple[dict
     solute[:sizes.get("Protein_LIG", 0)] = True
     membrane = np.zeros(len(resn), bool)
     membrane[sizes.get("Protein_LIG", 0):sizes.get("Protein_LIG", 0) + sizes.get("MEMB", 0)] = True
-    if index_groups != ["System", "Protein_LIG", "MEMB", "SOL_ION"]:
-        return {"index_groups": sizes}, fails + [f"index groups are {index_groups}, not System/Protein_LIG/MEMB/SOL_ION"]
+    ligand = index_groups[4:] == ["LIG"]  # an optional trailing group: the ligand atoms, frozen in EM, a subset of Protein_LIG
+    if index_groups[:4] != ["System", "Protein_LIG", "MEMB", "SOL_ION"] or index_groups[4:] not in ([], ["LIG"]):
+        return {"index_groups": sizes}, fails + [f"index groups are {index_groups}, not System/Protein_LIG/MEMB/SOL_ION[/LIG]"]
     everything = np.arange(1, len(resn) + 1)
-    if not np.array_equal(members[0], everything) or not np.array_equal(np.concatenate(members[1:]), everything):
+    if ligand and not np.isin(members[4], members[1]).all():
+        fails.append("the LIG index group has atoms outside Protein_LIG")
+    if not np.array_equal(members[0], everything) or not np.array_equal(np.concatenate(members[1:4]), everything):
         fails.append(f"index groups are not consecutive blocks that partition atoms 1..{len(resn)}: {sizes}")
     if protein[~solute].any() or bulk[~(solute | membrane)].sum() != bulk.sum() or (~bulk[~(solute | membrane)]).any():
         fails.append("index groups hold the wrong kind of molecule")

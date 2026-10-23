@@ -165,7 +165,7 @@ x, y cell.
 
 mstool backmaps the sliced membrane around the complex held as a rigid obstacle, the structure is checked for ring
 threading and stereochemistry (another seed is tried when needed; contact findings between the membrane and the complex are logged as a warning and left to the minimization), the topology is built, the box is set in
-z, water and 0.15 M NaCl (in the water, see below) are added, the system is minimized with and then without the lipid dihedral restraints, and
+z, water and 0.15 M NaCl (in the water, see below) are added, the system is minimized with and then without the lipid dihedral restraints (the heavy atoms of a ligand are frozen in both, so the receptor and lipids relax around it), and
 an independent audit must pass before `em.gro` appears. Every intermediate is kept: at the end of each build, passed
 or failed, the steps on the way to `em.gro` (`config.INTERMEDIATES`) are moved into `<out>/int/`, beside the working
 files (`int/work`) and the audit's scratch runs (`int/audit`); the top level holds the final outputs and the reports.

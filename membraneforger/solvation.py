@@ -22,6 +22,7 @@ from .config import (
     GENION_ATTEMPTS,
     INDEX_GROUPS,
     ION_RMIN_NM,
+    LIGAND_GROUP,
     MIN_Z_PAD_TOTAL_NM,
     MOLAR_PER_NM3,
     SALT_M,
@@ -252,7 +253,7 @@ def add_ions(system: dict, topology: dict, gmx: str, box: list[float], settings:
     target, n_pos, n_neg, short = ion_counts(volume, charge, mode=settings.counterion_mode)
     if short:
         log(out, shortfall_warning(settings.salt_volume, volume, box, charge, target, short), "WARN")
-    (out / "ions.mdp").write_text(EM_MDP.format(emtol=FMAX_TARGET, nsteps=0, coulombtype="Cut-off", define=""))
+    (out / "ions.mdp").write_text(EM_MDP.format(emtol=FMAX_TARGET, nsteps=0, coulombtype="Cut-off", define="", freeze=""))
     run_command(out, gmx.split() + ["grompp", "-f", "ions.mdp", "-c", "solv.gro", "-p", "topol.top",
                                 "-o", "ions.tpr", "-po", "ions_mdout.mdp", "-maxwarn", "0"], produces=("ions.tpr",))
     nsolute = len(topology["names"]) - 3 * topology["molecules"][-1][1]
@@ -307,14 +308,20 @@ def add_ions(system: dict, topology: dict, gmx: str, box: list[float], settings:
 
 
 def make_index(out: Path, topology: dict) -> dict:
-    """Write index_ini.ndx with System, Protein_LIG, MEMB and SOL_ION."""
+    """Write index_ini.ndx with System, Protein_LIG, MEMB and SOL_ION, plus LIG (the ligand heavy atoms) when there is a ligand."""
     groups, start = {name: [] for name in INDEX_GROUPS}, 1
-    for _, count, atoms, group in topology["molecules"]:
+    ligands = set(topology.get("ligands", ()))
+    groups[LIGAND_GROUP] = []
+    for mol, count, atoms, group in topology["molecules"]:
         groups[group] += range(start, start + count * len(atoms))
+        if mol in ligands:  # heavy atoms only: a hydrogen missing from the input is placed on a fixed direction and EM must relax it
+            heavy = [k for k, a in enumerate(atoms) if element(a["atom"]) != "H"]
+            groups[LIGAND_GROUP] += [start + n * len(atoms) + k for n in range(count) for k in heavy]
         start += count * len(atoms)
     groups["System"] = list(range(1, start))
+    if not groups[LIGAND_GROUP]:
+        del groups[LIGAND_GROUP]
     with (out / "index_ini.ndx").open("w") as fh:
-        for name in INDEX_GROUPS:
-            ids = groups[name]
+        for name, ids in groups.items():
             fh.write(f"[ {name} ]\n" + "".join(" ".join(map(str, ids[i:i + 15])) + "\n" for i in range(0, len(ids), 15)) + "\n")
     return {name: len(ids) for name, ids in groups.items()}
