@@ -17,6 +17,7 @@ from scipy.spatial import cKDTree
 
 from .audit import topology_includes, topology_molecules
 from .config import (
+    CUTOFF_NM,
     EM_MDP,
     FMAX_TARGET,
     GENION_ATTEMPTS,
@@ -99,12 +100,16 @@ def rebox_system(system: dict, topology: dict, requested_z_nm: float | None = No
                             "midplane_fraction_z": round((center + shift) / box_z, 4),
                             "symmetric_box_z_nm": symmetric_z,
                             "estimated_z_reduction_pct": round(100.0 * (1.0 - box_z / symmetric_z), 2),
+                            "periodic_z_gap_nm": round(box_z - (hi - lo), 4),
                             "z_pad_nm": z_pad_nm, "minimum_z_nm": round(minimum, 4), "shift_nm": round(shift, 4),
                             "requested_z_nm": requested_z_nm}
     log(system["out"], f"rebox ({mode}, {'symmetric' if symmetric else 'asymmetric'}): {box_x:.3f} x {box_y:.3f} x {box_z:.3f} nm "
                        f"(centred layout would be {symmetric_z:.3f} nm); bilayer midplane z {center:.2f} nm ({centre_source}) at "
                        f"{(center + shift) / box_z:.2f} of the box, solute top {top - center:+.2f} nm, solute bottom {bottom - center:+.2f} nm, "
                        f"clearance {lower_clear:.2f} below / {upper_clear:.2f} above, pad {z_pad_nm} nm, minimum z {minimum:.3f} nm")
+    if box_z - (hi - lo) < 2.0 * CUTOFF_NM - 1e-6:
+        log(system["out"], f"rebox: water across the z boundary is {box_z - (hi - lo):.2f} nm, below two cutoffs "
+                           f"({2.0 * CUTOFF_NM:.1f} nm)", "WARN")
     return [box_x, box_y, box_z]
 
 

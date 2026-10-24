@@ -59,7 +59,7 @@ from .config import Settings
 from .lipids import anchor_bead, anchor_xyz, leaflet_of
 from .structio import element, xyz_nm
 
-__all__ = ['solute_extent', 'crop_windows', 'image_molecule', 'make_whole', 'lipid_anchor', 'anchor_image_shift',
+__all__ = ['xy_periodic_check', 'solute_extent', 'crop_windows', 'image_molecule', 'make_whole', 'lipid_anchor', 'anchor_image_shift',
            'all_beads_inside', 'select_lipids', 'seam_clashes', 'created_pairs', 'pair_keys', 'offset_slack', 'relax_seam',
            'remove_hard_core_overlaps',
            'composition_distance', 'score_offset', 'choose_offset', 'leaflet_counts', 'selection_diagnostics',
@@ -370,6 +370,43 @@ def selection_diagnostics(decisions: list[dict]) -> dict:
                     "area, which under-packed the cut membrane; the anchor rule keeps the lipid population of the source"}
 
 
+def xy_periodic_check(complex_a: list[dict], sliced: list[dict], cell: np.ndarray, midplane_nm: float, settings: Settings) -> dict:
+    """Lipid shells around the transmembrane region and the complex's distance to its own periodic images in x and y."""
+    # Reported, not enforced: a violation is listed in `flags` and the caller logs it; no dimension is changed here.
+    # shells_between_images is the closest approach of the TMD to its image through the membrane, in lipid shells, and
+    # shells_per_side half of it (each of the two proteins owns half of the lipids between them).
+    heavy = np.array([[a["x"], a["y"], a["z"]] for a in complex_a if element(a["atom"]) != "H"], dtype=float) / 10.0
+    tmd = heavy[np.abs(heavy[:, 2] - midplane_nm) <= settings.tmd_half_nm]
+    if not len(tmd):
+        return {"checked": False, "reason": "no complex heavy atom within tmd_half_nm of the bilayer midplane", "flags": []}
+
+    def image_gap(points: np.ndarray) -> float:
+        tree, nearest = cKDTree(points[:, :2]), np.inf
+        for sx, sy in ((1, 0), (0, 1), (1, 1), (1, -1)):
+            shifted = points[:, :2] + np.array([sx, sy]) * cell
+            nearest = min(nearest, float(tree.query(shifted)[0].min()))
+        return nearest
+
+    tmd_gap, complex_gap = image_gap(tmd), image_gap(heavy)
+    anchors = np.array([anchor_xyz(m["xyz"], [b["atom"] for b in m["beads"]], anchor_bead(m["cg"])) for m in sliced])[:, :2]
+    wrapped = cKDTree(tmd[:, :2] % cell, boxsize=cell)
+    distance = wrapped.query(anchors % cell)[0]
+    width = settings.lipid_shell_nm
+    counts = [int(((distance >= i * width) & (distance < (i + 1) * width)).sum()) for i in range(3)]
+    per_side = tmd_gap / 2.0 / width
+    flags = []
+    if per_side < settings.min_lipid_shells:
+        flags.append(f"{per_side:.1f} lipid shells ({0.5 * tmd_gap:.2f} nm) per side between the transmembrane region and its image; "
+                     f"at least {settings.min_lipid_shells:g} recommended (Feng et al. 2023): raise --xy-buffer")
+    if complex_gap < settings.min_image_clearance_nm:
+        flags.append(f"the complex is {complex_gap:.2f} nm from its own periodic image in x/y, below the "
+                     f"{settings.min_image_clearance_nm:g} nm cutoff: raise --xy-buffer")
+    return {"checked": True, "tmd_atoms": int(len(tmd)), "lipid_shell_nm": width, "tmd_image_gap_nm": round(tmd_gap, 3),
+            "shells_between_images": round(tmd_gap / width, 2), "shells_per_side": round(per_side, 2),
+            "lipids_per_shell": counts, "complex_image_clearance_nm": round(complex_gap, 3),
+            "min_lipid_shells": settings.min_lipid_shells, "min_image_clearance_nm": settings.min_image_clearance_nm, "flags": flags}
+
+
 def slice_membrane_cg(membrane: list[dict], placed: list[dict], box: list[float], midplane_nm: float, settings: Settings,
                       requested: tuple | None = None, reference: dict | None = None) -> dict:
     """Crop the CG membrane to the placed complex plus the buffer; returns the new membrane, complex, box and a report.
@@ -441,6 +478,7 @@ def slice_membrane_cg(membrane: list[dict], placed: list[dict], box: list[float]
               "lipids_outside_window": outside, "composition_before": dict(sorted(before.items())),
               "composition_after": dict(sorted(after.items())), "leaflets_before": leaflet_counts(membrane, midplane_nm),
               "leaflets_after": leaflets, "bilayer_midplane_nm": round(midplane_nm, 4),
-              "selection": selection_diagnostics(decisions), "seam": seam}
+              "selection": selection_diagnostics(decisions), "seam": seam,
+              "xy_check": xy_periodic_check(moved_complex, sliced, np.array(new_box[:2]), midplane_nm, settings)}
     return {"membrane": sliced, "placed": moved_complex, "box": new_box, "composition": after, "report": report,
             "kept_indices": [index for _, _, index in kept]}

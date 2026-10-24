@@ -2,14 +2,23 @@
 
 ## Unreleased
 
-- **The automatic box z is asymmetric.** z is the full extent of the complex and membrane (hydrogens included) plus
-  1.5 nm of water above the highest and below the lowest atom, with equal clearances at both ends, instead of twice the
-  larger distance from the bilayer midplane. A receptor that is taller on one side of the bilayer needs less water, so
-  fewer atoms (about 9% less z for a receptor reaching 4 nm out and 3 nm in; measure it per system with the new
-  `symmetric_box_z_nm` and `estimated_z_reduction_pct` in the `box` entry of `run_manifest.json`, which also records
-  `z_layout`, `z_source`, the clearances and `midplane_fraction_z`). The water across the periodic boundary is never less
-  than 2.0 nm or two cutoffs. `--symmetric-box-z` (`Settings.box_z_symmetric`) restores the centred box, and the
-  `--box-nm` z check before backmapping uses the same rule. Box volume, water and ion counts change for every system.
+- **The automatic box z is asymmetric, with 2.25 nm of water at each end.** z is the full extent of the complex and
+  membrane (hydrogens included) plus 2.25 nm (22.5 A, the CHARMM-GUI water default; Park & Im 2026,
+  doi:10.1016/j.jmb.2026.169672, and the CHARMM-GUI FAQ) above the highest and below the lowest atom, with equal
+  clearances at both ends, instead of twice the larger distance from the bilayer midplane plus 1.5 nm. At equal padding
+  the asymmetric box is shorter (a receptor reaching 4 nm out and 3 nm in: 10.0 nm against 11.0 nm at 1.5 nm), but the
+  2.25 nm default can make a box, and so the atom count, larger than before; `--z-pad-nm 1.5` gives the smaller box.
+  `--symmetric-box-z --z-pad-nm 1.5` (or `--symmetric-box-z` alone, `Settings.box_z_symmetric`) restores the earlier
+  centred box. The water across the periodic boundary is never less than 2.0 nm or two cutoffs in the asymmetric
+  layout. The `box` entry of `run_manifest.json` gains `z_layout`, `z_source`, the clearances, `midplane_fraction_z`,
+  `periodic_z_gap_nm`, `symmetric_box_z_nm` and `estimated_z_reduction_pct` (against the centred box at the same padding).
+  The `--box-nm` z check before backmapping uses the same rule.
+- **Periodic xy check after slicing (reported, never enforced).** The slice report gains `xy_check`: the lipid shells
+  (0.8 nm each) between the transmembrane region and its own image and the lipids in the first three shells, and the
+  distance between the complex and its periodic image in x and y. Fewer than 2 shells per side (Feng et al. 2023, JCTC,
+  section 10.1, recommends at least 2-3; doi:10.1021/acs.jctc.2c01246) or a complex closer to its image than the
+  1.2 nm cutoff is logged as a WARN and listed in `xy_check.flags`; no dimension changes. `--xy-buffer` (default 1.0 nm)
+  stays the way to widen the membrane; Park & Im 2026 document a 20 A xy margin as the CHARMM-GUI default.
 
 - **Ligands are frozen during minimization.** `index_ini.ndx` gains a trailing `LIG` group (the heavy atoms of the ligand
   molecules, i.e. every non-protein residue of the input, a subset of `Protein_LIG`; hydrogens stay free so EM can correct any that were synthesized), and both minimizations (`emres` and `em`) set `freezegrps = LIG` with

@@ -98,13 +98,12 @@ def z_box_need(heavy: tuple[float, float], atoms: tuple[float, float], center: f
     # heavy and atoms are the (lowest, highest) z of the heavy atoms and of all atoms, hydrogens included. Asymmetric
     # (the default): the box is the full extent of all atoms plus the padding at both ends, and the bilayer is wherever it
     # falls. Symmetric (the earlier layout): twice the larger heavy-atom distance from the bilayer centre plus the padding.
-    # Either way the water across the periodic boundary is never less than MIN_Z_PAD_TOTAL_NM nor two cutoffs, so the
-    # complex does not see its own image.
+    # The asymmetric layout keeps the water across the periodic boundary at least MIN_Z_PAD_TOTAL_NM and two cutoffs, so
+    # the complex does not see its own image; the symmetric layout is exactly the earlier rule (MIN_Z_PAD_TOTAL_NM only).
     span = atoms[1] - atoms[0]
-    floor = max(MIN_Z_PAD_TOTAL_NM, 2.0 * CUTOFF_NM)
     if symmetric:
-        return max(2.0 * (max(heavy[1] - center, center - heavy[0]) + pad_nm), span + floor)
-    return span + max(2.0 * pad_nm, floor)
+        return max(2.0 * (max(heavy[1] - center, center - heavy[0]) + pad_nm), span + MIN_Z_PAD_TOTAL_NM)
+    return span + max(2.0 * pad_nm, MIN_Z_PAD_TOTAL_NM, 2.0 * CUTOFF_NM)
 SALT_M, ION_RMIN_NM, GENION_ATTEMPTS = 0.15, 0.60, 3
 # Added NaCl is a concentration in the water, so the ion numbers come from the aqueous volume, not the box: protein, ligands
 # and lipids take about 30 % of a membrane box. gmx solvate fills the box from spc216.gro (216 waters in a 1.86206 nm
@@ -380,6 +379,15 @@ class Settings:
     # BOX = auto slices the coarse-grained membrane to the placed complex plus this buffer on each side in x and y
     # (1.0 nm, the slice_buffer_nm of the earlier workflow); an axis whose window reaches the cell width is not cut.
     box_xy_buffer_nm: float = 1.0
+    # Reported (never enforced) after slicing: lipid shells around the transmembrane region (atoms within tmd_half_nm of
+    # the bilayer midplane; a shell is lipid_shell_nm wide, about one lipid diameter) and the water-free distance between
+    # the complex and its own periodic image in x and y. Fewer than min_lipid_shells shells between the TMD and its
+    # image on each side (Feng et al. 2023, JCTC, section 10.1: at least 2-3), or a complex closer to its image than
+    # min_image_clearance_nm (the non-bonded cutoff), is flagged in the log, run_manifest.json and the slice report.
+    tmd_half_nm: float = 1.5
+    lipid_shell_nm: float = 0.8
+    min_lipid_shells: float = 2.0
+    min_image_clearance_nm: float = CUTOFF_NM
     # A user box must leave at least this much membrane on each side of the complex.
     box_xy_min_buffer_nm: float = 0.5
     # Seam contact threshold between beads of different lipids that only the new periodicity brings together. The

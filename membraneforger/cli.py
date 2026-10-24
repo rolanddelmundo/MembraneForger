@@ -439,7 +439,8 @@ def main(argv: list | None = None) -> int:
         parser.error("--apl-tolerance must be positive")
     settings = Settings(fit_max_core_rmsd_a=args.fit_max_core_rmsd, fit_min_core_fraction=args.fit_min_core_fraction,
                         box_xy_buffer_nm=args.xy_buffer,
-                        box_z_symmetric=args.symmetric_box_z, box_z_pad_nm=args.z_pad_nm or (LEGACY_Z_PAD_NM if args.symmetric_box_z else SLAB_Z_PAD_NM),
+                        box_z_symmetric=args.symmetric_box_z,
+                        box_z_pad_nm=args.z_pad_nm or (LEGACY_Z_PAD_NM if args.symmetric_box_z else SLAB_Z_PAD_NM),
                         apl_validate=args.apl_validate == "yes", apl_slice_tolerance_percent=args.apl_tolerance,
                         rdf_validate=args.rdf_validate == "yes", cg_validate=args.cg_validate == "yes",
                         slice_optimize_offset=args.slice_offset_search and not args.no_slice_offset,

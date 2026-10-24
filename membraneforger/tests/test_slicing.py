@@ -454,3 +454,29 @@ class Integration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PeriodicXYCheck(unittest.TestCase):
+    def cut(self, buffer_nm):
+        members = [lipid("POPC", 9.0 + 0.3 * k, 10.0 + 0.1 * (k % 3), MIDPLANE + (3 if k % 2 else -3)) for k in range(12)]
+        return mf.slice_membrane_cg(members, solute((8, 12), (9, 11)), CELL, MIDPLANE,
+                                    mf.Settings(slice_min_lipids=2, box_xy_buffer_nm=buffer_nm))["report"]["xy_check"]
+
+    def test_the_default_buffer_is_flagged_not_changed(self):
+        check = self.cut(1.0)  # cell 6 x 4 nm, the two atoms diagonal: closest approach to an image is sqrt(2^2 + 2^2) nm
+        self.assertTrue(check["checked"])
+        self.assertAlmostEqual(check["tmd_image_gap_nm"], 8.0 ** 0.5, places=3)
+        self.assertAlmostEqual(check["shells_per_side"], 8.0 ** 0.5 / 2.0 / 0.8, places=2)
+        self.assertEqual(len(check["flags"]), 1)  # 1.77 shells per side: below 2
+        self.assertIn("lipid shells", check["flags"][0])
+        self.assertAlmostEqual(check["complex_image_clearance_nm"], 8.0 ** 0.5, places=3)
+
+    def test_a_wide_buffer_passes_and_reports_shell_counts(self):
+        check = self.cut(3.0)
+        self.assertEqual(check["flags"], [])
+        self.assertGreaterEqual(check["shells_per_side"], 2.0)
+        self.assertEqual(len(check["lipids_per_shell"]), 3)
+
+    def test_a_complex_closer_than_the_cutoff_to_its_image_is_flagged(self):
+        check = self.cut(0.4)  # 4.8 x 2.8 nm cell: atoms 0.8 nm and 0.8 nm from the images
+        self.assertTrue(any("periodic image" in f for f in check["flags"]))

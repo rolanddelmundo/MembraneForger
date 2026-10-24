@@ -228,6 +228,13 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
     cut = run_stage(session, "slice", slice_membrane_cg, membrane, placed, box, midplane, session.settings, requested,
                     session.analysis.slice_reference())
     record["slice"] = cut["report"]
+    check = cut["report"]["xy_check"]
+    if check["checked"]:
+        log(out, f"periodic xy: {check['shells_per_side']:.1f} lipid shells per side around the transmembrane region "
+                 f"(lipids per {check['lipid_shell_nm']:g} nm shell {check['lipids_per_shell']}), complex "
+                 f"{check['complex_image_clearance_nm']:.2f} nm from its own image", "WARN" if check["flags"] else "PASS")
+    for flag in check["flags"]:
+        log(out, f"periodic xy: {flag}", "WARN")
     if session.embed and session.embed_site == "free":
         reached = run_stage(session, "slice", refuse_frame_protein_in_slice, cg["protein"], slab, box, placed, cut)
         record["slice"]["frame_protein_beads_in_window"] = reached
