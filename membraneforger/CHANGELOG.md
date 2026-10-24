@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Faster seam and embedding relaxation.** `relax_seam` keeps a neighbour list (pairs within the repulsion range plus a
+  0.1 nm skin, rebuilt once a bead has moved 0.05 nm) instead of rebuilding a KD-tree every step, and accumulates forces with
+  `np.bincount` instead of `np.add.at`. The relaxed coordinates agree with the previous code to rounding error
+  (1e-11 nm after 200 steps); `embed_complex` on KOR_Membrane1 (15,161 beads, 1200 steps) takes 25 s instead of 59 s.
+  The unused `slicing.seam_clashes` (superseded by `inherent_pairs` and `created_pairs`) is removed.
+
 - **Ligands are frozen during minimization.** `index_ini.ndx` gains a trailing `LIG` group (the heavy atoms of the ligand
   molecules, i.e. every non-protein residue of the input, a subset of `Protein_LIG`; hydrogens stay free so EM can correct any that were synthesized), and both minimizations (`emres` and `em`) set `freezegrps = LIG` with
   `freezedim = Y Y Y`, so a ligand keeps its placed coordinates and the receptor, lipids and solvent relax around it.
