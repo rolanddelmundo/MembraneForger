@@ -7,7 +7,8 @@ from dataclasses import dataclass
 
 __all__ = ['ORIENTATION', 'ORIENT_CHAINS', 'ORIENT_RESIDUES', 'NTERM_SIDE', 'PDB_ID', 'PPM_MEMBRANE', 'BOX',
            'AMINO', 'SOLVENT', 'N_CAP', 'C_CAP', 'RENAME_RESIDUE', 'RENAME_ATOM', 'RENAME_MOLECULE', 'TERMINUS_MENU', 'N_ACYLATED',
-           'DEFAULT_LIGANDS', 'NSTEPS', 'DISULFIDE_MAX_A', 'DISULFIDE_OK_A', 'SLAB_Z_PAD_NM', 'MIN_Z_PAD_TOTAL_NM', 'CUTOFF_NM', 'z_box_need',
+           'DEFAULT_LIGANDS', 'NSTEPS', 'DISULFIDE_MAX_A', 'DISULFIDE_OK_A', 'SLAB_Z_PAD_NM', 'LEGACY_Z_PAD_NM',
+           'MIN_Z_PAD_TOTAL_NM', 'CUTOFF_NM', 'z_box_need',
            'SALT_M', 'MOLAR_PER_NM3', 'WATERS_PER_NM3', 'ION_RMIN_NM', 'GENION_ATTEMPTS', 'WATER_PROTECT_NM', 'LIPID_SCAN_A',
            'LIPID_DELETE_A', 'GENERATED', 'INTERMEDIATES', 'INDEX_GROUPS', 'FMAX_TARGET', 'H_BOND_RANGE', 'GLPA_MAX_BOND_A',
            'LYS_BACKBONE', 'ONE_LETTER', 'GM3_XML_TO_GLPA', 'LIPIDATED', 'CYSG_HDB', 'DIHRES_EM_FC', 'EM_MDP', 'LIGAND_GROUP',
@@ -33,7 +34,8 @@ PPM_MEMBRANE = ""          # advanced: PPM 3.0 membrane code, "" = undefined fla
 # auto: the coarse-grained membrane is sliced in x and y to the placed complex plus 1.0 nm of membrane on each side
 # (whole lipids only; an axis that would be as wide as the cell is kept whole), and z is the full extent of the
 # complex and membrane plus SLAB_Z_PAD_NM of water above the highest and below the lowest atom (not centred on the
-# bilayer). A user box is opt-in: "x,y,z" in nm, with x and y no larger than the coarse-grained cell (the membrane is cut to that size around the complex) and z at least the automatic minimum.
+# bilayer). A user box is opt-in: "x,y,z" in nm, with x and y no larger than the coarse-grained cell (the membrane is
+# cut to that size around the complex) and z at least the automatic minimum.
 BOX = "auto"               # auto | "x,y,z" in nm, e.g. "14,14,22" (x and y are cut around the complex, z sizes the water)
 
 # ============================================================
@@ -85,7 +87,9 @@ N_ACYLATED = ("GLYP",)
 DEFAULT_LIGANDS = frozenset({"GDP", "MG", "V6G"})  # non-protein residues treated as ligands when no all-atom input says so
 NSTEPS = 50000  # default maximum EM steps
 DISULFIDE_MAX_A, DISULFIDE_OK_A = 3.0, (1.8, 2.2)  # SG-SG below 3.0 A is a disulfide; outside 1.8-2.2 A it is rebuilt
-SLAB_Z_PAD_NM, MIN_Z_PAD_TOTAL_NM = 1.5, 2.0  # water above/below the solute, and the least total z padding
+# Water above and below the complex: 2.25 nm (22.5 A, the CHARMM-GUI default; 1.5 nm in releases before the asymmetric
+# layout), and the least total z padding.
+SLAB_Z_PAD_NM, LEGACY_Z_PAD_NM, MIN_Z_PAD_TOTAL_NM = 2.25, 1.5, 2.0
 CUTOFF_NM = 1.2  # rvdw = rcoulomb in EM_MDP; the water across the z boundary must stay at least twice this
 
 
