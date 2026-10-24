@@ -22,6 +22,7 @@ are in nm; the options that took Å before (`--box`, `--bilayer-z`, `--fit-max-c
 | `-o`, `--out DIR` | Output directory (with `--runs`, the parent of one directory per run). | `./<all-atom structure stem>_membraneforger` (the `--membrane` stem with `--membrane`), the same for a single build and `--runs` |
 | `--overwrite` | Allow a build into an `--out` that already holds an earlier build; its generated outputs are replaced. Without it the build stops before touching anything. | off |
 | `--overwrite-restart` | Additionally allow replacing checkpoints and trajectories (`*.cpt`, `*.xtc`, `*.trr`, `*.tng`) in `--out`. The build never deletes them otherwise. GROMACS `-cpi`/`-append` continuation of a run is not affected. | off |
+| `--archive-previous no\|reports\|all` | With `--overwrite`, first copy the earlier build's reports (`reports`) or reports and structures (`all`: `em.gro` or `int/em.unverified.gro`, `topol.top`, `index_ini.ndx`) to `<out>/previous_builds/<start time>_<status>/`, so a rejected attempt survives its rebuild. Nothing is deleted; a copy that fails stops the build before anything is replaced. | `no` |
 | `--name NAME` | System name used in logs and in `[ system ]`. | output directory name |
 | `--membrane PDB` | Skip orientation and backmapping and start from an assembled protein + membrane PDB with a `CRYST1` record, for example `<out>/int/membrane.pdb` of an earlier build. Replaces `--aa` and `--cg`. | — |
 
@@ -61,6 +62,9 @@ The slice gate compares the cut membrane with the membrane it was cut from, befo
 | Option | Meaning | Default |
 |---|---|---|
 | `--apl-validate yes\|no` | Stop before backmapping when a leaflet's area per lipid changes by more than `--apl-tolerance`. | `yes` |
+| `--backbone-check yes\|report\|no` | After EM, compare the protein backbone with the structure EM started from (`solv_ions.gro`). `yes` stops the build on a peptide bond EM twisted or changed to the other isomer, a C-alpha or Thr/Ile C-beta it inverted, a phi/psi that moved more than 30 degrees beyond the restraint width (backbone restraints on), or a Ramachandran outlier in a `--strict-segments` range; `report` lists the same as warnings; `no` skips it. Report: `backbone_check.json`. | `report` |
+| `--backbone-drift-margin DEG` | Degrees added to the 30 degree backbone-restraint width before a phi/psi drift fails the backbone check. | `30` |
+| `--strict-segments CHAIN:FIRST-LAST[,...]` | Input residues that were modelled rather than observed (for example `R:338-345,A:5-9`). A Ramachandran outlier in one of them after EM fails the backbone check even if the residue was not an outlier before. Chain letters and residue numbers are those of the all-atom input. | none |
 | `--cg-validate yes\|no` | Stop before embedding when the coarse-grained frame has an empty leaflet, a broken molecule, a strongly tilted bilayer or pervasive bead overlaps; `no` only reports it. | `yes` |
 | `--apl-tolerance PERCENT` | Largest accepted change of the leaflet area per lipid across slicing (a warning is logged above 3 %). | `5.0` |
 | `--rdf-validate yes\|no` | Compare the lateral headgroup RDF of the slice with its source. Warns only. | `yes` |

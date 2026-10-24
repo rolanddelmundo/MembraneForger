@@ -173,7 +173,9 @@ python -m membraneforger --membrane <out>/int/membrane.pdb --out <out>
 
 Rerunning into an `<out>` that holds an earlier build is refused unless `--overwrite` is given; checkpoints and trajectories
 there also need `--overwrite-restart` and are never deleted otherwise. With `--overwrite` the other outputs and intermediates are
-replaced and only `int/membrane.pdb` is kept. Give a new `--out` to keep the earlier build as it is.
+replaced and only `int/membrane.pdb` is kept. Give a new `--out` to keep the earlier build as it is, or add
+`--archive-previous reports` (or `all`, which also copies `em.gro`, `topol.top` and `index_ini.ndx`) to have the earlier build's reports copied to
+`<out>/previous_builds/<start time>_<status>/` before they are replaced; a build that was rejected and rebuilt in the same `--out` stays inspectable.
 
 ## Disulfides
 
