@@ -134,7 +134,12 @@ preserves the source's lipid density and composition when `--slice-offset-search
 is relaxed in place at the coarse-grained level instead of deleting lipids.
 
 `--box-nm X Y Z` (nm) sets the box instead. x and y may only be smaller than the membrane patch; z must leave the default
-water padding. A z too short for the complex is refused before backmapping.
+water padding (1.5 nm above the highest and below the lowest atom). A z too short for the complex is refused before backmapping.
+
+The automatic z is the full extent of the complex and membrane plus the padding at both ends, so a receptor that reaches
+further on one side of the bilayer does not add water on the other side. The bilayer is then not at the middle of the box;
+`run_manifest.json` records the layout, the clearances and `midplane_fraction_z`. `--symmetric-box-z` restores the earlier
+box centred on the midplane.
 
 The default 1.0 nm buffer is small for large complexes. If the slice gate stops the build, rerun with a larger
 `--xy-buffer` (2.0 is a common choice for production systems).

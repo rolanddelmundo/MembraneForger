@@ -50,7 +50,8 @@ The complete complex (partners, peptides, ligands, ions) is moved as one rigid b
 | Option | Meaning | Default |
 |---|---|---|
 | `--xy-buffer NM` | Membrane kept around the complex on each side in x and y when the box is automatic. Large complexes and single helices often need 2–3. | `1.0` nm |
-| `--box-nm X Y Z` | Opt-in box edges in nm. x and y may only be smaller than the membrane patch, which is then cut around the complex. z must leave the default water padding. | automatic |
+| `--symmetric-box-z` | Size the automatic box z symmetrically about the bilayer midplane, as releases before this layout did. By default z is the extent of the complex and membrane plus 1.5 nm of water at each end. | off |
+| `--box-nm X Y Z` | Opt-in box edges in nm. x and y may only be smaller than the membrane patch, which is then cut around the complex. z must leave the default water padding above and below the complex and membrane. | automatic |
 | `--dellipid LIPID` | Remove every molecule of this lipid (repeatable): `CHOL`, `POPC`, `DOPC`, `POPE`, `DOPE`, `POPS`, `DOPS`, `PSM`, `DPG3`, `SAP6`. The aliases `GM3` (for `DPG3`) and `PIP2`/`SAPI25` (for `SAP6`) are accepted. | — |
 | `--addlipid LIPID` | Turn the lipids removed by `--dellipid` into this lipid instead: `POPC`, `DOPC`, `POPE`, `DOPE`, `POPS`, `DOPS`, `PSM`. | — |
 

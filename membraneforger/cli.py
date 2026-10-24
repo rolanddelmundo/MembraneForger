@@ -217,8 +217,11 @@ def make_parser() -> argparse.ArgumentParser:
                              "than the frame's receptor (e.g. one transmembrane helix) (default: %(default)s)")
     parser.add_argument("--box-nm", nargs=3, type=float, metavar=("X", "Y", "Z"),
                         help=f"opt-in box edges in nm (default: BOX = {BOX}: the membrane is sliced to the complex plus --xy-buffer "
-                             "in x and y, and z is sized around the bilayer midplane); x and y may only be smaller than the "
+                             "in x and y, and z is the extent of the complex and membrane plus the water padding); x and y may only be smaller than the "
                              "membrane patch, which is then cut around the complex, z must leave the default water padding")
+    parser.add_argument("--symmetric-box-z", action="store_true",
+                        help="size the automatic box z symmetrically about the bilayer midplane, as releases before the "
+                             "asymmetric layout did (default: z is the extent of the complex and membrane plus the padding)")
     parser.add_argument("--box", nargs=3, type=float, metavar=("X", "Y", "Z"), help=argparse.SUPPRESS)  # earlier releases: edges in A
     parser.add_argument("--bilayer-z-nm", type=float, metavar="Z",
                         help="z of the bilayer centre in the all-atom input, in nm (default: found from the hydrophobic belt)")
@@ -427,7 +430,7 @@ def main(argv: list | None = None) -> int:
     if not args.apl_tolerance > 0:
         parser.error("--apl-tolerance must be positive")
     settings = Settings(fit_max_core_rmsd_a=args.fit_max_core_rmsd, fit_min_core_fraction=args.fit_min_core_fraction,
-                        box_xy_buffer_nm=args.xy_buffer, apl_validate=args.apl_validate == "yes", apl_slice_tolerance_percent=args.apl_tolerance,
+                        box_xy_buffer_nm=args.xy_buffer, box_z_symmetric=args.symmetric_box_z, apl_validate=args.apl_validate == "yes", apl_slice_tolerance_percent=args.apl_tolerance,
                         rdf_validate=args.rdf_validate == "yes", cg_validate=args.cg_validate == "yes",
                         slice_optimize_offset=args.slice_offset_search and not args.no_slice_offset,
                         counterion_mode=args.counterion_mode)

@@ -266,7 +266,8 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
         "PASS" if record["slice_check"]["pass"] else "WARN")
     placed, membrane, box = cut["placed"], cut["membrane"], cut["box"]
     if session.box_a:  # refuse a z that cannot hold the complex now, not after the slow backmapping
-        run_stage(session, "mapping", check_box_z, placed, slab, session.box_a[2] / 10.0)
+        run_stage(session, "mapping", check_box_z, placed, slab, session.box_a[2] / 10.0,
+                  session.settings.box_z_pad_nm, session.settings.box_z_symmetric)
     return {"placed": placed, "membrane": membrane, "box": box, "mapping": mapping,
             "composition": Counter(RENAME_MOLECULE.get(m["aa"], m["aa"]) for m in membrane),
             "ligands": DEFAULT_LIGANDS | {a["resname"] for a in aa_atoms if a["resname"] not in AMINO}}
@@ -387,7 +388,7 @@ def build_topology_and_box(session: Session, membrane: Path, ligands: set, expec
     for note in topology["notes"]:
         log(out, note)
     box = run_stage(session, "box", rebox_system, system, topology, session.box_a[2] / 10.0 if session.box_a else None,
-                    session.settings.box_z_pad_nm)
+                    session.settings.box_z_pad_nm, session.settings.box_z_symmetric)
     session.record["box"] = system["box_report"]
     rings = run_stage(session, "rings", review_ring_piercing, out, "boxed.gro")
     solute_atoms = sum(n * len(atoms) for _, n, atoms, group in topology["molecules"] if group == "Protein_LIG")

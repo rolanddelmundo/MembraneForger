@@ -474,6 +474,76 @@ class RequestedBoxZ(unittest.TestCase):
     def test_requested_z_is_used_when_large_enough_and_refused_otherwise(self):
         system, topology = self.system()
         auto = mf.rebox_system(system, topology)
-        self.assertAlmostEqual(auto[2], 2.0 * (3.0 + mf.SLAB_Z_PAD_NM))
+        self.assertAlmostEqual(auto[2], 6.0 + 2.0 * mf.SLAB_Z_PAD_NM)  # symmetric solute: both layouts agree
+        self.assertAlmostEqual(mf.rebox_system(system, topology, symmetric=True)[2], 2.0 * (3.0 + mf.SLAB_Z_PAD_NM))
         self.assertIn("is below the", failure(mf.rebox_system, system, topology, auto[2] - 1.0))
         self.assertAlmostEqual(mf.rebox_system(system, topology, 20.0)[2], 20.0)
+
+
+class AsymmetricBoxZ(unittest.TestCase):
+    def system(self, below, above, requested=None, symmetric=False, z_pad=mf.SLAB_Z_PAD_NM):
+        """Bilayer phosphates at 5 +/- 2 nm; one protein CA `below` nm under the midplane and one `above` nm over it, plus a hydrogen."""
+        coords = [{"resid": 1, "resname": "ALA", "atom": "CA", "group": "Protein_LIG", "x": 10.0, "y": 10.0, "z": 50.0 + 10.0 * dz}
+                  for dz in (-below, above)]
+        coords.append({"resid": 1, "resname": "ALA", "atom": "HA", "group": "Protein_LIG", "x": 10.0, "y": 10.0, "z": 50.0 + 10.0 * above + 1.0})
+        coords += [{"resid": 2 + i, "resname": "POPC", "atom": "P", "group": "MEMB", "x": 10.0 + i, "y": 10.0, "z": 50.0 + sign * 20.0}
+                   for i in range(6) for sign in (-1, 1)]
+        out = Path(tempfile.mkdtemp())
+        system = {"cryst1": "CRYST1   40.000   40.000  100.000  90.00  90.00  90.00 P 1           1", "out": out, "name": "t"}
+        box = mf.rebox_system(system, {"coords": coords}, requested, z_pad, symmetric)
+        z = np.array([a["z"] for a in mf.read_gro(out / "boxed.gro")[0]])
+        return box, system["box_report"], z
+
+    def assert_geometry(self, box, z, pad):
+        tol = 1e-3
+        self.assertGreaterEqual(z.min(), pad - tol)
+        self.assertLessEqual(z.max(), box[2] - pad + tol)
+        self.assertGreaterEqual(box[2] - (z.max() - z.min()), 2.0 * pad - tol)
+
+    def test_lopsided_receptor_gets_a_shorter_box_with_equal_clearances(self):
+        box, report, z = self.system(below=2.0, above=5.0)
+        pad = mf.SLAB_Z_PAD_NM
+        self.assert_geometry(box, z, pad)
+        self.assertAlmostEqual(box[2], 7.1 + 2.0 * pad, places=2)  # hydrogen 0.1 nm above the top CA sets the extent
+        self.assertAlmostEqual(report["lower_clearance_nm"], report["upper_clearance_nm"], places=3)
+        self.assertEqual(report["z_layout"], "asymmetric")
+        self.assertAlmostEqual(report["symmetric_box_z_nm"], 2.0 * (5.0 + pad), places=2)
+        self.assertGreater(report["estimated_z_reduction_pct"], 5.0)
+
+    def test_hydrogens_count_toward_the_padding(self):
+        box, report, z = self.system(below=2.0, above=5.0)
+        self.assertGreaterEqual(box[2] - z.max(), mf.SLAB_Z_PAD_NM - 1e-3)
+
+    def test_rounding_keeps_the_protein_membrane_arrangement(self):
+        (_, _, z_a), (_, _, z_b) = self.system(below=2.0, above=5.0), self.system(below=2.0, above=5.0, requested=14.0)
+        self.assertAlmostEqual(float(np.ptp(z_a)), float(np.ptp(z_b)), places=3)  # only the origin differs
+
+    def test_protein_below_the_membrane_and_near_symmetric(self):
+        box, report, z = self.system(below=5.0, above=2.0)
+        self.assert_geometry(box, z, mf.SLAB_Z_PAD_NM)
+        self.assertGreater(report["midplane_fraction_z"], 0.5)  # the long side is below, so the bilayer sits high in the box
+        box, report, z = self.system(below=3.0, above=3.0)
+        self.assert_geometry(box, z, mf.SLAB_Z_PAD_NM)
+        self.assertLess(abs(report["estimated_z_reduction_pct"]), 3.5)  # only the hydrogen's 0.1 nm differs
+
+    def test_oversized_request_is_kept_and_split_evenly(self):
+        box, report, z = self.system(below=2.0, above=5.0, requested=15.0)
+        self.assertAlmostEqual(box[2], 15.0)
+        self.assertEqual(report["z_source"], "user")
+        self.assertAlmostEqual(report["lower_clearance_nm"], report["upper_clearance_nm"], places=3)
+
+    def test_legacy_symmetric_mode_centres_the_bilayer(self):
+        box, report, z = self.system(below=2.0, above=5.0, symmetric=True)
+        self.assertAlmostEqual(box[2], 2.0 * (5.0 + mf.SLAB_Z_PAD_NM), places=2)
+        self.assertAlmostEqual(report["midplane_fraction_z"], 0.5, places=3)
+        self.assertEqual(report["z_layout"], "symmetric")
+
+    def test_small_pad_still_leaves_two_cutoffs_across_the_boundary(self):
+        box, report, z = self.system(below=2.0, above=5.0, z_pad=0.5)
+        self.assertGreaterEqual(box[2] - float(np.ptp(z)), 2.0 * mf.CUTOFF_NM - 1e-3)
+
+    def test_pre_backmapping_check_follows_the_same_layout(self):
+        placed = [{"atom": "CA", "resname": "ALA", "x": 0.0, "y": 0.0, "z": z} for z in (30.0, 90.0)]
+        slab = (4.0, 8.0)  # complex 3-9 nm; slab inside it
+        self.assertAlmostEqual(mf.check_box_z(placed, slab, 20.0), 6.0 + 2.0 * mf.SLAB_Z_PAD_NM)
+        self.assertAlmostEqual(mf.check_box_z(placed, slab, 20.0, symmetric=True), 2.0 * (3.0 + mf.SLAB_Z_PAD_NM))

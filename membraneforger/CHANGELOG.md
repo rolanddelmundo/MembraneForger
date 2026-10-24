@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **The automatic box z is asymmetric.** z is the full extent of the complex and membrane (hydrogens included) plus
+  1.5 nm of water above the highest and below the lowest atom, with equal clearances at both ends, instead of twice the
+  larger distance from the bilayer midplane. A receptor that is taller on one side of the bilayer needs less water, so
+  fewer atoms (about 9% less z for a receptor reaching 4 nm out and 3 nm in; measure it per system with the new
+  `symmetric_box_z_nm` and `estimated_z_reduction_pct` in the `box` entry of `run_manifest.json`, which also records
+  `z_layout`, `z_source`, the clearances and `midplane_fraction_z`). The water across the periodic boundary is never less
+  than 2.0 nm or two cutoffs. `--symmetric-box-z` (`Settings.box_z_symmetric`) restores the centred box, and the
+  `--box-nm` z check before backmapping uses the same rule. Box volume, water and ion counts change for every system.
+
 - **Ligands are frozen during minimization.** `index_ini.ndx` gains a trailing `LIG` group (the heavy atoms of the ligand
   molecules, i.e. every non-protein residue of the input, a subset of `Protein_LIG`; hydrogens stay free so EM can correct any that were synthesized), and both minimizations (`emres` and `em`) set `freezegrps = LIG` with
   `freezedim = Y Y Y`, so a ligand keeps its placed coordinates and the receptor, lipids and solvent relax around it.
