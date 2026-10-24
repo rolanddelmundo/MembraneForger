@@ -227,7 +227,8 @@ def align_frame_to_box(atoms: list[dict], box: list[float]) -> tuple[list[dict],
     as_read = score(0.0)
     square = bool(abs(cell[0] - cell[1]) < 0.01)
     best = (0.0, as_read)
-    if square:
+    tolerated = max(5, len(kept) // 2000)  # a handful of inherent near-contacts is data, thousands are the rotation
+    if square and as_read > tolerated:  # a frame that is already periodic is returned as read, so the scan is skipped
         for step, span in ((1.0, 90.0), (0.1, 1.0), (0.01, 0.1)):
             start = best[0] if span < 90.0 else 0.0
             for deg in np.arange(start - (span if span < 90.0 else 0.0), start + span, step):
@@ -235,7 +236,6 @@ def align_frame_to_box(atoms: list[dict], box: list[float]) -> tuple[list[dict],
                 if n < best[1]:
                     best = (round(float(deg), 2), n)
     angle, remaining = best
-    tolerated = max(5, len(kept) // 2000)  # a handful of inherent near-contacts is data, thousands are the rotation
     if remaining > tolerated and remaining > 0.1 * as_read:
         raise SystemExit(f"the coarse-grained frame is not periodic in its {cell[0]:.3f} x {cell[1]:.3f} nm box: {as_read} bead pairs of "
                          f"different molecules overlap (< {FRAME_OVERLAP_NM} nm) once wrapped, and no rotation about z removes them "

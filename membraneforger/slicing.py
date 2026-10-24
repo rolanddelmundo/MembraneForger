@@ -202,6 +202,9 @@ def relax_seam(xyz: list[np.ndarray], size: np.ndarray, cell_z: float, cropped: 
     minimum_image = lambda d: d - new_box * np.round(d / new_box)
     scatter = lambda index, values: np.stack([np.bincount(index, values[:, k], len(points)) for k in range(3)], axis=1)
     skin = 0.1  # neighbour list: pairs within repulsion_nm + skin, rebuilt once a bead has moved more than skin / 2
+    # A lipid at its starting coordinates has no shape or position force, so only lipids that something has pushed enter the
+    # intra-lipid restraints; once active a lipid stays active.
+    lipid_of, active, active_intra = owner[intra[:, 0]], np.zeros(len(xyz), bool), np.zeros(len(intra), bool)
     points, remaining, step, crowded = start.copy(), np.zeros((0, 2), int), 0, False
     listed, candidates = points.copy(), created_pairs(points, owner, new_box, repulsion_nm + skin, inherent)
     while step < steps:
@@ -226,10 +229,16 @@ def relax_seam(xyz: list[np.ndarray], size: np.ndarray, cell_z: float, cropped: 
             hit = np.isfinite(near)
             away = minimum_image(np.mod(points[hit], new_box) - protein.data[index[hit]])
             force[hit] += (k_rep * (protein_range - near[hit]))[:, None] * away / np.maximum(near[hit], 1e-9)[:, None]
-        bond = points[intra[:, 1]] - points[intra[:, 0]]
-        length = np.linalg.norm(bond, axis=1)
-        pull = (k_intra * (length - d0))[:, None] * bond / np.maximum(length, 1e-9)[:, None]
-        force += scatter(intra[:, 0], pull) - scatter(intra[:, 1], pull)
+        pushed = np.bincount(owner, force.any(axis=1), len(xyz)) > 0
+        if (pushed & ~active).any():
+            active |= pushed
+            active_intra = active[lipid_of]
+            first, second, rest = intra[active_intra, 0], intra[active_intra, 1], d0[active_intra]
+        if active_intra.any():
+            bond = points[second] - points[first]
+            length = np.linalg.norm(bond, axis=1)
+            pull = (k_intra * (length - rest))[:, None] * bond / np.maximum(length, 1e-9)[:, None]
+            force += scatter(first, pull) - scatter(second, pull)
         force -= k_pos * (points - start)
         largest = float(np.linalg.norm(force, axis=1).max())
         points += force * (min(max_step_nm / largest, 0.1) if largest > 0 else 0.0)
