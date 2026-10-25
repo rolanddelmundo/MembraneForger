@@ -389,9 +389,10 @@ class Settings:
     # that FAIL and (apl_validate) the build stops before backmapping. The RDF check compares the all-anchor headgroup
     # g(r) of each leaflet with the reference's: first-shell position shift PASS within rdf_peak_warning_a, WARNING
     # within rdf_max_peak_shift_a (two 0.5 A bins), FAIL beyond; the RMS difference of the curves may be at most
-    # rdf_max_noise_units times their combined counting noise. Composition and representativeness (slice against the
-    # whole embedded cell) are graded against the empirical distribution of equal-size windows of the embedded
-    # membrane (central 95 % PASS, 95-99 % WARNING, beyond FAIL).
+    # rdf_max_noise_units times their combined counting noise. Representativeness (slice against the whole embedded
+    # cell) is graded against the empirical distribution of equal-size windows of the embedded membrane (central 95 % PASS,
+    # 95-99 % WARNING, beyond FAIL); the composition distance against shell-stratified draws around the complex
+    # (slice_shell_edges_nm, slice_null_draws; PASS up to the 95th percentile, WARNING up to the 99th, FAIL above).
     apl_validate: bool = APL_VALIDATE.lower() == "yes"
     apl_slice_warning_percent: float = APL_SLICE_WARNING_PERCENT
     apl_slice_tolerance_percent: float = APL_SLICE_TOLERANCE_PERCENT
@@ -408,5 +409,11 @@ class Settings:
     rdf_max_noise_units: float = 3.0
     # Equivalent windows sampled from the embedded membrane for the empirical finite-crop distributions (per axis).
     slice_window_samples: int = 12
+    # Composition control of the slice gate: shell-stratified draws (packing.shell_stratified_null) around the complex,
+    # because a slice is cut around the protein and always holds its annular shell, which uniform windows rarely do.
+    # Shell edges are xy distances (nm) to the nearest bead of the complex; the percentile grading is the same as for the
+    # other window controls (PASS up to the 95th percentile, WARNING up to the 99th).
+    slice_shell_edges_nm: tuple = (0.5, 1.0, 1.5, 2.0, 3.0)
+    slice_null_draws: int = 5000
     # A sliced membrane must keep at least this many lipids, and at least this many phospholipids, in two leaflets.
     slice_min_lipids: int = 30
