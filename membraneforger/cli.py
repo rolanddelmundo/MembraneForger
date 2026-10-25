@@ -13,8 +13,19 @@ from dataclasses import replace
 from pathlib import Path
 
 from .backbone_check import parse_segments
-from .config import (BOX, LEGACY_Z_PAD_NM, NSTEPS, NTERM_SIDE, ORIENT_CHAINS, ORIENT_RESIDUES, ORIENTATION, PDB_ID, PPM_MEMBRANE,
-                     SLAB_Z_PAD_NM, Settings)
+from .config import (
+    BOX,
+    LEGACY_Z_PAD_NM,
+    NSTEPS,
+    NTERM_SIDE,
+    ORIENT_CHAINS,
+    ORIENT_RESIDUES,
+    ORIENTATION,
+    PDB_ID,
+    PPM_MEMBRANE,
+    SLAB_Z_PAD_NM,
+    Settings,
+)
 from .embedding import CONVERTIBLE, EMBED_SITES, LIPID_NAMES, lipid_name
 from .orientation import NTERM_SIDES, ORIENTATION_MODES, OrientationRequest, parse_residue_ranges
 from .pipeline import Session, build

@@ -18,7 +18,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .common import AA_PDB, CG_GRO, FORCEFIELD, MAPPING, REPO, failure, mf, gmx_skip_reason, ppm_skip_reason, skip_if
+from .common import AA_PDB, CG_GRO, FORCEFIELD, MAPPING, REPO, failure, gmx_skip_reason, mf, ppm_skip_reason, skip_if
 
 OPM_6WHC = Path(__file__).parent / "data" / "6whc_opm_chainR.pdb"  # chain R and the dummy atoms of the OPM entry 6WHC
 

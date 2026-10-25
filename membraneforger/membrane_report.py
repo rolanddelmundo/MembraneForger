@@ -48,8 +48,8 @@ from .packing import (
     per_lipid_rows,
     reference_packing,
     region_reference,
-    species_table,
     shell_stratified_null,
+    species_table,
     window_distribution,
 )
 from .qc import classify, classify_percentile, metric, overall_status, records_table
@@ -452,9 +452,11 @@ class MembraneValidation:
             if repr_status == "INSUFFICIENT SAMPLING":
                 repr_status = "NOT RUN"  # too few equal-size windows (an uncut axis): representativeness is reported, not graded
             comp = summary["vs_reference"]["composition"][leaflet]
-            uniform_status, uniform_percentile = classify_percentile(comp["distance"], windows[leaflet]["window_composition_distance"], one_sided=True)
+            uniform_status, uniform_percentile = classify_percentile(
+                comp["distance"], windows[leaflet]["window_composition_distance"], one_sided=True)
             strata = shells[leaflet]["strata_composition_distance"]  # the control: slices are cut around the protein (packing.shell_stratified_null)
-            comp_status, comp_percentile = classify_percentile(comp["distance"], strata, one_sided=True) if len(strata) else (uniform_status, uniform_percentile)
+            comp_status, comp_percentile = (classify_percentile(comp["distance"], strata, one_sided=True) if len(strata)
+                                            else (uniform_status, uniform_percentile))
             comp_status = "PASS" if comp_status == "PASS" or comp["within_finite_crop_variability"] and comp_status != "FAIL" else comp_status
             n = cur["measure"][leaflet]["lipids"]
             leaflets[leaflet] = {"lipids": n, "region_lipids_in_reference": region[leaflet]["lipids"],
@@ -556,7 +558,9 @@ class MembraneValidation:
                 "PASS" if v["construction_status"] == "PASS" else "WARN")
             c = composition[l]
             log(self.out, f"slice {l} leaflet composition distance {c['distance']} (random crop of this size: {c['expected_distance_random_crop']}; "
-                          f"{v['composition_status']} against {'shell-stratified draws around the complex' if v['composition_control'] == 'shell-stratified' else 'equal-size windows'})"
+                          f"{v['composition_status']} against "
+                          + ("shell-stratified draws around the complex" if v["composition_control"] == "shell-stratified"
+                             else "equal-size windows") + ")"
                           + (f"; flagged species {c['flagged_species']}" if c["flagged_species"] else ""),
                 "INFO" if v["composition_status"] == "PASS" else "WARN")
             r = rdf["leaflets"][l].get("all")
