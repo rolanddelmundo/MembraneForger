@@ -134,10 +134,25 @@ preserves the source's lipid density and composition when `--slice-offset-search
 is relaxed in place at the coarse-grained level instead of deleting lipids.
 
 `--box-nm X Y Z` (nm) sets the box instead. x and y may only be smaller than the membrane patch; z must leave the default
-water padding. A z too short for the complex is refused before backmapping.
+water padding (2.25 nm above the highest and below the lowest atom). A z too short for the complex is refused before backmapping.
 
-The default 1.0 nm buffer is small for large complexes. If the slice gate stops the build, rerun with a larger
-`--xy-buffer` (2.0 is a common choice for production systems).
+The automatic z is the full extent of the complex and membrane plus the padding at both ends, so a receptor that reaches
+further on one side of the bilayer does not add water on the other side. The bilayer is then not at the middle of the box;
+`run_manifest.json` records the layout, the clearances and `midplane_fraction_z`. The 2.25 nm default is the CHARMM-GUI water
+thickness (22.5 A) and can give a larger box than the earlier 1.5 nm: `--z-pad-nm 1.5` keeps the smaller one, and
+`--symmetric-box-z --z-pad-nm 1.5` restores the earlier box centred on the midplane.
+
+After slicing, the log and the slice report give the lipid shells around the transmembrane region and the distance of
+the complex to its own image in x and y (`xy_check`): `estimated_shell_equivalents_per_side` is a geometric proxy (half the closest approach
+of the transmembrane region to its image, in 0.8 nm units), and `voronoi_shells` counts shells by molecular adjacency on
+the lipid coordinates of each leaflet (a periodic Voronoi tessellation of the lipid anchors and the receptor atoms near
+the leaflet; first-shell lipids share a cell edge with the receptor, each next shell is adjacent to the previous one;
+`voronoi_shells_per_side` is half the lipid rows between the receptor and its image, the lower leaflet). A build with fewer
+than two shells by either measure (at least 2-3 are recommended, Feng et al. 2023, section 10.1) or a complex closer
+than the cutoff to its image gets a WARN; nothing is resized, so widen the membrane with `--xy-buffer` if you see it.
+
+The default 1.0 nm buffer is small for large complexes. If the slice gate stops the build, or the xy check warns, rerun
+with a larger `--xy-buffer` (1.6 is two 0.8 nm lipid shells, 2.4 three; 2.0 is common for production systems).
 
 ## Outputs in detail
 

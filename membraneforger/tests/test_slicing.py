@@ -39,8 +39,8 @@ def fill(n_per_leaflet=40):
     return [lipid("POPC", 0.5 + 0.4 * k, 0.5, MIDPLANE + (3.0 if k % 2 else -3.0)) for k in range(2 * n_per_leaflet)]
 
 
-SETTINGS = mf.Settings(slice_min_lipids=4)
-SMALL = mf.Settings(slice_min_lipids=2)
+SETTINGS = mf.Settings(slice_min_lipids=4, box_xy_buffer_nm=1.0)
+SMALL = mf.Settings(slice_min_lipids=2, box_xy_buffer_nm=1.0)
 
 
 class WindowAndMolecules(unittest.TestCase):
@@ -175,7 +175,8 @@ class Seam(unittest.TestCase):
     def test_a_hard_core_overlap_that_cannot_be_relaxed_costs_one_lipid(self):
         members = [lipid("POPC", 7.05, 10.0, MIDPLANE + 3), lipid("POPE", 12.95, 10.0, MIDPLANE + 3),
                    lipid("DOPC", 9.0, 9.0, MIDPLANE - 3), lipid("DOPE", 10.0, 11.0, MIDPLANE - 3)]
-        cut = mf.slice_membrane_cg(members, solute((8, 12), (9, 11)), CELL, MIDPLANE, mf.Settings(slice_min_lipids=2, seam_relax_steps=0))
+        cut = mf.slice_membrane_cg(members, solute((8, 12), (9, 11)), CELL, MIDPLANE, mf.Settings(
+                                    slice_min_lipids=2, seam_relax_steps=0, box_xy_buffer_nm=1.0))
         seam = cut["report"]["seam"]
         self.assertEqual((seam["pairs_created_by_new_periodicity"], seam["lipids_removed"]), (2, 1))
         self.assertEqual(len(cut["membrane"]), 3)
@@ -221,7 +222,7 @@ class RealFrames(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.settings = mf.Settings()
+        cls.settings = mf.Settings(box_xy_buffer_nm=1.0)
         aa, _ = mf.read_all_atom(AA_PDB, FORCEFIELD)
         raw, cls.box = mf.read_cg(CG_GRO)
         cg = mf.classify_cg(raw, MAPPING)
@@ -320,7 +321,8 @@ class RealFrames(unittest.TestCase):
 class OffsetSlack(unittest.TestCase):
     def test_slack_is_the_search_range_clamped_to_the_minimum_margin(self):
         search = dict(slice_optimize_offset=True)
-        self.assertAlmostEqual(mf.offset_slack(mf.Settings(**search)), 0.5)                      # 1.0 buffer, 0.5 margin
+        self.assertAlmostEqual(mf.offset_slack(mf.Settings(box_xy_buffer_nm=1.0, **search)), 0.5)  # 1.0 buffer, 0.5 margin
+        self.assertAlmostEqual(mf.offset_slack(mf.Settings(**search)), 0.5)                      # 1.6 buffer: the search range is capped at 0.5
         self.assertAlmostEqual(mf.offset_slack(mf.Settings(box_xy_buffer_nm=0.7, **search)), 0.2)
         self.assertEqual(mf.offset_slack(mf.Settings(box_xy_buffer_nm=0.5, **search)), 0.0)      # cannot shift at all
         self.assertEqual(mf.offset_slack(mf.Settings(box_xy_buffer_nm=0.3, **search)), 0.0)
@@ -454,3 +456,77 @@ class Integration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PeriodicXYCheck(unittest.TestCase):
+    def cut(self, buffer_nm):
+        members = [lipid("POPC", 9.0 + 0.3 * k, 10.0 + 0.1 * (k % 3), MIDPLANE + (3 if k % 2 else -3)) for k in range(12)]
+        return mf.slice_membrane_cg(members, solute((8, 12), (9, 11)), CELL, MIDPLANE,
+                                    mf.Settings(slice_min_lipids=2, box_xy_buffer_nm=buffer_nm))["report"]["xy_check"]
+
+    def test_the_default_buffer_is_flagged_not_changed(self):
+        check = self.cut(1.0)  # cell 6 x 4 nm, the two atoms diagonal: closest approach to an image is sqrt(2^2 + 2^2) nm
+        self.assertTrue(check["checked"])
+        self.assertAlmostEqual(check["tmd_image_gap_nm"], 8.0 ** 0.5, places=3)
+        self.assertAlmostEqual(check["estimated_shell_equivalents_per_side"], 8.0 ** 0.5 / 2.0 / 0.8, places=2)
+        self.assertTrue(any("estimated 1.8 lipid shell equivalents" in f for f in check["flags"]))  # below 2
+        self.assertAlmostEqual(check["complex_image_clearance_nm"], 8.0 ** 0.5, places=3)
+
+    def test_a_wide_buffer_passes_the_geometry_but_sparse_lipids_fill_no_shell(self):
+        check = self.cut(3.0)
+        # geometry passes; the twelve test lipids form no shells, which only the lipid coordinates reveal
+        self.assertEqual(len(check["flags"]), 1)
+        self.assertIn("Voronoi adjacency gives", check["flags"][0])
+        self.assertLess(check["voronoi_shells_per_side"], 2)
+        self.assertGreaterEqual(check["estimated_shell_equivalents_per_side"], 2.0)
+        self.assertEqual(len(check["lipids_per_shell"]), 3)
+
+    def test_a_complex_closer_than_the_cutoff_to_its_image_is_flagged(self):
+        check = self.cut(0.4)  # 4.8 x 2.8 nm cell: atoms 0.8 nm and 0.8 nm from the images
+        self.assertTrue(any("periodic image" in f for f in check["flags"]))
+
+    def test_the_default_buffer_is_one_nm_and_two_shells_need_1_6(self):
+        settings = mf.Settings()
+        self.assertEqual(settings.box_xy_buffer_nm, 1.0)
+        self.assertAlmostEqual(settings.min_lipid_shells * settings.lipid_shell_nm, 1.6)
+        check = PeriodicXYCheck().cut(1.6)
+        self.assertGreaterEqual(check["estimated_shell_equivalents_per_side"], settings.min_lipid_shells)
+        self.assertFalse([f for f in check["flags"] if "estimated" in f])
+
+    def test_an_uncut_axis_blames_the_source_cell(self):
+        members = [lipid("POPC", 9.0 + 0.3 * k, 10.0, MIDPLANE + (3 if k % 2 else -3)) for k in range(12)]
+        placed = solute((1, 19), (9, 11))  # nearly spans x of a 20 nm cell: that axis is kept whole
+        check = mf.slice_membrane_cg(members, placed, CELL, MIDPLANE, mf.Settings(slice_min_lipids=2))["report"]["xy_check"]
+        self.assertTrue(check["flags"])
+        self.assertIn("source membrane cell", check["flags"][0])
+
+
+class VoronoiShells(unittest.TestCase):
+    """voronoi_shells on a hand-made leaflet: a square lattice of anchors around a one-atom protein."""
+
+    def lattice(self, cell, spacing=1.0, hole=0.0, centre=None):
+        xs = np.arange(spacing / 2.0, cell, spacing)
+        points = np.array([[x, y] for x in xs for y in xs])
+        if centre is not None:
+            points = points[np.hypot(points[:, 0] - centre[0], points[:, 1] - centre[1]) > hole]
+        return points
+
+    def test_rows_between_a_protein_and_its_image_set_the_shells_per_side(self):
+        # a 1 nm lattice in a 10 nm cell with the protein at a lattice vertex: ten lipid rows from the protein to its image
+        cell = np.array([10.0, 10.0])
+        lipids = self.lattice(10.0, hole=0.6, centre=(5.0, 5.0))
+        result = mf.voronoi_shells(np.array([[5.0, 5.0]]), lipids, cell)
+        self.assertEqual(result["lipid_rows_between_images"], 10)
+        self.assertEqual(result["shells_per_side"], 5)
+        self.assertEqual(result["lipids_per_shell"], [4, 8, 12])  # the four diagonal neighbours, then rings of 8 and 12
+
+    def test_a_narrower_cell_leaves_fewer_shells(self):
+        cell = np.array([6.0, 6.0])
+        lipids = self.lattice(6.0, hole=0.6, centre=(3.0, 3.0))
+        result = mf.voronoi_shells(np.array([[3.0, 3.0]]), lipids, cell)
+        self.assertEqual((result["lipid_rows_between_images"], result["shells_per_side"]), (6, 3))
+
+    def test_no_lipids_or_no_protein_gives_zero(self):
+        cell = np.array([6.0, 6.0])
+        self.assertEqual(mf.voronoi_shells(np.zeros((0, 2)), self.lattice(6.0), cell)["shells_per_side"], 0)
+        self.assertEqual(mf.voronoi_shells(np.array([[3.0, 3.0]]), np.zeros((1, 2)), cell)["shells_per_side"], 0)

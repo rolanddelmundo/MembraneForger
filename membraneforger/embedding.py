@@ -9,7 +9,7 @@ from collections import Counter
 import numpy as np
 from scipy.spatial import cKDTree
 
-from .config import AMINO, MIN_Z_PAD_TOTAL_NM, SLAB_Z_PAD_NM
+from .config import AMINO, SLAB_Z_PAD_NM, z_box_need
 from .lipids import anchor_bead, anchor_xyz, leaflet_of
 from .slicing import relax_seam
 from .structio import element, wrap, xyz_nm
@@ -491,15 +491,16 @@ def edit_lipids(membrane: list[dict], delete: list[str], add: str | None, mappin
     return kept, {"deleted": dict(removed), "converted_to_" + target if target else "converted": dict(converted)}
 
 
-def check_box_z(placed: list[dict], slab: tuple[float, float], requested_z_nm: float) -> float:
+def check_box_z(placed: list[dict], slab: tuple[float, float], requested_z_nm: float, z_pad_nm: float = SLAB_Z_PAD_NM,
+                symmetric: bool = False) -> float:
     """Refuse a requested box z that cannot hold the placed complex, before the slow backmapping is paid for."""
-    # Same rule as rebox_system (water padding above and below the complex, measured from the bilayer centre),
-    # estimated from the coarse-grained bilayer; rebox_system re-checks on the all-atom membrane. Returns the need (nm).
+    # Same rule as rebox_system (z_box_need: water padding above and below the complex and membrane), estimated from the
+    # coarse-grained bilayer on the complex's heavy atoms (there are no hydrogens yet); rebox_system re-checks on the
+    # all-atom membrane with hydrogens. Returns the need (nm).
     z = np.array([a["z"] for a in placed if element(a["atom"]) != "H"]) / 10.0
-    centre = 0.5 * (slab[0] + slab[1])
-    need = max(2.0 * (max(z.max() - centre, centre - z.min()) + SLAB_Z_PAD_NM),
-               max(z.max(), slab[1]) - min(z.min(), slab[0]) + MIN_Z_PAD_TOTAL_NM)
+    lo, hi = min(z.min(), slab[0]), max(z.max(), slab[1])
+    need = z_box_need((lo, hi), (lo, hi), 0.5 * (slab[0] + slab[1]), z_pad_nm, symmetric)
     if requested_z_nm < need - 1e-6:
         raise SystemExit(f"requested box z {requested_z_nm * 10:.0f} A is below the {need * 10:.0f} A this complex needs "
-                         f"({SLAB_Z_PAD_NM} nm of water above and below it); checked before backmapping")
+                         f"({z_pad_nm} nm of water above and below it); checked before backmapping")
     return need

@@ -44,6 +44,34 @@
   KOR_Membrane1-5 instead of 1, 2, 3, 5, 6), and the leaflet composition is unchanged to the whole percent. The ranges the
   documentation quotes for the bundled frames (for example the 8-frame tutorial tables) were measured on the original
   eight frames and are not re-measured here.
+- **The automatic box z is asymmetric, with 2.25 nm of water at each end.** z is the full extent of the complex and
+  membrane (hydrogens included) plus 2.25 nm (22.5 A, the CHARMM-GUI water default; Park & Im 2026,
+  doi:10.1016/j.jmb.2026.169672, and the CHARMM-GUI FAQ) above the highest and below the lowest atom, with equal
+  clearances at both ends, instead of twice the larger distance from the bilayer midplane plus 1.5 nm. At equal padding
+  the asymmetric box is shorter (a receptor reaching 4 nm out and 3 nm in: 10.0 nm against 11.0 nm at 1.5 nm), but the
+  2.25 nm default can make a box, and so the atom count, larger than before; `--z-pad-nm 1.5` gives the smaller box.
+  `--symmetric-box-z --z-pad-nm 1.5` (or `--symmetric-box-z` alone, `Settings.box_z_symmetric`) restores the earlier
+  centred box. The water across the periodic boundary is never less than 2.0 nm or two cutoffs in the asymmetric
+  layout. The `box` entry of `run_manifest.json` gains `z_layout`, `z_source`, the clearances, `midplane_fraction_z`,
+  `periodic_z_gap_nm`, `symmetric_box_z_nm` and `estimated_z_reduction_pct` (against the centred box at the same padding).
+  The `--box-nm` z check before backmapping uses the same rule.
+- **Periodic xy check after slicing (reported, never enforced).** `--xy-buffer` stays 1.0 nm; `--xy-buffer 1.6` is two
+  0.8 nm lipid shells. The slice report gains `xy_check` with two different numbers. `estimated_shell_equivalents_per_side`
+  is a geometric proxy: half the closest approach of the transmembrane region to its image, in 0.8 nm units.
+  `voronoi_shells` (per leaflet) and `voronoi_shells_per_side` (the lower leaflet) count shells by molecular adjacency
+  on the lipid coordinates: a periodic 2D Voronoi tessellation of the leaflet's lipid anchors and the receptor's
+  heavy atoms within 1.5 nm of the midplane; first-shell lipids share a cell edge with a receptor atom, each next shell
+  is the lipids adjacent to the previous one, with no fixed shell width. The lipid rows between the receptor and its
+  own image are the smallest shell number of a lipid adjacent to an image's receptor atom, and each receptor owns half of
+  them. The check also gives the lipids in the first three shells and the distance between the complex and its image in
+  x and y. Fewer than 2 shells by either measure (Feng et al. 2023, JCTC, section 10.1, recommends at least 2-3;
+  doi:10.1021/acs.jctc.2c01246) or a complex closer to its image than the 1.2 nm cutoff is logged as a WARN and listed
+  in `xy_check.flags`; no dimension changes. The adjacency measure follows the idea of Voronoi nearest-neighbour lipid
+  shells (Nguyen et al. 2015, "Characterization of 3D Voronoi Tessellation Nearest Neighbor Lipid Shells"; "Molecular basis
+  for the regulation of membrane proteins through preferential lipid solvation") but is not a re-implementation of
+  them, and a count of two shells here is not a statement of CHARMM-GUI compliance. `python -m membraneforger.equilibration`
+  also reports, over every analysed frame, the closest approach of the protein (and of its transmembrane slab) to its own
+  image in x and y.
 
 - **Ligands are frozen during minimization.** `index_ini.ndx` gains a trailing `LIG` group (the heavy atoms of the ligand
   molecules, i.e. every non-protein residue of the input, a subset of `Protein_LIG`; hydrogens stay free so EM can correct any that were synthesized), and both minimizations (`emres` and `em`) set `freezegrps = LIG` with

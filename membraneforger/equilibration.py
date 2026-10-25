@@ -29,6 +29,7 @@ from .config import Settings
 from .membrane_report import AA_LIPIDS, CORE_HALF_NM, matrix_markdown, stage_from_gro, stage_matrix
 from .packing import measure_packing
 from .qc import classify, metric, overall_status, records_table
+from .slicing import periodic_image_gap
 from .structure_metrics import bilayer_thickness, core_hydration, layered_order, protein_orientation, tail_interdigitation, z_density_profiles
 from .trajectory import (
     CHARMM36_CHAINS,
@@ -50,10 +51,35 @@ from .trajectory import (
 __all__ = ['frame_series', 'convergence_gate', 'equilibrium_gate', 'write_equilibration_report', 'main']
 
 
+def image_gap(protein_nm: np.ndarray, box_nm, midplane_nm: float | None, settings: Settings) -> float:
+    """Closest x/y distance (nm) of the protein, or of its transmembrane slab, to its own periodic image in one frame."""
+    points = np.asarray(protein_nm, dtype=float)
+    if midplane_nm is not None and len(points):
+        points = points[np.abs(points[:, 2] - midplane_nm) <= settings.tmd_half_nm]
+    return periodic_image_gap(points, np.asarray(box_nm[:2], dtype=float)) if len(points) > 1 else np.nan
+
+
+def profile_change(first: dict, last: dict, midplane_first: float, midplane_last: float) -> dict:
+    """RMS change of every group's density profile over its peak, on a common z grid relative to each frame's midplane."""
+    # The box height drifts during NPT, so the two profiles may have different bin counts and the membrane may have moved:
+    # both are shifted to their own midplane and resampled (periodically) onto the span the two boxes share.
+    def relative(profile: dict, midplane: float, grid: np.ndarray) -> dict:
+        length = float(profile["z_nm"][-1] - profile["z_nm"][0] + profile["bin_nm"])
+        rel = ((profile["z_nm"] - midplane + length / 2.0) % length) - length / 2.0
+        order = np.argsort(rel)
+        return {k: np.interp(grid, rel[order], v[order], period=None) for k, v in profile["density_nm3"].items()}
+
+    half = 0.5 * min(float(first["z_nm"][-1] - first["z_nm"][0] + first["bin_nm"]), float(last["z_nm"][-1] - last["z_nm"][0] + last["bin_nm"]))
+    grid = np.arange(-half + 0.05, half - 0.05, 0.1)
+    a, b = relative(first, midplane_first, grid), relative(last, midplane_last, grid)
+    return {k: float(np.sqrt(np.mean((b[k] - a[k]) ** 2)) / max(float(a[k].max()), 1e-9)) for k in b if k in a}
+
+
 def frame_series(paths: list[Path], settings: Settings, topology: Path | None = None) -> dict:
     """Per-frame APL, thickness, core hydration and protein orientation from .gro frames, plus anchor and box series."""
     series = {"frame": [], "apl_upper_A2": [], "apl_lower_A2": [], "thickness_A": [], "core_water_percent": [], "tilt_deg": [],
-              "depth_A": [], "area_nm2": [], "water_path": [], "interdigitation": []}
+              "depth_A": [], "area_nm2": [], "water_path": [], "interdigitation": [],
+              "image_clearance_nm": [], "tmd_image_gap_nm": []}
     anchors, boxes = [], []
     for k, path in enumerate(paths):
         stage = stage_from_gro(Path(path), name="equilibrated", topology=topology)  # falls back to names for stripped frames
@@ -70,11 +96,14 @@ def frame_series(paths: list[Path], settings: Settings, topology: Path | None = 
         series["tilt_deg"].append(orientation["tilt_deg"] if orientation else np.nan)
         series["depth_A"].append(orientation["depth_A"] if orientation else np.nan)
         series["area_nm2"].append(stage["box_nm"][0] * stage["box_nm"][1])
+        series["image_clearance_nm"].append(image_gap(stage["protein_nm"], stage["box_nm"], None, settings))
+        series["tmd_image_gap_nm"].append(image_gap(stage["protein_nm"], stage["box_nm"], stage["midplane_nm"], settings))
         series["water_path"].append(bool(hydration["transmembrane_water_path"]) if hydration else None)
         series["interdigitation"].append(tail_interdigitation(stage["tails"][0], stage["tails"][1], stage["midplane_nm"])["overlap"]
                                          if "tails" in stage else np.nan)
         if k == 0:
             series["first_profiles"] = z_density_profiles(stage["z_groups"], stage["box_nm"]) if "z_groups" in stage else None
+            series["first_midplane_nm"] = stage["midplane_nm"]
         anchors.append(np.array([[r["x_nm"], r["y_nm"]] for r in stage["lipids"]]))
         boxes.append(stage["box_nm"][:2])
         if k == len(paths) - 1:
@@ -140,13 +169,20 @@ def convergence_gate(energy: dict | None, frames: dict | None, frame_time_ps: np
             layered = layered_order(frames["last_profiles"], frames["last_stage"]["midplane_nm"], stage="equilibrated")
             records.append(layered["record"])
             if frames.get("first_profiles"):
-                first, last = frames["first_profiles"]["density_nm3"], frames["last_profiles"]["density_nm3"]
-                change = {k: float(np.sqrt(np.mean((last[k] - first[k]) ** 2)) / max(float(first[k].max()), 1e-9)) for k in last if k in first}
+                change = profile_change(frames["first_profiles"], frames["last_profiles"], frames["first_midplane_nm"],
+                                        frames["last_stage"]["midplane_nm"])
                 records.append(metric("Z-density profile change first-to-last frame", "equilibrated", max(change.values()) if change else None,
                                       "fraction of peak", status="NOT RUN", reason="largest RMS change of a group profile over its peak; reported"))
     else:
         records.append(metric("APL", "equilibrated", None, "A^2", status="NOT RUN", reason="no --frames given (or their times are unknown)"))
     return records
+
+
+def scd_record(name: str, chain: str, values: dict, reference) -> dict:
+    """The qc.metric record of one chain's S_CD profile (n is the number of lipids behind its best-sampled carbon)."""
+    graded = scd_profile_rmse(reference, values["scd"])
+    return metric(f"S_CD {name} {chain}", "final", float(np.nanmean(values["scd"])), "-", n=int(max(values["n"])),
+                  deviation=graded["rmse"], status=graded["status"], reason="mean S_CD over the chain; " + graded["reason"])
 
 
 def equilibrium_gate(energy: dict | None, frames: dict | None, frame_time_ps: np.ndarray | None, args, settings: Settings) -> list[dict]:
@@ -163,6 +199,15 @@ def equilibrium_gate(energy: dict | None, frames: dict | None, frame_time_ps: np
                               reason=f"{ka['reason']}; {versus['reason']}"))
     else:
         records.append(metric("area compressibility K_A", "final", None, "mN/m", status="NOT RUN", reason="no --energy xvg given"))
+    if frames is not None and len(frames["image_clearance_nm"]):
+        worst = float(np.nanmin(frames["image_clearance_nm"])) if np.isfinite(frames["image_clearance_nm"]).any() else None
+        tmd = float(np.nanmin(frames["tmd_image_gap_nm"])) if np.isfinite(frames["tmd_image_gap_nm"]).any() else float("nan")
+        limit = settings.min_image_clearance_nm
+        records.append(metric("periodic image clearance (x/y)", "final", worst, "nm", reference=limit, n=len(frames["image_clearance_nm"]),
+                              status="NOT RUN" if worst is None else "PASS" if worst >= limit else "WARNING",
+                              reason="closest approach of the protein to its own image over every frame (not only production); "
+                                     f"transmembrane slab {tmd:.2f} nm; limit is the non-bonded cutoff" if worst is not None
+                                     else "no protein in the frames"))
     if frames is not None and frame_time_ps is not None and len(frames["anchors"]) >= 10:
         n = len(frames["anchors"])
         start = int(n * (1.0 - args.production_fraction))
@@ -207,10 +252,7 @@ def equilibrium_gate(energy: dict | None, frames: dict | None, frame_time_ps: np
                 reference_scd = (args.reference_scd or {}).get(name, {})
                 for chain, values in profile.items():
                     if values["n"]:
-                        graded = scd_profile_rmse(reference_scd.get(chain), values["scd"])
-                        records.append(metric(f"S_CD {name} {chain}", "final", float(np.nanmean(values["scd"])), "-", n=int(values["n"]),
-                                              deviation=graded["rmse"], status=graded["status"],
-                                              reason="mean S_CD over the chain; " + graded["reason"]))
+                        records.append(scd_record(name, chain, values, reference_scd.get(chain)))
     else:
         records.append(metric("lateral diffusion D", "final", None, "um^2/s", status="INSUFFICIENT SAMPLING",
                               reason="fewer than 10 frames (or no --frames)"))

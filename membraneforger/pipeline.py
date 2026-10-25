@@ -241,6 +241,15 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
     cut = run_stage(session, "slice", slice_membrane_cg, membrane, placed, box, midplane, session.settings, requested,
                     session.analysis.slice_reference())
     record["slice"] = cut["report"]
+    check = cut["report"]["xy_check"]
+    if check["checked"]:
+        voronoi = check["voronoi_shells"]
+        log(out, f"periodic xy: {check['estimated_shell_equivalents_per_side']:.1f} estimated shell equivalents per side; Voronoi "
+                 f"adjacency gives {voronoi['upper']['shells_per_side']} (upper) / {voronoi['lower']['shells_per_side']} (lower) lipid "
+                 f"shells per side (lipids in shells 1-3: {voronoi['upper']['lipids_per_shell']} / {voronoi['lower']['lipids_per_shell']}), complex "
+                 f"{check['complex_image_clearance_nm']:.2f} nm from its own image", "WARN" if check["flags"] else "PASS")
+    for flag in check["flags"]:
+        log(out, f"periodic xy: {flag}", "WARN")
     if session.embed and session.embed_site == "free":
         reached = run_stage(session, "slice", refuse_frame_protein_in_slice, cg["protein"], slab, box, placed, cut)
         record["slice"]["frame_protein_beads_in_window"] = reached
@@ -279,7 +288,8 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
         "PASS" if record["slice_check"]["pass"] else "WARN")
     placed, membrane, box = cut["placed"], cut["membrane"], cut["box"]
     if session.box_a:  # refuse a z that cannot hold the complex now, not after the slow backmapping
-        run_stage(session, "mapping", check_box_z, placed, slab, session.box_a[2] / 10.0)
+        run_stage(session, "mapping", check_box_z, placed, slab, session.box_a[2] / 10.0,
+                  session.settings.box_z_pad_nm, session.settings.box_z_symmetric)
     return {"placed": placed, "membrane": membrane, "box": box, "mapping": mapping,
             "composition": Counter(RENAME_MOLECULE.get(m["aa"], m["aa"]) for m in membrane),
             "ligands": DEFAULT_LIGANDS | {a["resname"] for a in aa_atoms if a["resname"] not in AMINO}}
@@ -400,7 +410,7 @@ def build_topology_and_box(session: Session, membrane: Path, ligands: set, expec
     for note in topology["notes"]:
         log(out, note)
     box = run_stage(session, "box", rebox_system, system, topology, session.box_a[2] / 10.0 if session.box_a else None,
-                    session.settings.box_z_pad_nm)
+                    session.settings.box_z_pad_nm, session.settings.box_z_symmetric)
     session.record["box"] = system["box_report"]
     rings = run_stage(session, "rings", review_ring_piercing, out, "boxed.gro")
     solute_atoms = sum(n * len(atoms) for _, n, atoms, group in topology["molecules"] if group == "Protein_LIG")
