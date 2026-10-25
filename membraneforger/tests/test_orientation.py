@@ -2,7 +2,7 @@
 
 The PPM 3.0 provider is exercised through a stand-in executable that reproduces the real program's I/O contract
 (input on stdin, res.lib in the working directory, anchorout.pdb + datapar1 + datasub1 as outputs, dummy atoms,
-hydrogens dropped). Tests that need the real program run only when MEMBRANEFORGER_PPM points at it, or `immers`
+hydrogens dropped). Tests that need the real program are skipped unless MEMBRANEFORGER_PPM points at it (res.lib beside it), or `immers`
 is on PATH; tests that need the network (OPM download) run only when MEMBRANEFORGER_TEST_NETWORK is set.
 """
 import json
@@ -18,7 +18,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .common import AA_PDB, CG_GRO, FORCEFIELD, MAPPING, REPO, failure, mf
+from .common import AA_PDB, CG_GRO, FORCEFIELD, MAPPING, REPO, failure, mf, gmx_skip_reason, ppm_skip_reason, skip_if
 
 OPM_6WHC = Path(__file__).parent / "data" / "6whc_opm_chainR.pdb"  # chain R and the dummy atoms of the OPM entry 6WHC
 
@@ -696,6 +696,7 @@ class CommandLine(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp())
         self.gmx = os.environ.get("MEMBRANEFORGER_GMX") or shutil.which("gmx") or "gmx"
 
+    @skip_if(gmx_skip_reason)
     def test_option_validation(self):
         self.assertIn("invalid choice", self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--orientation", "maybe")[1])
         self.assertIn("expected 3 arguments", self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--box", "100", "100")[1])
@@ -711,7 +712,7 @@ class CommandLine(unittest.TestCase):
                                    "--orient-residues", "349-376")[1])
 
     def test_multiple_chains_fail_early_with_instructions(self):
-        if not shutil.which(self.gmx):
+        if not shutil.which(self.gmx.split()[0]):
             self.skipTest("GROMACS is needed to reach the orientation stage")
         code, output = self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--out", self.tmp / "o", "--gmx", self.gmx)
         self.assertEqual(code, 1)
@@ -722,7 +723,7 @@ class CommandLine(unittest.TestCase):
         self.assertEqual(manifest["error"]["stage"], "orient")
 
     def test_nterm_side_is_requested_before_anything_expensive(self):
-        if not shutil.which(self.gmx):
+        if not shutil.which(self.gmx.split()[0]):
             self.skipTest("GROMACS is needed to reach the orientation stage")
         exe = Fixtures.fake_ppm(self.tmp)
         code, output = self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--out", self.tmp / "o", "--gmx", self.gmx,
@@ -732,7 +733,7 @@ class CommandLine(unittest.TestCase):
         self.assertNotIn("stage mstool", output)
 
 
-@unittest.skipUnless(os.environ.get("MEMBRANEFORGER_PPM") or shutil.which("immers"), "real PPM 3.0 not installed")
+@skip_if(ppm_skip_reason)
 class RealPPM(unittest.TestCase):
     """With the real program: the output is an exact rigid copy and the receptor straddles the slab with its N terminus out."""
 
