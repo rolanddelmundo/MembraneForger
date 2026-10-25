@@ -409,12 +409,14 @@ backmapped one, 10 / 20 %), and on `em.gro` the Z-density profiles and the core 
 structure cannot tell a transient from a persistent path; the record says so.
 
 The build's own audit of `em.gro` was extended as well. Its dihedral-restraint check reads the DIHRES rows of the
-lipid topologies, and for GM3 (GLPA) those 23 rows cover only the ceramide C2/C3 centres, the C4=C5 bond, the three
+lipid topologies, and for GM3 (GLPA) those 24 rows cover only the ceramide C2/C3 centres, the C4=C5 bond, the ceramide
+amide C2S-NF-C1F-C2F (held trans during `emres`; its CHARMM36 torsion has no force constant), the three
 ring chairs and sialic acid C7/C8; a sugar carbon with an inverted configuration can sit in a correct chair and pass
 them. The audit therefore also tests, geometrically, all 16 sugar stereocentres (glucose C1-C5, galactose C1-C5,
 sialic acid C2 and C4-C8) and the two ceramide trans bonds of every GM3 with the chirality definitions of
 `membraneforger/backmap_data/map.dat` (`membraneforger/stereo.py`, the same test as `membraneforger/examples/check_gm3_stereo.py`), and fails the
-build on any inverted centre or cis bond: a configuration never corrects itself in MD. The same test runs on
+build on any inverted centre or cis bond (a ceramide trans bond under 90 degrees): a configuration never corrects itself in MD.
+The report also counts each trans bond as trans (150 degrees or more), twisted (30 to 150) or cis (30 or less). The same test runs on
 `membrane.pdb` right after backmapping, where a wrong GM3 counts as a wrong configuration in the backmap verdict and
 another seed is tried, so a build only reaches the audit with a GM3 that was wrong on every attempt.
 
