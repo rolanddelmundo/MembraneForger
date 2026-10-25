@@ -669,7 +669,7 @@ def molecule_itp(name: str, toppar: Path, forcefield: Path, ligands: set) -> Pat
         shutil.copy(forcefield / "toppar" / f"{name}.itp", path)
     data = read_itp(path)
     if not data["posres"] and name not in SOLVENT:
-        macro = "POSRES_FC_LIG" if name in ligands else "POSRES_FC_LIPID"
+        macro = "POSRES_FC_BB" if name in ligands else "POSRES_FC_LIPID"  # a ligand follows the backbone schedule of the equilibration
         rows = [f"{a['nr']:6d}  1  {macro}  {macro}  {macro}\n" for a in data["atoms"] if element(a["atom"]) != "H"]
         (toppar / f"posre_{name}.itp").write_text("[ position_restraints ]\n" + "".join(rows))
         with path.open("a") as fh:
