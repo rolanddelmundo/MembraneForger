@@ -9,6 +9,12 @@
   minimizations are unchanged: the ligand is frozen there and no `-DPOSRES` is defined. `POSRES_FC_LIG` stays defined as 0
   for itps that still name it.
 
+- **The audit tests the six inositol stereocentres of SAPI25.** Its DIHRES rows restrain the ring chairs (six +-60 rows)
+  but not the configuration at each carbon, and swapping the hydrogen and the hydroxyl or phosphate at one carbon leaves
+  every row satisfied, so an inverted inositol carbon passed. `check_pi_stereo` evaluates the six chirality definitions of
+  the SAPI25 block of `map.dat` on the final structure (molecules made whole across the cell, as for GM3) and fails the
+  audit on any inverted centre; the report has a `sapi25_stereochemistry` entry.
+
 - **The GM3 ceramide amide is restrained during `emres`.** In the CHARMM36 topology the torsion C2S-NF-C1F-C2F
   (`CTL1 NHL C CTL2`) has a zero force constant and no DIHRES row covered the amide, so nothing but two symmetric
   planarity terms resisted its rotation. In one test build (GCGR, 27 GM3) the restrained minimization turned one amide from
