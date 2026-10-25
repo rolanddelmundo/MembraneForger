@@ -416,7 +416,8 @@ them. The audit therefore also tests, geometrically, all 16 sugar stereocentres 
 sialic acid C2 and C4-C8) and the two ceramide trans bonds of every GM3 with the chirality definitions of
 `membraneforger/backmap_data/map.dat` (`membraneforger/stereo.py`, the same test as `membraneforger/examples/check_gm3_stereo.py`), and fails the
 build on any inverted centre or cis bond (a ceramide trans bond under 90 degrees): a configuration never corrects itself in MD.
-The report also counts each trans bond as trans (150 degrees or more), twisted (30 to 150) or cis (30 or less). The same test runs on
+The report also counts each trans bond as trans (150 degrees or more), twisted (30 to 150) or cis (30 or less). The six inositol stereocentres of every SAPI25 are tested the same way with the SAPI25 chirality definitions of `map.dat`,
+because its six chair rows stay satisfied when a hydrogen and a hydroxyl swap places at one carbon. The same test runs on
 `membrane.pdb` right after backmapping, where a wrong GM3 counts as a wrong configuration in the backmap verdict and
 another seed is tried, so a build only reaches the audit with a GM3 that was wrong on every attempt.
 
