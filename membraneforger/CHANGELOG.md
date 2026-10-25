@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- **Backbone check after minimization (`--backbone-check yes|report|no`, default `report`).** The audit looked at C-alpha positions and
+  contacts but never at peptide planes, alpha-carbon handedness or phi/psi, so a build could PASS with a twisted peptide bond or an
+  inverted centre. A new `backbone` stage runs after `validate` and compares `em.unverified.gro` with `solv_ions.gro` (the same atoms before
+  EM). With `yes` it stops the build, with the residues named, on: a peptide bond EM twisted (non-Pro `|omega| < 120`; Xaa-Pro changed between cis and
+  trans or twisted); a C-alpha, or Thr/Ile C-beta, whose handedness differs from the start (so D residues in the input are not an error);
+  a phi/psi that moved more than the 30 degree restraint width plus `--backbone-drift-margin` (default 30), only when the EM-only
+  backbone restraints were on; and a Ramachandran outlier in a `--strict-segments CHAIN:FIRST-LAST[,...]` range (residues the caller
+  knows were modelled, not observed; chain letters and numbers as in the input). Everything else (new Ramachandran outliers elsewhere,
+  omega between 120 and 150, bonds already twisted before EM, drift without restraints) is a warning. The report is `backbone_check.json`
+  and a summary goes to `run_manifest.json`. The default `report` lists the failures as warnings and does not stop the build; `no` skips the stage. What it cannot do:
+  tell a modelled residue from an observed one without `--strict-segments`; on the five restrained GIPR/Gs builds checked (1214 residues each)
+  the largest drift was 35.5 degrees, so a residue that drifts inside the restraint width into a borderline region is not caught. A start and an end
+  structure whose protein residues do not correspond are skipped with a warning, not failed.
+- **`--archive-previous reports|all` (with `--overwrite`).** Before the earlier build is replaced, its reports (`reports`: log, manifest,
+  audit, backbone check, contacts, ring piercing, membrane validation, orientation, mapping) or reports and structures (`all`: also `em.gro` or
+  `int/em.unverified.gro`, `topol.top`, `index_ini.ndx`) are copied to `<out>/previous_builds/<start time>_<status>/` with an `ARCHIVED.json`.
+  Nothing is deleted, the folder survives the rerun, and a copy that fails stops the build with the earlier outputs intact. Without the option
+  nothing changes.
+
 - **Ligands are frozen during minimization.** `index_ini.ndx` gains a trailing `LIG` group (the heavy atoms of the ligand
   molecules, i.e. every non-protein residue of the input, a subset of `Protein_LIG`; hydrogens stay free so EM can correct any that were synthesized), and both minimizations (`emres` and `em`) set `freezegrps = LIG` with
   `freezedim = Y Y Y`, so a ligand keeps its placed coordinates and the receptor, lipids and solvent relax around it.

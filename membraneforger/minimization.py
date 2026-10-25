@@ -21,7 +21,7 @@ from .solvation import ion_census, salt_summary
 from .structio import element, read_gro, read_pdb, wrap, xyz_nm
 from .validation import check_inputs_unchanged
 
-__all__ = ['has_dihedral_restraints', 'run_em', 'closest_contact', 'force_culprit', 'stage_files', 'read_structure',
+__all__ = ['has_dihedral_restraints', 'has_backbone_dihres', 'run_em', 'closest_contact', 'force_culprit', 'stage_files', 'read_structure',
            'closest_partner', 'slice_number', 'trace_clash', 'overlaps_of_molecule', 'validate_em']
 
 # On an Fmax failure, the residues within this distance of the atom with the largest force are named.
@@ -43,6 +43,11 @@ def has_dihedral_restraints(out: Path) -> bool:
             elif section == "dihedral_restraints" and s and s[0].isdigit():
                 return True
     return False
+
+
+def has_backbone_dihres(out: Path) -> bool:
+    """Whether a protein .itp in toppar/ carries the EM-only backbone phi/psi restraints (#ifdef BBDIHRES)."""
+    return any("#ifdef BBDIHRES" in itp.read_text(errors="replace") for itp in (out / "toppar").glob("*.itp"))
 
 
 def freeze_text(topology: dict) -> str:
