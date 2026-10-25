@@ -105,6 +105,86 @@ class AmideRestraint(unittest.TestCase):
             self.assertEqual(bool(mf.wrong_gm3_centres(named, [], [amide])[1]), refused, angle)
 
 
+def correct_inositol() -> dict:
+    """A chair of six carbons (C11..C16) with a hydrogen and an oxygen on each, every one in the configuration of map.dat.
+
+    Axial and equatorial positions are assigned to H and O alternately, then H and O are exchanged at each carbon the
+    SAPI25 definitions read as inverted: that exchange flips exactly that carbon, which no ring-chair restraint sees."""
+    ring = ["C11", "C12", "C13", "C14", "C15", "C16"]
+    named = {}
+    for k, c in enumerate(ring):
+        angle = np.radians(60.0 * k)
+        up = 1.0 if k % 2 == 0 else -1.0
+        radial = np.array([np.cos(angle), np.sin(angle), 0.0])
+        named[c] = np.array([1.45 * radial[0], 1.45 * radial[1], 0.25 * up])
+        axial, equatorial = named[c] + np.array([0.0, 0.0, 1.0 * up]), named[c] + 1.0 * radial + np.array([0.0, 0.0, -0.3 * up])
+        h, o = (f"H{k + 1}", "O12" if k == 0 else f"O{k + 1}")
+        named[h], named[o] = axial, equatorial
+    inverted, _ = mf.wrong_gm3_centres(named, mf.pi_chiral_definitions(DATA), [])
+    for centre in inverted:
+        h, o = f"H{ring.index(centre) + 1}", "O12" if centre == "C11" else f"O{ring.index(centre) + 1}"
+        named[h], named[o] = named[o], named[h]
+    return named
+
+
+def write_inositol(path: Path, named: dict, resname: str = "SAPI", box: float | None = None) -> None:
+    """The inositol atoms as one SAPI25 residue in a PDB (or a .gro when the path ends in .gro), wrapped into a cell if asked."""
+    xyz = {n: (np.mod(x, box) if box else x) for n, x in named.items()}
+    if path.suffix == ".gro":
+        lines = [f"{1:5d}{resname:<5s}{n:>5s}{i + 1:5d}{x[0] / 10:8.3f}{x[1] / 10:8.3f}{x[2] / 10:8.3f}\n" for i, (n, x) in enumerate(xyz.items())]
+        path.write_text(f"inositol\n{len(lines)}\n" + "".join(lines) + f"{(box or 100.0) / 10:10.5f}" * 3 + "\n")
+        return
+    rows = [f"HETATM{i + 1:5d} {n:<4s} {resname:<4s}M   1    {x[0]:8.3f}{x[1]:8.3f}{x[2]:8.3f}  1.00  0.00\n" for i, (n, x) in enumerate(xyz.items())]
+    head = f"CRYST1{box:9.3f}{box:9.3f}{box:9.3f}  90.00  90.00  90.00 P 1           1\n" if box else ""
+    path.write_text(head + "".join(rows) + "END\n")
+
+
+class Inositol(unittest.TestCase):
+    """SAPI25: the six ring-chair rows are satisfied when a hydrogen and a hydroxyl swap places, so the centres are tested geometrically."""
+
+    def test_map_dat_defines_the_six_inositol_centres(self):
+        self.assertEqual(sorted(d[1] for d in mf.pi_chiral_definitions(DATA)), sorted(mf.PI_POSITIONS))
+
+    def test_a_correct_inositol_passes_and_each_swapped_carbon_is_the_one_reported(self):
+        good = correct_inositol()
+        definitions = mf.pi_chiral_definitions(DATA)
+        self.assertEqual(mf.wrong_gm3_centres(good, definitions, [])[0], [])
+        with tempfile.TemporaryDirectory() as tmp:
+            for suffix, resname in ((".pdb", "SAPI"), (".gro", "SAPI2")):
+                path = Path(tmp) / f"good{suffix}"
+                write_inositol(path, good, resname)
+                report, fails = mf.check_pi_stereo(path, DATA)
+                self.assertEqual((report["molecules"], fails), (1, []))
+                for k, centre in enumerate(("C11", "C12", "C13", "C14", "C15", "C16")):
+                    bad = dict(good)
+                    h, o = f"H{k + 1}", "O12" if k == 0 else f"O{k + 1}"
+                    bad[h], bad[o] = good[o], good[h]
+                    broken = Path(tmp) / f"bad{k}{suffix}"
+                    write_inositol(broken, bad, resname)
+                    report, fails = mf.check_pi_stereo(broken, DATA)
+                    self.assertEqual([c for c, n in report["wrong_by_centre"].items() if n], [mf.PI_POSITIONS[centre]])
+                    self.assertEqual(len(fails), 1)
+                    self.assertIn("inverted inositol stereocentre", fails[0])
+
+    def test_a_structure_without_sapi25_has_nothing_to_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            empty = Path(tmp) / "empty.pdb"
+            empty.write_text("ATOM      1  N   ALA A   1       0.000   0.000   0.000  1.00  0.00           N\nEND\n")
+            report, fails = mf.check_pi_stereo(empty, DATA)
+            self.assertEqual((report["molecules"], fails), (0, []))
+
+    def test_a_correct_inositol_split_by_the_periodic_boundary_is_made_whole(self):
+        good = {n: x + 3.0 for n, x in correct_inositol().items()}
+        box = 6.0  # coordinates run from 0.7 to 5.2 A and are shifted by -3: negative ones jump to the far side of the cell
+        shifted = {n: x - 3.0 for n, x in good.items()}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "wrapped.pdb"
+            write_inositol(path, shifted, box=box)
+            self.assertGreater(float(np.ptp([np.mod(x, box) for x in shifted.values()], axis=0).max()), box / 2)  # genuinely split
+            report, fails = mf.check_pi_stereo(path, DATA)
+            self.assertEqual((report["molecules"], fails), (1, []))
+
+
 class Structures(unittest.TestCase):
     def test_a_structure_without_gm3_passes_and_a_mirrored_gm3_fails(self):
         xml = (DATA / "GM3.xml").read_text() if (DATA / "GM3.xml").is_file() else ""

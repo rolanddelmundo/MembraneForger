@@ -26,7 +26,7 @@ python -m membraneforger --aa prot-lig.pdb --cg system.gro --orient-chain R --ou
 | `trajectory.py` | convergence, S_CD order parameters, MSD and diffusion, K_A, leaflet tension (gates 3 and 4) |
 | `qc.py` | the metric record and the PASS / WARNING / FAIL / INSUFFICIENT SAMPLING classification |
 | `contacts.py` | force-field-aware contact validator and bond-crossing detector (gate 2 and the build's contact gates) |
-| `stereo.py` | geometric GM3 stereochemistry check: sugar stereocentres and ceramide trans bonds |
+| `stereo.py` | geometric stereochemistry checks: GM3 sugar stereocentres and ceramide trans bonds, SAPI25 inositol stereocentres |
 | `membrane_report.py` | the staged validation of a build: slice gate, all-atom stages, `membrane_validation.md/.json`, figures |
 | `equilibration.py` | `python -m membraneforger.equilibration`: gates 3 and 4 on a finished trajectory |
 | `backmapping.py`, `mstool_worker.py` | membrane backmapping; the worker is the only file that imports mstool |

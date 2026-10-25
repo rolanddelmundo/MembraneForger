@@ -21,6 +21,8 @@ Coordinates in a .gro or a PDB with a CRYST1 record may be wrapped into the cell
 between builds), so every molecule is first made whole: each atom is moved to the periodic image nearest the previous
 atom of the molecule. A test on raw wrapped coordinates reads a split molecule as inverted - a false positive.
 
+The six inositol carbons of SAPI25 (PIP2) are tested the same way at the end of this module (check_pi_stereo).
+
 GLPA is read by atom order (its three sugars reuse the names C1..C6), GM3 by atom name; in a .gro the molecule is
 four consecutive CHARMM residues (CER160, BGLC, BGAL, ANE5AC).
 """
@@ -33,7 +35,8 @@ from .config import GM3_XML_TO_GLPA
 
 __all__ = ['GM3_POSITIONS', 'GM3_TRANS_NAMES', 'GLPA_PARTS', 'TRANS_MIN_DEG', 'CIS_MAX_DEG', 'REFUSE_BELOW_DEG', 'trans_band',
            'map_section', 'gm3_chiral_definitions', 'gm3_trans_definitions', 'dihedral', 'read_structure_atoms', 'make_whole',
-           'read_gm3_molecules', 'gm3_named', 'wrong_gm3_centres', 'check_gm3_stereo']
+           'read_gm3_molecules', 'gm3_named', 'wrong_gm3_centres', 'check_gm3_stereo', 'PI_RESNAME', 'PI_RESNAMES', 'PI_POSITIONS',
+           'pi_chiral_definitions', 'read_pi_molecules', 'check_pi_stereo']
 
 # GM3 centre name -> sugar position, for the report (the 16 sugar stereocentres).
 GM3_POSITIONS = {"C1": "Glc C1", "C2": "Glc C2", "C3": "Glc C3", "C4": "Glc C4", "C5": "Glc C5",
@@ -50,9 +53,9 @@ def trans_band(phi: float) -> str:
     return "trans" if abs(phi) >= TRANS_MIN_DEG else "cis" if abs(phi) <= CIS_MAX_DEG else "twisted"
 
 
-def map_section(data: Path, name: str) -> list:
-    """The rows of one [ name ] section of the GM3 block of map.dat."""
-    block = (data / "map.dat").read_text().split("RESI GM3")[1].split("RESI ")[0]
+def map_section(data: Path, name: str, residue: str = "GM3") -> list:
+    """The rows of one [ name ] section of the block of one residue (GM3 unless given) of map.dat."""
+    block = (data / "map.dat").read_text().split(f"RESI {residue}\n")[1].split("RESI ")[0]
     body = block.split(f"[ {name} ]")[1].split("[")[0] if f"[ {name} ]" in block else ""
     return [line.split() for line in body.splitlines() if line.strip()]
 
@@ -187,4 +190,66 @@ def check_gm3_stereo(path: Path, data: Path) -> tuple[dict, list]:
                      f"({sum(flipped.values())} centres, {sum(cis_count.values())} bonds), e.g. molecule {worst['molecule']} "
                      f"(residue {worst['first_residue']}): {', '.join(worst['inverted'] + worst['cis'])}; a configuration never "
                      "corrects itself in MD")
+    return report, fails
+
+
+# SAPI25 (PIP2) inositol ring: the six ring carbons carry the stereocentres. The CHARMM-GUI topology restrains only the ring
+# chair (six +-60 rows, which an exchange of a hydrogen and a hydroxyl or phosphate at one carbon leaves satisfied), so an
+# inverted inositol carbon passes an audit that reads the DIHRES rows. map.dat defines each centre like those of GM3.
+PI_RESNAME = "SAPI25"
+PI_RESNAMES = ("SAPI25", "SAPI2", "SAPI")  # as written in a topology, in a .gro (five characters) and in a PDB (four)
+PI_POSITIONS = {"C11": "inositol C1", "C12": "inositol C2", "C13": "inositol C3", "C14": "inositol C4", "C15": "inositol C5",
+                "C16": "inositol C6"}
+
+
+def pi_chiral_definitions(data: Path) -> list:
+    """The inositol chirality definitions [target, centre, C, D, E] of the SAPI25 block of map.dat, one per ring carbon."""
+    rows = [d for d in map_section(data, "chiral", PI_RESNAME) if d[1] in PI_POSITIONS]
+    missing = sorted(set(PI_POSITIONS) - {d[1] for d in rows})
+    if missing:
+        raise SystemExit(f"{data / 'map.dat'} has no chirality definition for SAPI25 centre(s) {missing}")
+    return rows
+
+
+def read_pi_molecules(path: Path) -> dict:
+    """(molecule number, residue number) -> {atom name: xyz in A} for every SAPI25 residue of a .gro or .pdb, made whole."""
+    atoms, box = read_structure_atoms(path)
+    molecules, last = {}, None
+    for key, resname, name, xyz in atoms:
+        if resname not in PI_RESNAMES:
+            last = None
+            continue
+        if key != last or name in molecules[next(reversed(molecules))]["names"]:  # a new residue (or the same number again)
+            molecules[(len(molecules) + 1, key[-2])] = {"names": set(), "atoms": []}
+        current = molecules[next(reversed(molecules))]
+        current["names"].add(name)
+        current["atoms"].append((name, xyz))
+        last = key
+    return {k: dict(make_whole(v["atoms"], box)) for k, v in molecules.items()}
+
+
+def check_pi_stereo(path: Path, data: Path) -> tuple[dict, list]:
+    """Audit every SAPI25 in a structure: inverted inositol stereocentres per centre, the affected molecules and the failures."""
+    molecules = read_pi_molecules(path)
+    chirals = pi_chiral_definitions(data)
+    report = {"molecules": len(molecules), "stereocentres_per_molecule": len(chirals), "wrong_by_centre": {}, "affected_molecules": []}
+    if not molecules:
+        return report, []
+    flipped, affected = Counter(), []
+    for key, named in molecules.items():
+        absent = [a for d in chirals for a in d if a not in named]
+        if absent:
+            raise SystemExit(f"{path}: SAPI25 molecule {key[0]} (residue {key[1]}) has no atom(s) {sorted(set(absent))}")
+        inverted, _ = wrong_gm3_centres(named, chirals, [])
+        flipped.update(inverted)
+        if inverted:
+            affected.append({"molecule": key[0], "first_residue": key[1], "inverted": [PI_POSITIONS[c] for c in inverted]})
+    report["wrong_by_centre"] = {PI_POSITIONS[c]: flipped.get(c, 0) for c in PI_POSITIONS}
+    report["affected_molecules"] = affected
+    fails = []
+    if affected:
+        worst = affected[0]
+        fails.append(f"SAPI25: {len(affected)} of {len(molecules)} molecules have an inverted inositol stereocentre "
+                     f"({sum(flipped.values())} centres), e.g. molecule {worst['molecule']} (residue {worst['first_residue']}): "
+                     f"{', '.join(worst['inverted'])}; a configuration never corrects itself in MD")
     return report, fails
