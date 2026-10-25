@@ -368,7 +368,7 @@ class Integration(unittest.TestCase):
         margins = (float(moved[:, 0].min()), float(prepared["box"][0] - moved[:, 0].max()))
         self.assertGreaterEqual(min(margins), session.settings.box_xy_min_buffer_nm - 1e-6)
         self.assertAlmostEqual(sum(margins), 2.0 * session.settings.box_xy_buffer_nm, places=5)
-        self.assertEqual(report["crop_offset"]["offset_nm"][0], round(1.0 - margins[0], 3))
+        self.assertEqual(report["crop_offset"]["offset_nm"][0], round(session.settings.box_xy_buffer_nm - margins[0], 3))
         self.assertTrue(session.record["slice_check"]["pass"])
         self.assertTrue((Path(session.out) / "membrane_validation.md").is_file())
 
