@@ -75,10 +75,10 @@ how `--embed-site free` chooses its spot.
 
 ### Bundled membranes
 
-Thirteen frames (50 µs, Martini 3) of a GPCR in an asymmetric ten-species cell-membrane model, in
-`membraneforger/examples/preeq_cg_cellmem/`: `KOR_Membrane1` to `KOR_Membrane9` (kappa opioid receptor, nine frames) and `GPR139_Membrane2` to `GPR139_Membrane5`
-(GPR139, four frames), about 18.3 × 18.3 × 19.2 nm each (the number is the simulation run the frame comes from). Leaflet
-composition in mole percent, averaged over the 13 frames
+Twelve frames (50 µs, Martini 3) of a GPCR in an asymmetric ten-species cell-membrane model, in
+`membraneforger/examples/preeq_cg_cellmem/`: `KOR_Membrane1` to `KOR_Membrane9` (kappa opioid receptor, nine frames) and `GPR139_Membrane3` to `GPR139_Membrane5`
+(GPR139, three frames), about 18.3 × 18.3 × 19.2 nm each (the number is the simulation run the frame comes from). Leaflet
+composition in mole percent, averaged over the 12 frames
 (`membraneforger/examples/leaflet_composition.py`):
 
 | Leaflet | CHOL | POPC | DOPC | POPE | DOPE | PSM | DPG3 | POPS | DOPS | SAP6 |
