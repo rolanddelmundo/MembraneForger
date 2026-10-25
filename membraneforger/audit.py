@@ -15,7 +15,7 @@ from scipy.spatial import cKDTree
 
 from .config import DISULFIDE_OK_A, Settings
 from .runtools import INT_DIR, run_path
-from .stereo import check_gm3_stereo
+from .stereo import check_gm3_stereo, check_pi_stereo
 
 __all__ = ['gro_table', 'topology_includes', 'topology_molecules', 'itp_atoms', 'gromacs', 'check_topology',
            'check_grompp', 'check_energy', 'same_image', 'superposed_rmsd', 'check_structure', 'closest_contact_between', 'itp_bonds',
@@ -530,7 +530,7 @@ def check_disulfide_geometry(run: Path, structure: str) -> tuple[dict, list]:
     return report, fails
 
 
-DEFAULT_DATA = Path(__file__).resolve().parent / "backmap_data"  # map.dat: the GM3 chirality definitions the stereo check uses
+DEFAULT_DATA = Path(__file__).resolve().parent / "backmap_data"  # map.dat: the GM3 and SAPI25 chirality definitions the stereo checks use
 
 
 def audit_run(run: Path, gmx: str, structure: str = "em.gro", settings: Settings = Settings(), data: Path | None = None) -> dict:
@@ -544,6 +544,7 @@ def audit_run(run: Path, gmx: str, structure: str = "em.gro", settings: Settings
                                ("ring_piercing", check_ring_piercing(run, structure)),
                                ("dihedral_restraints", check_dihedral_restraints(run, structure)),
                                ("gm3_stereochemistry", check_gm3_stereo(run_path(run, structure), data)),
+                               ("sapi25_stereochemistry", check_pi_stereo(run_path(run, structure), data)),
                                ("disulfides", check_disulfide_geometry(run, structure))):
         report[key] = part
         failures += fails
@@ -555,6 +556,7 @@ def audit_run(run: Path, gmx: str, structure: str = "em.gro", settings: Settings
                         "no covalent bond threads a 5- or 6-membered ring",
                         "lipid stereocentres and double bonds satisfy their CHARMM-GUI dihedral restraints",
                         "every GM3 has its 16 sugar stereocentres and 2 ceramide trans bonds in the configuration of map.dat",
+                        "every SAPI25 has its 6 inositol stereocentres in the configuration of map.dat",
                         "every disulfide of the topology measures 1.8-2.2 A after EM"]
     report["failures"] = failures
     report["result"] = "FAIL" if failures else "PASS"
