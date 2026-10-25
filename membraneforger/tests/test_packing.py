@@ -281,6 +281,59 @@ class SliceGate(unittest.TestCase):
         self.assertLess(float(np.ptp(windows["upper"]["window_apl_A2"])), 2.0)
 
 
+class ShellStratifiedNull(unittest.TestCase):
+    """The composition control of the slice gate: draws that keep the slice's number of lipids in each shell around the protein."""
+
+    EDGES = (0.5, 1.0, 1.5, 2.0, 3.0)
+
+    def setUp(self):
+        self.membrane = bilayer(nx=20, ny=20, spacing=0.8)
+        for mol, name in zip(self.membrane, np.random.default_rng(5).choice(["POPC", "DOPC", "CHOL", "POPE"], len(self.membrane))):
+            mol["cg"] = mol["aa"] = str(name)                                # random species: the slice is a sample of the leaflet
+        solute = [{"atom": "CA", "resname": "ALA", "chain": "A", "resid": k, "x": 80.0 + dx, "y": 80.0 + dy, "z": 60.0}
+                  for k, (dx, dy) in enumerate([(-8, -8), (8, -8), (-8, 8), (8, 8), (0, 0)])]
+        self.stage = mf.cg_stage("embed", self.membrane, solute, [16.0, 16.0, 12.0], MIDPLANE)
+        mf.measure_packing(self.stage)
+        self.kept = [r["index"] for r in self.stage["lipids"] if 4.0 <= r["x_nm"] < 12.0 and 4.0 <= r["y_nm"] < 12.0]
+
+    def distance(self, leaflet, relabel=0):
+        rows = [r for r in self.stage["lipids"] if r["leaflet"] == leaflet and "voronoi_area_nm2" in r]
+        whole = Counter(r["resname"] for r in rows)
+        kept = [r["resname"] for r in rows if r["index"] in set(self.kept)]
+        for k in range(relabel):
+            kept[k] = "CHOL"
+        return mf.composition_distance(whole, Counter(kept))
+
+    def test_it_returns_the_requested_draws_per_leaflet_and_is_repeatable(self):
+        first = mf.shell_stratified_null(self.stage, self.kept, self.EDGES, 200)
+        again = mf.shell_stratified_null(self.stage, self.kept, self.EDGES, 200)
+        for leaflet in ("upper", "lower"):
+            self.assertEqual(len(first[leaflet]["strata_composition_distance"]), 200)
+            self.assertTrue(np.array_equal(first[leaflet]["strata_composition_distance"], again[leaflet]["strata_composition_distance"]))
+
+    def test_a_typical_slice_is_inside_the_null_and_a_relabelled_one_is_far_outside(self):
+        null = mf.shell_stratified_null(self.stage, self.kept, self.EDGES, 500)
+        for leaflet in ("upper", "lower"):
+            control = null[leaflet]["strata_composition_distance"]
+            status, _ = mf.classify_percentile(self.distance(leaflet), control, one_sided=True)
+            self.assertEqual(status, "PASS")
+            status, percentile = mf.classify_percentile(self.distance(leaflet, relabel=20), control, one_sided=True)
+            self.assertEqual(status, "FAIL")                                 # 20 of ~100 lipids turned into cholesterol
+            self.assertGreater(percentile, 0.99)
+
+    def test_shells_held_completely_have_no_variance(self):
+        # every lipid of the nearest shell is in the slice, so a draw takes all of them; only the outer shells vary
+        null = mf.shell_stratified_null(self.stage, self.kept, self.EDGES, 300)["upper"]["strata_composition_distance"]
+        self.assertGreater(float(null.std()), 0.0)
+        self.assertLess(float(null.max()), 0.5)
+
+    def test_without_a_complex_the_control_is_empty(self):
+        bare = mf.cg_stage("embed", self.membrane, [], [16.0, 16.0, 12.0], MIDPLANE)
+        mf.measure_packing(bare)
+        null = mf.shell_stratified_null(bare, self.kept, self.EDGES, 50)
+        self.assertEqual(len(null["upper"]["strata_composition_distance"]), 0)
+
+
 class RealFrameGate(unittest.TestCase):
     """The real GCGR frame: embedded membrane -> slice -> gate, with the report written to a temporary directory."""
 

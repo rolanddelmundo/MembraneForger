@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **The slice composition gate is graded against shell-stratified draws.** The control for the composition distance was the
+  144 equal-size windows spread over the embedded cell, which rarely contain the protein, while a slice is cut around the
+  complex and always holds its annular shell (cholesterol and PIP2 are enriched there). The control is now 5000 random
+  re-draws of the slice that keep its number of lipids in each shell of 0.5, 1.0, 1.5, 2.0 and 3.0 nm around the protein
+  (`packing.shell_stratified_null`, `Settings.slice_shell_edges_nm`, `Settings.slice_null_draws`). The grading is unchanged
+  (PASS up to the 95th percentile, WARNING up to the 99th, FAIL above); the percentile against the equal-size windows is
+  still recorded as `composition_percentile_uniform_windows`. On the 50 µs frames cut around the GCGR complex, a slice with 10 %
+  of its lipids relabelled as another species fails under both controls, and `GPR139_Membrane2`, whose lower leaflet failed
+  against the equal-size windows (percentile 0.993), is at percentile 0.80 under the new control.
+
 - **Five more 50 µs bundled membranes.** `KOR_Membrane4` and `KOR_Membrane8` complete the nine kappa opioid receptor
   runs, and `GPR139_Membrane3` and `GPR139_Membrane4` join `GPR139_Membrane5`, for 12 frames
   (9 KOR, 3 GPR139). Each is the unmodified 50 µs frame of its run (runs 1 and 6-9 of GPR139 had not reached 50 µs, and run 2 is not bundled). `--cg 1`

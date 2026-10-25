@@ -49,6 +49,7 @@ from .packing import (
     reference_packing,
     region_reference,
     species_table,
+    shell_stratified_null,
     window_distribution,
 )
 from .qc import classify, classify_percentile, metric, overall_status, records_table
@@ -439,6 +440,7 @@ class MembraneValidation:
         region = region_reference(ref["stage"], cut["kept_indices"])
         cropped = [w["cropped"] for w in cut["report"]["axes"]]
         windows = window_distribution(ref["stage"], cut["box"][:2], cropped, settings.slice_window_samples)
+        shells = shell_stratified_null(ref["stage"], cut["kept_indices"], settings.slice_shell_edges_nm, settings.slice_null_draws)
         warning, tolerance = settings.apl_slice_warning_percent, settings.apl_slice_tolerance_percent
         leaflets, records = {}, []
         for leaflet in LEAFLETS:
@@ -450,7 +452,9 @@ class MembraneValidation:
             if repr_status == "INSUFFICIENT SAMPLING":
                 repr_status = "NOT RUN"  # too few equal-size windows (an uncut axis): representativeness is reported, not graded
             comp = summary["vs_reference"]["composition"][leaflet]
-            comp_status, comp_percentile = classify_percentile(comp["distance"], windows[leaflet]["window_composition_distance"], one_sided=True)
+            uniform_status, uniform_percentile = classify_percentile(comp["distance"], windows[leaflet]["window_composition_distance"], one_sided=True)
+            strata = shells[leaflet]["strata_composition_distance"]  # the control: slices are cut around the protein (packing.shell_stratified_null)
+            comp_status, comp_percentile = classify_percentile(comp["distance"], strata, one_sided=True) if len(strata) else (uniform_status, uniform_percentile)
             comp_status = "PASS" if comp_status == "PASS" or comp["within_finite_crop_variability"] and comp_status != "FAIL" else comp_status
             n = cur["measure"][leaflet]["lipids"]
             leaflets[leaflet] = {"lipids": n, "region_lipids_in_reference": region[leaflet]["lipids"],
@@ -464,6 +468,8 @@ class MembraneValidation:
                                  "expected_lipids_from_reference_apl": whole["expected_lipids_from_reference_apl"],
                                  "lipid_count_deviation_percent": whole["lipid_count_deviation_percent"],
                                  "composition_status": comp_status, "composition_percentile": comp_percentile,
+                                 "composition_control": "shell-stratified" if len(strata) else "uniform windows",
+                                 "composition_percentile_uniform_windows": uniform_percentile,
                                  "equivalent_windows": window_summary(windows[leaflet])}
             records.append(metric("leaflet APL, same lipids uncut", "slice", apl, "A^2", leaflet, region[leaflet]["apl_A2"], None, n,
                                   round(change, 2), status, f"{change:+.2f} % (PASS <= {warning} %, WARNING <= {tolerance} %)"))
@@ -474,7 +480,8 @@ class MembraneValidation:
                                   + ("; fewer than 20 windows, not graded)" if repr_status == "NOT RUN" else ")")))
             records.append(metric("composition distance", "slice", comp["distance"], "mole fraction", leaflet, 0.0, None, n, comp["distance"],
                                   comp_status, f"random crop of this size: {comp['expected_distance_random_crop']}; percentile "
-                                  f"{comp_percentile} of equal-size windows"
+                                  f"{comp_percentile} of "
+                                  + (f"{len(strata)} shell-stratified draws around the complex" if len(strata) else "equal-size windows")
                                   + (f"; flagged {comp['flagged_species']}" if comp["flagged_species"] else "")))
         region_curves = region_rdfs(ref["stage"], cut["kept_indices"], min(0.5 * min(cut["box"][:2]) - 1e-6, 2.5),
                                     {l: cur["measure"][l]["accessible_area_nm2"] for l in LEAFLETS})
@@ -549,7 +556,7 @@ class MembraneValidation:
                 "PASS" if v["construction_status"] == "PASS" else "WARN")
             c = composition[l]
             log(self.out, f"slice {l} leaflet composition distance {c['distance']} (random crop of this size: {c['expected_distance_random_crop']}; "
-                          f"{v['composition_status']} against equal-size windows)"
+                          f"{v['composition_status']} against {'shell-stratified draws around the complex' if v['composition_control'] == 'shell-stratified' else 'equal-size windows'})"
                           + (f"; flagged species {c['flagged_species']}" if c["flagged_species"] else ""),
                 "INFO" if v["composition_status"] == "PASS" else "WARN")
             r = rdf["leaflets"][l].get("all")

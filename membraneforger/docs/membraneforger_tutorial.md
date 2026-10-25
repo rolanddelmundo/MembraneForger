@@ -312,8 +312,11 @@ the search `KOR_Membrane5` lower (+4.87 %) is the one that does (PASS WITH WARNI
 
 For each leaflet and species the report gives N and the mole fraction in the reference and in the slice, the
 difference in mole percent, the sampling standard deviation a random crop of that many lipids would have, and the
-composition distance `D_comp = 0.5 * sum |x_slice - x_reference|` (the total variation distance). D_comp is graded against the equal-size-window distribution
-(and against three times the multinomial expectation when fewer than 20 windows exist). Rare species (PIP2, GM3,
+composition distance `D_comp = 0.5 * sum |x_slice - x_reference|` (the total variation distance). D_comp is graded against shell-stratified draws around the complex
+(5000 random re-draws of the slice that keep its number of lipids in each shell of 0.5, 1.0, 1.5, 2.0 and 3.0 nm around the protein,
+so the cholesterol and PIP2 enrichment next to the protein is part of the expectation and only the bulk the slice samples varies;
+`packing.shell_stratified_null`). The percentile of the equal-size windows is still reported beside it, and a distance within three
+times the multinomial expectation is accepted as before unless the percentile grade is already FAIL. Rare species (PIP2, GM3,
 10-20 molecules in a cut) are shown with their N and flagged "(few)" below 10; their mole fractions move by one or
 two points between reference and slice and their species APL has a standard deviation of 20-25 A^2 across molecules,
 so a difference of a few percent in their mean carries no weight.
@@ -605,7 +608,7 @@ turns every one into a PASS / WARNING / FAIL / INSUFFICIENT SAMPLING / REFERENCE
 | 2 | Bilayer thickness | all stages | expansion / compression, hydrophobic thickness | D_HH from the anchor planes, 1 nm local map | slice <= 3 % from embed; backmap / minimized <= 10 %; equilibrium <= 3 % from a matched reference | 3-5 % (CG), 10-15 % (AA), 3-5 % (reference) | beyond; REFERENCE NEEDED without a reference |
 | 3 | Lipid-tail order parameters | equilibrated AA | acyl-chain ordering, phase | S_CD per species, chain (sn-1, sn-2) and leaflet | profile RMSE <= 0.03 vs a matched profile | 0.03-0.05 | > 0.05; REFERENCE NEEDED without a profile |
 | 4 | Z-density profiles | backmap -> minimized -> equilibrated | bilayer architecture along the normal | rho(z) of heads, tails, cholesterol, protein, ions, water | heads outside tails and water outside heads on both sides, cholesterol between; first-to-last change reported | cholesterol not between tails and heads | head density inside the tail region |
-| 5 | Composition and leaflet asymmetry | frame -> embed -> slice -> final | the intended composition is kept | N and mole fraction per species and leaflet, distance D_comp | below the 95th percentile of equal-size parent windows (or 3 sigma of a random crop with < 20 windows) | 95th-99th percentile | above the 99th percentile for species with N >= 10; rarer species are flagged "(few)", never failed alone |
+| 5 | Composition and leaflet asymmetry | frame -> embed -> slice -> final | the intended composition is kept | N and mole fraction per species and leaflet, distance D_comp | below the 95th percentile of shell-stratified draws around the complex (or 3 sigma of a random crop with < 20 draws) | 95th-99th percentile | above the 99th percentile for species with N >= 10; rarer species are flagged "(few)", never failed alone |
 | 6 | Leaflet differential tension | final equilibrated AA | mechanical balance of the asymmetric leaflets | gamma_upper, gamma_lower, delta gamma from a lateral pressure profile | abs(delta gamma) <= 5 mN/m with compatible uncertainty | 5-10 mN/m, or one leaflet above 10 mN/m | > 10 mN/m with the uncertainty supporting it; INSUFFICIENT SAMPLING otherwise |
 | 7 | Lipid lateral diffusion | final equilibrated AA | fluidity, lipid mobility | drift-corrected x, y MSD, D (periodic cell), exponent alpha | alpha 0.9-1.1 with R^2 >= 0.98; D within a factor 2 of a matched reference | alpha 0.8-0.9 or 1.1-1.2; factor 2-5 | not diffusive (not graded) or > 5-fold |
 | 8 | Area compressibility K_A | final equilibrated AA | elasticity | K_A from equilibrium area fluctuations, block-bootstrap uncertainty | <= 20 % from a matched reference, uncertainty <= 20 % | 20-40 % | > 40 %; uncertainty > 40 % = INSUFFICIENT SAMPLING |
