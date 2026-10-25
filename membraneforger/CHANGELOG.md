@@ -13,12 +13,18 @@
   layout. The `box` entry of `run_manifest.json` gains `z_layout`, `z_source`, the clearances, `midplane_fraction_z`,
   `periodic_z_gap_nm`, `symmetric_box_z_nm` and `estimated_z_reduction_pct` (against the centred box at the same padding).
   The `--box-nm` z check before backmapping uses the same rule.
+- **`--xy-buffer` defaults to 1.6 nm (two lipid shells).** The membrane kept around the complex in x and y grows from
+  1.0 nm to 2 x 0.8 nm, so the transmembrane region has at least two lipid shells between it and its own image
+  (Feng et al. 2023, JCTC, section 10.1: at least 2-3). The bundled GPR139 and KOR frames are 18 nm wide, so a complex of
+  ordinary size is cut from them with room to spare. `--xy-buffer 1.0` gives the earlier membrane. An axis that cannot
+  be cut because the source cell is as narrow as the window keeps the whole cell and is flagged as too small, never
+  silently shrunk. The xy box and atom count grow with the buffer.
 - **Periodic xy check after slicing (reported, never enforced).** The slice report gains `xy_check`: the lipid shells
   (0.8 nm each) between the transmembrane region and its own image and the lipids in the first three shells, and the
   distance between the complex and its periodic image in x and y. Fewer than 2 shells per side (Feng et al. 2023, JCTC,
   section 10.1, recommends at least 2-3; doi:10.1021/acs.jctc.2c01246) or a complex closer to its image than the
-  1.2 nm cutoff is logged as a WARN and listed in `xy_check.flags`; no dimension changes. `--xy-buffer` (default 1.0 nm)
-  stays the way to widen the membrane; Park & Im 2026 document a 20 A xy margin as the CHARMM-GUI default.
+  1.2 nm cutoff is logged as a WARN and listed in `xy_check.flags`; no dimension changes. `--xy-buffer` stays the way to
+  widen the membrane; Park & Im 2026 document a 20 A xy margin as the CHARMM-GUI default.
 
 - **Ligands are frozen during minimization.** `index_ini.ndx` gains a trailing `LIG` group (the heavy atoms of the ligand
   molecules, i.e. every non-protein residue of the input, a subset of `Protein_LIG`; hydrogens stay free so EM can correct any that were synthesized), and both minimizations (`emres` and `em`) set `freezegrps = LIG` with

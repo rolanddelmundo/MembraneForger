@@ -39,8 +39,8 @@ def fill(n_per_leaflet=40):
     return [lipid("POPC", 0.5 + 0.4 * k, 0.5, MIDPLANE + (3.0 if k % 2 else -3.0)) for k in range(2 * n_per_leaflet)]
 
 
-SETTINGS = mf.Settings(slice_min_lipids=4)
-SMALL = mf.Settings(slice_min_lipids=2)
+SETTINGS = mf.Settings(slice_min_lipids=4, box_xy_buffer_nm=1.0)
+SMALL = mf.Settings(slice_min_lipids=2, box_xy_buffer_nm=1.0)
 
 
 class WindowAndMolecules(unittest.TestCase):
@@ -175,7 +175,8 @@ class Seam(unittest.TestCase):
     def test_a_hard_core_overlap_that_cannot_be_relaxed_costs_one_lipid(self):
         members = [lipid("POPC", 7.05, 10.0, MIDPLANE + 3), lipid("POPE", 12.95, 10.0, MIDPLANE + 3),
                    lipid("DOPC", 9.0, 9.0, MIDPLANE - 3), lipid("DOPE", 10.0, 11.0, MIDPLANE - 3)]
-        cut = mf.slice_membrane_cg(members, solute((8, 12), (9, 11)), CELL, MIDPLANE, mf.Settings(slice_min_lipids=2, seam_relax_steps=0))
+        cut = mf.slice_membrane_cg(members, solute((8, 12), (9, 11)), CELL, MIDPLANE, mf.Settings(
+                                    slice_min_lipids=2, seam_relax_steps=0, box_xy_buffer_nm=1.0))
         seam = cut["report"]["seam"]
         self.assertEqual((seam["pairs_created_by_new_periodicity"], seam["lipids_removed"]), (2, 1))
         self.assertEqual(len(cut["membrane"]), 3)
@@ -221,7 +222,7 @@ class RealFrames(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.settings = mf.Settings()
+        cls.settings = mf.Settings(box_xy_buffer_nm=1.0)
         aa, _ = mf.read_all_atom(AA_PDB, FORCEFIELD)
         raw, cls.box = mf.read_cg(CG_GRO)
         cg = mf.classify_cg(raw, MAPPING)
@@ -320,7 +321,8 @@ class RealFrames(unittest.TestCase):
 class OffsetSlack(unittest.TestCase):
     def test_slack_is_the_search_range_clamped_to_the_minimum_margin(self):
         search = dict(slice_optimize_offset=True)
-        self.assertAlmostEqual(mf.offset_slack(mf.Settings(**search)), 0.5)                      # 1.0 buffer, 0.5 margin
+        self.assertAlmostEqual(mf.offset_slack(mf.Settings(box_xy_buffer_nm=1.0, **search)), 0.5)  # 1.0 buffer, 0.5 margin
+        self.assertAlmostEqual(mf.offset_slack(mf.Settings(**search)), 0.5)                      # 1.6 buffer: the search range is capped at 0.5
         self.assertAlmostEqual(mf.offset_slack(mf.Settings(box_xy_buffer_nm=0.7, **search)), 0.2)
         self.assertEqual(mf.offset_slack(mf.Settings(box_xy_buffer_nm=0.5, **search)), 0.0)      # cannot shift at all
         self.assertEqual(mf.offset_slack(mf.Settings(box_xy_buffer_nm=0.3, **search)), 0.0)
@@ -480,3 +482,18 @@ class PeriodicXYCheck(unittest.TestCase):
     def test_a_complex_closer_than_the_cutoff_to_its_image_is_flagged(self):
         check = self.cut(0.4)  # 4.8 x 2.8 nm cell: atoms 0.8 nm and 0.8 nm from the images
         self.assertTrue(any("periodic image" in f for f in check["flags"]))
+
+    def test_the_default_buffer_is_two_lipid_shells_and_one_nm_stays_reachable(self):
+        settings = mf.Settings()
+        self.assertAlmostEqual(settings.box_xy_buffer_nm, settings.min_lipid_shells * settings.lipid_shell_nm)
+        check = PeriodicXYCheck().cut(settings.box_xy_buffer_nm)
+        self.assertGreaterEqual(check["shells_per_side"], settings.min_lipid_shells)  # cropped on both axes: no flag
+        self.assertEqual(check["flags"], [])
+        self.assertTrue(PeriodicXYCheck().cut(1.0)["flags"])
+
+    def test_an_uncut_axis_blames_the_source_cell(self):
+        members = [lipid("POPC", 9.0 + 0.3 * k, 10.0, MIDPLANE + (3 if k % 2 else -3)) for k in range(12)]
+        placed = solute((1, 19), (9, 11))  # nearly spans x of a 20 nm cell: that axis is kept whole
+        check = mf.slice_membrane_cg(members, placed, CELL, MIDPLANE, mf.Settings(slice_min_lipids=2))["report"]["xy_check"]
+        self.assertTrue(check["flags"])
+        self.assertIn("source membrane cell", check["flags"][0])

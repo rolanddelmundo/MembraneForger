@@ -377,8 +377,10 @@ class Settings:
     # receptor is not given the water the taller side needs. True: the earlier layout, centred on the bilayer midplane.
     box_z_symmetric: bool = False
     # BOX = auto slices the coarse-grained membrane to the placed complex plus this buffer on each side in x and y
-    # (1.0 nm, the slice_buffer_nm of the earlier workflow); an axis whose window reaches the cell width is not cut.
-    box_xy_buffer_nm: float = 1.0
+    # (1.6 nm = two lipid shells of lipid_shell_nm, min_lipid_shells x lipid_shell_nm, so the transmembrane region has at
+    # least two shells between it and its image; 1.0 nm, the slice_buffer_nm of the earlier workflow, is --xy-buffer 1.0);
+    # an axis whose window reaches the cell width is not cut.
+    box_xy_buffer_nm: float = 1.6
     # Reported (never enforced) after slicing: lipid shells around the transmembrane region (atoms within tmd_half_nm of
     # the bilayer midplane; a shell is lipid_shell_nm wide, about one lipid diameter) and the water-free distance between
     # the complex and its own periodic image in x and y. Fewer than min_lipid_shells shells between the TMD and its

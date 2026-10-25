@@ -370,9 +370,12 @@ def selection_diagnostics(decisions: list[dict]) -> dict:
                     "area, which under-packed the cut membrane; the anchor rule keeps the lipid population of the source"}
 
 
-def xy_periodic_check(complex_a: list[dict], sliced: list[dict], cell: np.ndarray, midplane_nm: float, settings: Settings) -> dict:
+def xy_periodic_check(complex_a: list[dict], sliced: list[dict], cell: np.ndarray, midplane_nm: float, settings: Settings,
+                      cropped: tuple = ()) -> dict:
     """Lipid shells around the transmembrane region and the complex's distance to its own periodic images in x and y."""
     # Reported, not enforced: a violation is listed in `flags` and the caller logs it; no dimension is changed here.
+    # `cropped` says per axis whether the membrane was cut; a flag on an axis that was not cut means the source cell
+    # itself is too small, which a larger buffer cannot fix, and the message says so.
     # shells_between_images is the closest approach of the TMD to its image through the membrane, in lipid shells, and
     # shells_per_side half of it (each of the two proteins owns half of the lipids between them).
     heavy = np.array([[a["x"], a["y"], a["z"]] for a in complex_a if element(a["atom"]) != "H"], dtype=float) / 10.0
@@ -395,12 +398,14 @@ def xy_periodic_check(complex_a: list[dict], sliced: list[dict], cell: np.ndarra
     counts = [int(((distance >= i * width) & (distance < (i + 1) * width)).sum()) for i in range(3)]
     per_side = tmd_gap / 2.0 / width
     flags = []
+    remedy = ("the source membrane cell is not cut on every axis and is too small for the complex: use a larger "
+              "coarse-grained membrane (the bundled frames are 18 nm wide)" if not all(cropped) and len(cropped) else "raise --xy-buffer")
     if per_side < settings.min_lipid_shells:
         flags.append(f"{per_side:.1f} lipid shells ({0.5 * tmd_gap:.2f} nm) per side between the transmembrane region and its image; "
-                     f"at least {settings.min_lipid_shells:g} recommended (Feng et al. 2023): raise --xy-buffer")
+                     f"at least {settings.min_lipid_shells:g} recommended (Feng et al. 2023): {remedy}")
     if complex_gap < settings.min_image_clearance_nm:
         flags.append(f"the complex is {complex_gap:.2f} nm from its own periodic image in x/y, below the "
-                     f"{settings.min_image_clearance_nm:g} nm cutoff: raise --xy-buffer")
+                     f"{settings.min_image_clearance_nm:g} nm cutoff: {remedy}")
     return {"checked": True, "tmd_atoms": int(len(tmd)), "lipid_shell_nm": width, "tmd_image_gap_nm": round(tmd_gap, 3),
             "shells_between_images": round(tmd_gap / width, 2), "shells_per_side": round(per_side, 2),
             "lipids_per_shell": counts, "complex_image_clearance_nm": round(complex_gap, 3),
@@ -479,6 +484,6 @@ def slice_membrane_cg(membrane: list[dict], placed: list[dict], box: list[float]
               "composition_after": dict(sorted(after.items())), "leaflets_before": leaflet_counts(membrane, midplane_nm),
               "leaflets_after": leaflets, "bilayer_midplane_nm": round(midplane_nm, 4),
               "selection": selection_diagnostics(decisions), "seam": seam,
-              "xy_check": xy_periodic_check(moved_complex, sliced, np.array(new_box[:2]), midplane_nm, settings)}
+              "xy_check": xy_periodic_check(moved_complex, sliced, np.array(new_box[:2]), midplane_nm, settings, tuple(cropped))}
     return {"membrane": sliced, "placed": moved_complex, "box": new_box, "composition": after, "report": report,
             "kept_indices": [index for _, _, index in kept]}

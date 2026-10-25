@@ -124,7 +124,7 @@ into another species with the same twelve-bead Martini 3 layout (`POPC`, `DOPC`,
 ## Box size
 
 By default (`BOX = auto`) the membrane is cut before backmapping, so a large frame costs no more than the complex
-needs. The window is the complex's extent plus `--xy-buffer` (1.0 nm) in x and y; an axis as wide as the cell is not
+needs. The window is the complex's extent plus `--xy-buffer` (1.6 nm, two lipid shells) in x and y; an axis as wide as the cell is not
 cut. z is sized from the protein height around the bilayer midplane.
 
 The cut is made lipid by lipid under periodic boundaries. Each lipid is made whole, one headgroup anchor represents it
@@ -147,8 +147,8 @@ the complex to its own image in x and y (`xy_check`). A build with fewer than tw
 recommended, Feng et al. 2023, section 10.1) or a complex closer than the cutoff to its image gets a WARN; nothing is
 resized, so widen the membrane with `--xy-buffer` if you see it.
 
-The default 1.0 nm buffer is small for large complexes. If the slice gate stops the build, rerun with a larger
-`--xy-buffer` (2.0 is a common choice for production systems).
+The default 1.6 nm buffer is two lipid shells. If the slice gate stops the build, or the xy check warns, rerun with a
+larger `--xy-buffer` (2.0 to 2.4 gives 2.5 to 3 shells); `--xy-buffer 1.0` reproduces the membrane of earlier releases.
 
 ## Outputs in detail
 
