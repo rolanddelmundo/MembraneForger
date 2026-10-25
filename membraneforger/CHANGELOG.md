@@ -55,8 +55,8 @@
   layout. The `box` entry of `run_manifest.json` gains `z_layout`, `z_source`, the clearances, `midplane_fraction_z`,
   `periodic_z_gap_nm`, `symmetric_box_z_nm` and `estimated_z_reduction_pct` (against the centred box at the same padding).
   The `--box-nm` z check before backmapping uses the same rule.
-- **Periodic xy check after slicing (reported, never enforced).** `--xy-buffer` stays 1.0 nm; `--xy-buffer 1.6` is two
-  0.8 nm lipid shells. The slice report gains `xy_check` with two different numbers. `estimated_shell_equivalents_per_side`
+- **Periodic xy check after slicing (reported, never enforced).** `--xy-buffer` now defaults to 1.2 nm, the smallest
+  buffer that clears the check on the bundled KOR and GPR139 frames; 1.0 and 1.6 (two 0.8 nm lipid shells) remain available. The slice report gains `xy_check` with two different numbers. `estimated_shell_equivalents_per_side`
   is a geometric proxy: half the closest approach of the transmembrane region to its image, in 0.8 nm units.
   `voronoi_shells` (per leaflet) and `voronoi_shells_per_side` (the lower leaflet) count shells by molecular adjacency
   on the lipid coordinates: a periodic 2D Voronoi tessellation of the leaflet's lipid anchors and the receptor's
