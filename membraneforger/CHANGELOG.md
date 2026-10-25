@@ -13,9 +13,9 @@
   against the equal-size windows (percentile 0.993), is at percentile 0.80 under the new control.
 
 - **Five more 50 µs bundled membranes.** `KOR_Membrane4` and `KOR_Membrane8` complete the nine kappa opioid receptor
-  runs, and `GPR139_Membrane3` and `GPR139_Membrane4` join `GPR139_Membrane5`, for 12 frames
-  (9 KOR, 3 GPR139). Each is the unmodified 50 µs frame of its run (runs 1 and 6-9 of GPR139 had not reached 50 µs, and run 2 is not bundled). `--cg 1`
-  now draws from three GPR139 frames, `--runs N` takes the first N of the longer series (`--runs 5 --cg 2` is now
+  runs, and `GPR139_Membrane2`, `GPR139_Membrane3` and `GPR139_Membrane4` join `GPR139_Membrane5`, for 13 frames
+  (9 KOR, 4 GPR139). Each is the unmodified 50 µs frame of its run (runs 1 and 6-9 of GPR139 had not reached 50 µs). `--cg 1`
+  now draws from four GPR139 frames, `--runs N` takes the first N of the longer series (`--runs 5 --cg 2` is now
   KOR_Membrane1-5 instead of 1, 2, 3, 5, 6), and the leaflet composition is unchanged to the whole percent. The ranges the
   documentation quotes for the bundled frames (for example the 8-frame tutorial tables) were measured on the original
   eight frames and are not re-measured here.

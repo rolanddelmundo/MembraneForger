@@ -1,25 +1,25 @@
 # Pre-equilibrated coarse-grained cell membranes (Martini 3)
 
-Twelve frames of a single GPCR in an asymmetric, ten-species cell-membrane model, each taken at 50 µs of a
-Martini 3 simulation (nine kappa opioid receptor frames and three GPR139 frames). They are the bundled membranes of MembraneForger: `--cg 1` picks one of the GPR139 frames, `--cg 2`
+Thirteen frames of a single GPCR in an asymmetric, ten-species cell-membrane model, each taken at 50 µs of a
+Martini 3 simulation (nine kappa opioid receptor frames and four GPR139 frames). They are the bundled membranes of MembraneForger: `--cg 1` picks one of the GPR139 frames, `--cg 2`
 one of the kappa opioid receptor frames, and `--cg NAME` (for example `--cg KOR_Membrane5`) a particular frame.
 `python -m membraneforger --list-membranes` lists them, and `--runs N` builds one complex in the first N frames of a
-series (at most as many as the series holds: nine for KOR, three for GPR139), giving N replicate systems that differ in
+series (at most as many as the series holds: nine for KOR, four for GPR139), giving N replicate systems that differ in
 their lipid arrangement.
 
 | Files | Receptor | Replicates |
 |---|---|---|
 | `KOR_Membrane1` to `KOR_Membrane9` (`KOR_Membranen_cg_cellmem.gro`) | kappa opioid receptor (PDB 8F7W) | 9 |
-| `GPR139_Membrane3`, `GPR139_Membrane4`, `GPR139_Membrane5` (`GPR139_Membranen_cg_cellmem.gro`) | GPR139 (PDB 7F6G) | 3 |
+| `GPR139_Membrane2` to `GPR139_Membrane5` (`GPR139_Membranen_cg_cellmem.gro`) | GPR139 (PDB 7F6G) | 4 |
 
 The number in a name is the replicate (run) of the simulation the frame was taken from, so it is kept even though the
-series has gaps: the frames are the 50 µs frame of runs 1 to 9 of 8F7W and of runs 3 to 5 of 7F6G, the
+series has gaps: the frames are the 50 µs frame of runs 1 to 9 of 8F7W and of runs 2 to 5 of 7F6G, the
 runs that reached 50 µs. Each is the unmodified `run50.gro` of its run. `--list-membranes` shows the names present.
 
 Each frame holds about 60,000 beads in a cell of about 18.3 × 18.3 × 19.2 nm: the receptor (about 290 residues),
 about 1,300 lipids, water and ions. The membranes were built with INSANE at CHOL:POPC:DOPC:POPE:DOPE:PSM:DPG3 =
 25:20:20:5:5:15:10 (upper leaflet) and CHOL:POPC:DOPC:POPE:DOPE:POPS:DOPS:SAP6 = 25:5:5:20:20:8:7:10 (lower
-leaflet). Composition at 50 µs, mole percent of each leaflet averaged over the 12 frames
+leaflet). Composition at 50 µs, mole percent of each leaflet averaged over the 13 frames
 (`python membraneforger/examples/leaflet_composition.py membraneforger/examples/preeq_cg_cellmem/KOR_Membrane?_cg_cellmem.gro membraneforger/examples/preeq_cg_cellmem/GPR139_Membrane?_cg_cellmem.gro`):
 
 | Leaflet | CHOL | POPC | DOPC | POPE | DOPE | PSM | DPG3 | POPS | DOPS | SAP6 |
