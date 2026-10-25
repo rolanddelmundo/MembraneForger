@@ -17,9 +17,9 @@
 #SBATCH --output=%x_%A_%a.log         # one log per task, written in the folder you submit from
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8             # cores for backmapping (OpenMM) and GROMACS; about 1 hour per build on 8
-#SBATCH --mem=70G                     # what a build of a GPCR complex in a bundled membrane needs
-#SBATCH --time=12:00:00               # five sequential runs, about 1 hour each on 8 cores
+#SBATCH --cpus-per-task=8             # cores for backmapping (OpenMM) and GROMACS; about 15-30 min per build on 8
+#SBATCH --mem=16G                     # peak RSS of a 270k-atom GPCR build is about 1.5 GB (was 70G); 16G leaves room for larger systems
+#SBATCH --time=12:00:00               # five sequential runs, about 15-30 min each on 8 cores
 #SBATCH --array=0-0                   # one task: the bundled GCGR complex, built in five membranes
 #SBATCH --mail-type=NONE
 #SBATCH --partition=fast,all          # Gemini partitions

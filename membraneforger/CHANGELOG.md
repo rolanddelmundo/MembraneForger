@@ -2,6 +2,87 @@
 
 ## Unreleased
 
+- **Backbone check after minimization (`--backbone-check yes|report|no`, default `report`).** The audit looked at C-alpha positions and
+  contacts but never at peptide planes, alpha-carbon handedness or phi/psi, so a build could PASS with a twisted peptide bond or an
+  inverted centre. A new `backbone` stage runs after `validate` and compares `em.unverified.gro` with `solv_ions.gro` (the same atoms before
+  EM). With `yes` it stops the build, with the residues named, on: a peptide bond EM twisted (non-Pro `|omega| < 120`; Xaa-Pro changed between cis and
+  trans or twisted); a C-alpha, or Thr/Ile C-beta, whose handedness differs from the start (so D residues in the input are not an error);
+  a phi/psi that moved more than the 30 degree restraint width plus `--backbone-drift-margin` (default 30), only when the EM-only
+  backbone restraints were on; and a Ramachandran outlier in a `--strict-segments CHAIN:FIRST-LAST[,...]` range (residues the caller
+  knows were modelled, not observed; chain letters and numbers as in the input). Everything else (new Ramachandran outliers elsewhere,
+  omega between 120 and 150, bonds already twisted before EM, drift without restraints) is a warning. The report is `backbone_check.json`
+  and a summary goes to `run_manifest.json`. The default `report` lists the failures as warnings and does not stop the build; `no` skips the stage. What it cannot do:
+  tell a modelled residue from an observed one without `--strict-segments`; on the five restrained GIPR/Gs builds checked (1214 residues each)
+  the largest drift was 35.5 degrees, so a residue that drifts inside the restraint width into a borderline region is not caught. A start and an end
+  structure whose protein residues do not correspond are skipped with a warning, not failed.
+- **`--archive-previous reports|all` (with `--overwrite`).** Before the earlier build is replaced, its reports (`reports`: log, manifest,
+  audit, backbone check, contacts, ring piercing, membrane validation, orientation, mapping) or reports and structures (`all`: also `em.gro` or
+  `int/em.unverified.gro`, `topol.top`, `index_ini.ndx`) are copied to `<out>/previous_builds/<start time>_<status>/` with an `ARCHIVED.json`.
+  Nothing is deleted, the folder survives the rerun, and a copy that fails stops the build with the earlier outputs intact. Without the option
+  nothing changes.
+- **Faster seam and embedding relaxation.** `relax_seam` keeps a neighbour list (pairs within the repulsion range plus a
+  0.1 nm skin, rebuilt once a bead has moved 0.05 nm) instead of rebuilding a KD-tree every step, and accumulates forces with
+  `np.bincount` instead of `np.add.at`, and applies the intra-lipid shape restraints only to lipids that something has pushed
+  (a lipid at its starting coordinates has zero such force). The relaxed coordinates agree with the previous code to rounding error
+  (1e-11 nm after 200 steps); `embed_complex` on KOR_Membrane1 (15,161 beads, 1200 steps) takes 16 s instead of 59 s.
+  `align_frame_to_box` no longer scans 130 rotations of a frame that is already periodic (about 3 s per build; output
+  unchanged, since such a frame was always returned as read). The unused `slicing.seam_clashes` (superseded by `inherent_pairs` and `created_pairs`) is removed.
+- **The slice composition gate is graded against shell-stratified draws.** The control for the composition distance was the
+  144 equal-size windows spread over the embedded cell, which rarely contain the protein, while a slice is cut around the
+  complex and always holds its annular shell (cholesterol and PIP2 are enriched there). The control is now 5000 random
+  re-draws of the slice that keep its number of lipids in each shell of 0.5, 1.0, 1.5, 2.0 and 3.0 nm around the protein
+  (`packing.shell_stratified_null`, `Settings.slice_shell_edges_nm`, `Settings.slice_null_draws`). The grading is unchanged
+  (PASS up to the 95th percentile, WARNING up to the 99th, FAIL above); the percentile against the equal-size windows is
+  still recorded as `composition_percentile_uniform_windows`. On the 50 µs frames cut around the GCGR complex, a slice with 10 %
+  of its lipids relabelled as another species fails under both controls, and `GPR139_Membrane2`, whose lower leaflet failed
+  against the equal-size windows (percentile 0.993), is at percentile 0.80 under the new control.
+
+- **Five more 50 µs bundled membranes.** `KOR_Membrane4` and `KOR_Membrane8` complete the nine kappa opioid receptor
+  runs, and `GPR139_Membrane2`, `GPR139_Membrane3` and `GPR139_Membrane4` join `GPR139_Membrane5`, for 13 frames
+  (9 KOR, 4 GPR139). Each is the unmodified 50 µs frame of its run (runs 1 and 6-9 of GPR139 had not reached 50 µs). `--cg 1`
+  now draws from four GPR139 frames, `--runs N` takes the first N of the longer series (`--runs 5 --cg 2` is now
+  KOR_Membrane1-5 instead of 1, 2, 3, 5, 6), and the leaflet composition is unchanged to the whole percent. The ranges the
+  documentation quotes for the bundled frames (for example the 8-frame tutorial tables) were measured on the original
+  eight frames and are not re-measured here.
+- **The automatic box z is asymmetric, with 2.25 nm of water at each end.** z is the full extent of the complex and
+  membrane (hydrogens included) plus 2.25 nm (22.5 A, the CHARMM-GUI water default; Park & Im 2026,
+  doi:10.1016/j.jmb.2026.169672, and the CHARMM-GUI FAQ) above the highest and below the lowest atom, with equal
+  clearances at both ends, instead of twice the larger distance from the bilayer midplane plus 1.5 nm. At equal padding
+  the asymmetric box is shorter (a receptor reaching 4 nm out and 3 nm in: 10.0 nm against 11.0 nm at 1.5 nm), but the
+  2.25 nm default can make a box, and so the atom count, larger than before; `--z-pad-nm 1.5` gives the smaller box.
+  `--symmetric-box-z --z-pad-nm 1.5` (or `--symmetric-box-z` alone, `Settings.box_z_symmetric`) restores the earlier
+  centred box. The water across the periodic boundary is never less than 2.0 nm or two cutoffs in the asymmetric
+  layout. The `box` entry of `run_manifest.json` gains `z_layout`, `z_source`, the clearances, `midplane_fraction_z`,
+  `periodic_z_gap_nm`, `symmetric_box_z_nm` and `estimated_z_reduction_pct` (against the centred box at the same padding).
+  The `--box-nm` z check before backmapping uses the same rule.
+- **Periodic xy check after slicing (reported, never enforced).** `--xy-buffer` now defaults to 1.2 nm, the smallest
+  buffer that clears the check on the bundled KOR and GPR139 frames; 1.0 and 1.6 (two 0.8 nm lipid shells) remain available. The slice report gains `xy_check` with two different numbers. `estimated_shell_equivalents_per_side`
+  is a geometric proxy: half the closest approach of the transmembrane region to its image, in 0.8 nm units.
+  `voronoi_shells` (per leaflet) and `voronoi_shells_per_side` (the lower leaflet) count shells by molecular adjacency
+  on the lipid coordinates: a periodic 2D Voronoi tessellation of the leaflet's lipid anchors and the receptor's
+  heavy atoms within 1.5 nm of the midplane; first-shell lipids share a cell edge with a receptor atom, each next shell
+  is the lipids adjacent to the previous one, with no fixed shell width. The lipid rows between the receptor and its
+  own image are the smallest shell number of a lipid adjacent to an image's receptor atom, and each receptor owns half of
+  them. The check also gives the lipids in the first three shells and the distance between the complex and its image in
+  x and y. Fewer than 2 shells by either measure (Feng et al. 2023, JCTC, section 10.1, recommends at least 2-3;
+  doi:10.1021/acs.jctc.2c01246) or a complex closer to its image than the 1.2 nm cutoff is logged as a WARN and listed
+  in `xy_check.flags`; no dimension changes. The adjacency measure follows the idea of Voronoi nearest-neighbour lipid
+  shells (Nguyen et al. 2015, "Characterization of 3D Voronoi Tessellation Nearest Neighbor Lipid Shells"; "Molecular basis
+  for the regulation of membrane proteins through preferential lipid solvation") but is not a re-implementation of
+  them, and a count of two shells here is not a statement of CHARMM-GUI compliance. `python -m membraneforger.equilibration`
+  also reports, over every analysed frame, the closest approach of the protein (and of its transmembrane slab) to its own
+  image in x and y.
+- **The GM3 ceramide amide is restrained during `emres`.** In the CHARMM36 topology the torsion C2S-NF-C1F-C2F
+  (`CTL1 NHL C CTL2`) has a zero force constant and no DIHRES row covered the amide, so nothing but two symmetric
+  planarity terms resisted its rotation. In one test build (GCGR, 27 GM3) the restrained minimization turned one amide from
+  -173.5 to -70.7 degrees, which the audit then counted as a cis bond; backmapping had produced it trans. `GLPA.itp` and
+  `GM3.itp` gain the row `6 4 56 58 1 180.0 2.5 DIHRES_FC` (the `map.dat` `[ trans ]` amide definition) after the C4=C5 row,
+  so the DIHRES block has 24 rows. The row acts only under `-DDIHRES`, i.e. in `emres`; the unrestrained `em` that
+  follows keeps the amide trans. The GM3 stereochemistry check places each ceramide trans bond in a band, trans
+  (|dihedral| >= 150), twisted (30 to 150) or cis (<= 30), and `bands_by_bond` in the report and in the backmapping
+  isomer review shows them; a bond is still refused below 90 degrees, and one between 90 and 150 degrees is reported, not
+  refused. PSM has the same unrestrained amide and is unchanged here.
+
 - **Ligands are frozen during minimization.** `index_ini.ndx` gains a trailing `LIG` group (the heavy atoms of the ligand
   molecules, i.e. every non-protein residue of the input, a subset of `Protein_LIG`; hydrogens stay free so EM can correct any that were synthesized), and both minimizations (`emres` and `em`) set `freezegrps = LIG` with
   `freezedim = Y Y Y`, so a ligand keeps its placed coordinates and the receptor, lipids and solvent relax around it.

@@ -1,6 +1,9 @@
 """Shared fixtures for the MembraneForger tests: repository example data and tiny synthetic systems."""
 import json
+import os
+import shutil
 import sys
+import unittest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -41,3 +44,26 @@ def failure(function, *args, **kwargs):
     except SystemExit as exc:
         return str(exc)
     return None
+
+
+def ppm_skip_reason():
+    """Why the real PPM 3.0 cannot be used here (None when it can): not found, or no res.lib beside the executable."""
+    try:
+        mf.find_ppm_executable(None)
+    except mf.OrientationFailure as error:
+        return f"real PPM 3.0 unusable ({error}); set MEMBRANEFORGER_PPM=/path/to/immers, with res.lib in the same folder"
+    return None
+
+
+def gmx_skip_reason():
+    """Why GROMACS cannot be run from Python (None when it can). A shell alias is invisible here: use a real executable."""
+    gmx = os.environ.get("MEMBRANEFORGER_GMX") or "gmx"
+    if shutil.which(gmx.split()[0]) is None:  # like find_gromacs: the command may carry arguments (singularity run IMAGE gmx)
+        return (f"no gmx executable found ({gmx!r}; shell aliases are invisible to Python); put a real gmx on PATH "
+                "or set MEMBRANEFORGER_GMX=/path/to/gmx")
+    return None
+
+
+def skip_if(reason_function):
+    """Decorator: skip a test or class, printing the reason, when reason_function() returns one."""
+    return lambda target: unittest.skipIf(reason_function() is not None, reason_function() or "")(target)

@@ -7,10 +7,11 @@ from dataclasses import dataclass
 
 __all__ = ['ORIENTATION', 'ORIENT_CHAINS', 'ORIENT_RESIDUES', 'NTERM_SIDE', 'PDB_ID', 'PPM_MEMBRANE', 'BOX',
            'AMINO', 'SOLVENT', 'N_CAP', 'C_CAP', 'RENAME_RESIDUE', 'RENAME_ATOM', 'RENAME_MOLECULE', 'TERMINUS_MENU', 'N_ACYLATED',
-           'DEFAULT_LIGANDS', 'NSTEPS', 'DISULFIDE_MAX_A', 'DISULFIDE_OK_A', 'SLAB_Z_PAD_NM', 'MIN_Z_PAD_TOTAL_NM',
+           'DEFAULT_LIGANDS', 'NSTEPS', 'DISULFIDE_MAX_A', 'DISULFIDE_OK_A', 'SLAB_Z_PAD_NM', 'LEGACY_Z_PAD_NM',
+           'MIN_Z_PAD_TOTAL_NM', 'CUTOFF_NM', 'z_box_need',
            'SALT_M', 'MOLAR_PER_NM3', 'WATERS_PER_NM3', 'ION_RMIN_NM', 'GENION_ATTEMPTS', 'WATER_PROTECT_NM', 'LIPID_SCAN_A',
            'LIPID_DELETE_A', 'GENERATED', 'INTERMEDIATES', 'INDEX_GROUPS', 'FMAX_TARGET', 'H_BOND_RANGE', 'GLPA_MAX_BOND_A',
-           'LYS_BACKBONE', 'ONE_LETTER', 'GM3_XML_TO_GLPA', 'LIPIDATED', 'CYSG_HDB', 'DIHRES_EM_FC', 'EM_MDP', 'LIGAND_GROUP',
+           'LYS_BACKBONE', 'ONE_LETTER', 'GM3_XML_TO_GLPA', 'LIPIDATED', 'CYSG_HDB', 'DIHRES_EM_FC', 'BB_DIHRES_DPHI', 'EM_MDP', 'LIGAND_GROUP',
            'APL_VALIDATE', 'APL_SLICE_WARNING_PERCENT', 'APL_SLICE_TOLERANCE_PERCENT', 'RDF_VALIDATE', 'CG_VALIDATE', 'Settings']
 
 # ============================================================
@@ -30,10 +31,11 @@ PPM_MEMBRANE = ""          # advanced: PPM 3.0 membrane code, "" = undefined fla
 # ============================================================
 # BOX
 # ============================================================
-# auto: the coarse-grained membrane is sliced in x and y to the placed complex plus 1.0 nm of membrane on each side
-# (whole lipids only; an axis that would be as wide as the cell is kept whole), and z is sized around the bilayer
-# midplane with SLAB_Z_PAD_NM of water above and below. A user box is opt-in: "x,y,z" in nm, with x and y no larger
-# than the coarse-grained cell (the membrane is cut to that size around the complex) and z at least the automatic minimum.
+# auto: the coarse-grained membrane is sliced in x and y to the placed complex plus 1.2 nm of membrane on each side
+# (whole lipids only; an axis that would be as wide as the cell is kept whole), and z is the full extent of the
+# complex and membrane plus SLAB_Z_PAD_NM of water above the highest and below the lowest atom (not centred on the
+# bilayer). A user box is opt-in: "x,y,z" in nm, with x and y no larger than the coarse-grained cell (the membrane is
+# cut to that size around the complex) and z at least the automatic minimum.
 BOX = "auto"               # auto | "x,y,z" in nm, e.g. "14,14,22" (x and y are cut around the complex, z sizes the water)
 
 # ============================================================
@@ -85,7 +87,23 @@ N_ACYLATED = ("GLYP",)
 DEFAULT_LIGANDS = frozenset({"GDP", "MG", "V6G"})  # non-protein residues treated as ligands when no all-atom input says so
 NSTEPS = 50000  # default maximum EM steps
 DISULFIDE_MAX_A, DISULFIDE_OK_A = 3.0, (1.8, 2.2)  # SG-SG below 3.0 A is a disulfide; outside 1.8-2.2 A it is rebuilt
-SLAB_Z_PAD_NM, MIN_Z_PAD_TOTAL_NM = 1.5, 2.0  # water above/below the solute, and the least total z padding
+# Water above and below the complex: 2.25 nm (22.5 A, the CHARMM-GUI default; 1.5 nm in releases before the asymmetric
+# layout), and the least total z padding.
+SLAB_Z_PAD_NM, LEGACY_Z_PAD_NM, MIN_Z_PAD_TOTAL_NM = 2.25, 1.5, 2.0
+CUTOFF_NM = 1.2  # rvdw = rcoulomb in EM_MDP; the water across the z boundary must stay at least twice this
+
+
+def z_box_need(heavy: tuple[float, float], atoms: tuple[float, float], center: float, pad_nm: float, symmetric: bool = False) -> float:
+    """Least box z (nm) that holds the solute and membrane with pad_nm of water on each side."""
+    # heavy and atoms are the (lowest, highest) z of the heavy atoms and of all atoms, hydrogens included. Asymmetric
+    # (the default): the box is the full extent of all atoms plus the padding at both ends, and the bilayer is wherever it
+    # falls. Symmetric (the earlier layout): twice the larger heavy-atom distance from the bilayer centre plus the padding.
+    # The asymmetric layout keeps the water across the periodic boundary at least MIN_Z_PAD_TOTAL_NM and two cutoffs, so
+    # the complex does not see its own image; the symmetric layout is exactly the earlier rule (MIN_Z_PAD_TOTAL_NM only).
+    span = atoms[1] - atoms[0]
+    if symmetric:
+        return max(2.0 * (max(heavy[1] - center, center - heavy[0]) + pad_nm), span + MIN_Z_PAD_TOTAL_NM)
+    return span + max(2.0 * pad_nm, MIN_Z_PAD_TOTAL_NM, 2.0 * CUTOFF_NM)
 SALT_M, ION_RMIN_NM, GENION_ATTEMPTS = 0.15, 0.60, 3
 # Added NaCl is a concentration in the water, so the ion numbers come from the aqueous volume, not the box: protein, ligands
 # and lipids take about 30 % of a membrane box. gmx solvate fills the box from spc216.gro (216 waters in a 1.86206 nm
@@ -101,7 +119,7 @@ GENERATED = ("oriented.pdb", "orientation_report.json", "membrane.pdb", "aa_cg_m
              "ions_mdout.mdp", "em.mdp", "mdout.mdp", "em_mdout.mdp", "emres_mdout.mdp", "em.tpr", "em.log", "em.edr",
              "em.trr", "em.gro", "em.unverified.gro", "emres.mdp", "emres.tpr", "emres.log", "emres.edr", "emres.trr",
              "emres.gro", "em.cpt", "emres.cpt", "em_prev.cpt", "emres_prev.cpt", "toppar",
-             "audit.json", "run_manifest.json", "ring_piercing.json", "membrane_validation.json", "membrane_validation.md",
+             "audit.json", "backbone_check.json", "run_manifest.json", "ring_piercing.json", "membrane_validation.json", "membrane_validation.md",
              "membrane_validation_lipids.tsv", "membrane_validation_apl.png", "membrane_validation_species.png",
              "membrane_validation_rdf.png", "membrane_validation_composition.png", "membrane_validation_protein_density.png",
              "em_clash_trace.json", "contacts.json", "work", "int")
@@ -243,6 +261,10 @@ CYSG_HDB = """CYSG		37
 # EM that is validated and published starts from its result.
 DIHRES_EM_FC = 1000.0
 
+# Half-width (degrees) of the flat-bottom backbone phi/psi restraints that a topology may carry for EM only (#ifdef BBDIHRES);
+# the backbone check allows a drift of this width plus --backbone-drift-margin when such restraints are present.
+BB_DIHRES_DPHI = 30.0
+
 EM_MDP = """{define}integrator      = steep
 emtol           = {emtol}
 emstep          = 0.005
@@ -355,9 +377,23 @@ class Settings:
     register_min_embedded_pairs: int = 20
     # Water above and below the complex/membrane in the automatic box (nm).
     box_z_pad_nm: float = SLAB_Z_PAD_NM
+    # False: z is the full extent of the solute and membrane plus box_z_pad_nm at both ends, so the shorter side of the
+    # receptor is not given the water the taller side needs. True: the earlier layout, centred on the bilayer midplane.
+    box_z_symmetric: bool = False
     # BOX = auto slices the coarse-grained membrane to the placed complex plus this buffer on each side in x and y
-    # (1.0 nm, the slice_buffer_nm of the earlier workflow); an axis whose window reaches the cell width is not cut.
-    box_xy_buffer_nm: float = 1.0
+    # (1.2 nm, the smallest buffer that gives two lipid shells in the bundled KOR and GPR139 frames; 1.0 and 1.6, two
+    # 0.8 nm lipid shells, stay available through --xy-buffer); an axis whose window reaches the cell width is not cut.
+    box_xy_buffer_nm: float = 1.2
+    # Reported (never enforced) after slicing: lipid shells around the transmembrane region (atoms within tmd_half_nm of
+    # the bilayer midplane; a shell is lipid_shell_nm wide, a geometric proxy for one lipid diameter) and the distance
+    # between the complex and its own periodic image in x and y. Fewer than min_lipid_shells estimated shell equivalents
+    # between the TMD and its image on each side, fewer than min_lipid_shells lipid shells per side by Voronoi adjacency
+    # of the lipid coordinates (slicing.voronoi_shells) (Feng et al. 2023, JCTC, section 10.1: at least 2-3), or a complex closer to its image than
+    # min_image_clearance_nm (the non-bonded cutoff), is flagged in the log, run_manifest.json and the slice report.
+    tmd_half_nm: float = 1.5
+    lipid_shell_nm: float = 0.8
+    min_lipid_shells: float = 2.0
+    min_image_clearance_nm: float = CUTOFF_NM
     # A user box must leave at least this much membrane on each side of the complex.
     box_xy_min_buffer_nm: float = 0.5
     # Seam contact threshold between beads of different lipids that only the new periodicity brings together. The
@@ -385,18 +421,31 @@ class Settings:
     # that FAIL and (apl_validate) the build stops before backmapping. The RDF check compares the all-anchor headgroup
     # g(r) of each leaflet with the reference's: first-shell position shift PASS within rdf_peak_warning_a, WARNING
     # within rdf_max_peak_shift_a (two 0.5 A bins), FAIL beyond; the RMS difference of the curves may be at most
-    # rdf_max_noise_units times their combined counting noise. Composition and representativeness (slice against the
-    # whole embedded cell) are graded against the empirical distribution of equal-size windows of the embedded
-    # membrane (central 95 % PASS, 95-99 % WARNING, beyond FAIL).
+    # rdf_max_noise_units times their combined counting noise. Representativeness (slice against the whole embedded
+    # cell) is graded against the empirical distribution of equal-size windows of the embedded membrane (central 95 % PASS,
+    # 95-99 % WARNING, beyond FAIL); the composition distance against shell-stratified draws around the complex
+    # (slice_shell_edges_nm, slice_null_draws; PASS up to the 95th percentile, WARNING up to the 99th, FAIL above).
     apl_validate: bool = APL_VALIDATE.lower() == "yes"
     apl_slice_warning_percent: float = APL_SLICE_WARNING_PERCENT
     apl_slice_tolerance_percent: float = APL_SLICE_TOLERANCE_PERCENT
     rdf_validate: bool = RDF_VALIDATE.lower() == "yes"
     cg_validate: bool = CG_VALIDATE.lower() == "yes"
+    # Backbone check after EM (backbone_check.py), measured against the structure EM started from. "yes" stops the build on a peptide
+    # bond EM twisted or changed, a C-alpha / C-beta it inverted, a --strict-segments residue in a Ramachandran outlier region, or (backbone
+    # restraints on) a phi/psi that moved more than BB_DIHRES_DPHI + backbone_drift_margin_deg; "report" lists the same as warnings; "no" skips it.
+    # With the restraints on, five builds of a 1214-residue receptor-G protein complex drifted at most 35.5 degrees and none beyond 45.
+    backbone_check: str = "report"
+    backbone_drift_margin_deg: float = 30.0
     rdf_peak_warning_a: float = 0.5
     rdf_max_peak_shift_a: float = 1.0
     rdf_max_noise_units: float = 3.0
     # Equivalent windows sampled from the embedded membrane for the empirical finite-crop distributions (per axis).
     slice_window_samples: int = 12
+    # Composition control of the slice gate: shell-stratified draws (packing.shell_stratified_null) around the complex,
+    # because a slice is cut around the protein and always holds its annular shell, which uniform windows rarely do.
+    # Shell edges are xy distances (nm) to the nearest bead of the complex; the percentile grading is the same as for the
+    # other window controls (PASS up to the 95th percentile, WARNING up to the 99th).
+    slice_shell_edges_nm: tuple = (0.5, 1.0, 1.5, 2.0, 3.0)
+    slice_null_draws: int = 5000
     # A sliced membrane must keep at least this many lipids, and at least this many phospholipids, in two leaflets.
     slice_min_lipids: int = 30

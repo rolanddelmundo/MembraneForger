@@ -119,7 +119,7 @@ embedding and slicing: the build does not equilibrate the coarse-grained membran
 
 ## 3. Slicing (BOX = auto)
 
-The window is the complex's x, y extent plus `--xy-buffer` (1.0 nm) on each side; an axis whose window would reach
+The window is the complex's x, y extent plus `--xy-buffer` (1.2 nm) on each side; an axis whose window would reach
 the cell is not cut. The cut is made lipid by lipid:
 
 1. every lipid is made whole under the periodic boundaries of the source cell;
@@ -312,8 +312,11 @@ the search `KOR_Membrane5` lower (+4.87 %) is the one that does (PASS WITH WARNI
 
 For each leaflet and species the report gives N and the mole fraction in the reference and in the slice, the
 difference in mole percent, the sampling standard deviation a random crop of that many lipids would have, and the
-composition distance `D_comp = 0.5 * sum |x_slice - x_reference|` (the total variation distance). D_comp is graded against the equal-size-window distribution
-(and against three times the multinomial expectation when fewer than 20 windows exist). Rare species (PIP2, GM3,
+composition distance `D_comp = 0.5 * sum |x_slice - x_reference|` (the total variation distance). D_comp is graded against shell-stratified draws around the complex
+(5000 random re-draws of the slice that keep its number of lipids in each shell of 0.5, 1.0, 1.5, 2.0 and 3.0 nm around the protein,
+so the cholesterol and PIP2 enrichment next to the protein is part of the expectation and only the bulk the slice samples varies;
+`packing.shell_stratified_null`). The percentile of the equal-size windows is still reported beside it, and a distance within three
+times the multinomial expectation is accepted as before unless the percentile grade is already FAIL. Rare species (PIP2, GM3,
 10-20 molecules in a cut) are shown with their N and flagged "(few)" below 10; their mole fractions move by one or
 two points between reference and slice and their species APL has a standard deviation of 20-25 A^2 across molecules,
 so a difference of a few percent in their mean carries no weight.
@@ -406,12 +409,14 @@ backmapped one, 10 / 20 %), and on `em.gro` the Z-density profiles and the core 
 structure cannot tell a transient from a persistent path; the record says so.
 
 The build's own audit of `em.gro` was extended as well. Its dihedral-restraint check reads the DIHRES rows of the
-lipid topologies, and for GM3 (GLPA) those 23 rows cover only the ceramide C2/C3 centres, the C4=C5 bond, the three
+lipid topologies, and for GM3 (GLPA) those 24 rows cover only the ceramide C2/C3 centres, the C4=C5 bond, the ceramide
+amide C2S-NF-C1F-C2F (held trans during `emres`; its CHARMM36 torsion has no force constant), the three
 ring chairs and sialic acid C7/C8; a sugar carbon with an inverted configuration can sit in a correct chair and pass
 them. The audit therefore also tests, geometrically, all 16 sugar stereocentres (glucose C1-C5, galactose C1-C5,
 sialic acid C2 and C4-C8) and the two ceramide trans bonds of every GM3 with the chirality definitions of
 `membraneforger/backmap_data/map.dat` (`membraneforger/stereo.py`, the same test as `membraneforger/examples/check_gm3_stereo.py`), and fails the
-build on any inverted centre or cis bond: a configuration never corrects itself in MD. The same test runs on
+build on any inverted centre or cis bond (a ceramide trans bond under 90 degrees): a configuration never corrects itself in MD.
+The report also counts each trans bond as trans (150 degrees or more), twisted (30 to 150) or cis (30 or less). The same test runs on
 `membrane.pdb` right after backmapping, where a wrong GM3 counts as a wrong configuration in the backmap verdict and
 another seed is tried, so a build only reaches the audit with a GM3 that was wrong on every attempt.
 
@@ -605,7 +610,7 @@ turns every one into a PASS / WARNING / FAIL / INSUFFICIENT SAMPLING / REFERENCE
 | 2 | Bilayer thickness | all stages | expansion / compression, hydrophobic thickness | D_HH from the anchor planes, 1 nm local map | slice <= 3 % from embed; backmap / minimized <= 10 %; equilibrium <= 3 % from a matched reference | 3-5 % (CG), 10-15 % (AA), 3-5 % (reference) | beyond; REFERENCE NEEDED without a reference |
 | 3 | Lipid-tail order parameters | equilibrated AA | acyl-chain ordering, phase | S_CD per species, chain (sn-1, sn-2) and leaflet | profile RMSE <= 0.03 vs a matched profile | 0.03-0.05 | > 0.05; REFERENCE NEEDED without a profile |
 | 4 | Z-density profiles | backmap -> minimized -> equilibrated | bilayer architecture along the normal | rho(z) of heads, tails, cholesterol, protein, ions, water | heads outside tails and water outside heads on both sides, cholesterol between; first-to-last change reported | cholesterol not between tails and heads | head density inside the tail region |
-| 5 | Composition and leaflet asymmetry | frame -> embed -> slice -> final | the intended composition is kept | N and mole fraction per species and leaflet, distance D_comp | below the 95th percentile of equal-size parent windows (or 3 sigma of a random crop with < 20 windows) | 95th-99th percentile | above the 99th percentile for species with N >= 10; rarer species are flagged "(few)", never failed alone |
+| 5 | Composition and leaflet asymmetry | frame -> embed -> slice -> final | the intended composition is kept | N and mole fraction per species and leaflet, distance D_comp | below the 95th percentile of shell-stratified draws around the complex (or 3 sigma of a random crop with < 20 draws) | 95th-99th percentile | above the 99th percentile for species with N >= 10; rarer species are flagged "(few)", never failed alone |
 | 6 | Leaflet differential tension | final equilibrated AA | mechanical balance of the asymmetric leaflets | gamma_upper, gamma_lower, delta gamma from a lateral pressure profile | abs(delta gamma) <= 5 mN/m with compatible uncertainty | 5-10 mN/m, or one leaflet above 10 mN/m | > 10 mN/m with the uncertainty supporting it; INSUFFICIENT SAMPLING otherwise |
 | 7 | Lipid lateral diffusion | final equilibrated AA | fluidity, lipid mobility | drift-corrected x, y MSD, D (periodic cell), exponent alpha | alpha 0.9-1.1 with R^2 >= 0.98; D within a factor 2 of a matched reference | alpha 0.8-0.9 or 1.1-1.2; factor 2-5 | not diffusive (not graded) or > 5-fold |
 | 8 | Area compressibility K_A | final equilibrated AA | elasticity | K_A from equilibrium area fluctuations, block-bootstrap uncertainty | <= 20 % from a matched reference, uncertainty <= 20 % | 20-40 % | > 40 %; uncertainty > 40 % = INSUFFICIENT SAMPLING |
@@ -655,7 +660,7 @@ the build's own checks). Where the thresholds live: `Settings` in `config.py`
 
 ## 8. Settings
 
-`membraneforger/config.py` carries the defaults, each with the reasoning: `box_xy_buffer_nm` (1.0), the slice
+`membraneforger/config.py` carries the defaults, each with the reasoning: `box_xy_buffer_nm` (1.2), the slice
 the opt-in offset search (`slice_optimize_offset` False, `slice_offset_search_nm` 0.5, `slice_offset_step_nm` 0.1), the ion mode (`counterion_mode` additive), the seam
 (`seam_min_bead_nm` 0.30, `seam_hard_core_nm` 0.15, `seam_relax_steps` 400), the force-field contact gate
 (`contact_rmin_fraction` 0.6, `bond_crossing_nm` 0.12), the gate (`APL_VALIDATE`,

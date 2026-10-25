@@ -53,18 +53,18 @@ Orientation determines the reference frame and slicing operates in it; nothing h
 from collections import Counter
 
 import numpy as np
-from scipy.spatial import cKDTree
+from scipy.spatial import Voronoi, cKDTree
 
 from .config import Settings
 from .lipids import anchor_bead, anchor_xyz, leaflet_of
 from .structio import element, xyz_nm
 
-__all__ = ['solute_extent', 'crop_windows', 'image_molecule', 'make_whole', 'lipid_anchor', 'anchor_image_shift',
-           'all_beads_inside', 'select_lipids', 'seam_clashes', 'created_pairs', 'pair_keys', 'offset_slack', 'relax_seam',
+__all__ = ['xy_periodic_check', 'periodic_image_gap', 'voronoi_shells', 'solute_extent', 'crop_windows',
+           'image_molecule', 'make_whole', 'lipid_anchor', 'anchor_image_shift',
+           'all_beads_inside', 'select_lipids', 'created_pairs', 'pair_keys', 'offset_slack', 'relax_seam',
            'remove_hard_core_overlaps',
            'composition_distance', 'score_offset', 'choose_offset', 'leaflet_counts', 'selection_diagnostics',
            'slice_membrane_cg']
-
 
 def solute_extent(placed: list[dict]) -> tuple[np.ndarray, np.ndarray]:
     """Lowest and highest x, y of every placed solute atom (protein and ligands), in nm."""
@@ -145,25 +145,6 @@ def select_lipids(whole: list[tuple], lower: np.ndarray, size: np.ndarray, cell:
     return kept, decisions
 
 
-def seam_clashes(xyz: list[np.ndarray], size: np.ndarray, cell_z: float, threshold_nm: float,
-                 cropped: list[bool]) -> tuple[list, int]:
-    """Bead pairs of different molecules closer than threshold only through the new periodic cell, plus the old count."""
-    # "Already close" is judged with the periodicity of the SOURCE frame: periodic in z and in every uncropped axis,
-    # not periodic across a cropped axis. A pair that is close in the new cell but not in that source arrangement was
-    # created by the new periodic boundary.
-    owner = np.concatenate([np.full(len(x), k) for k, x in enumerate(xyz)])
-    points = np.vstack(xyz)
-    points = points - points.min(axis=0)
-    new_box = np.array([size[0], size[1], cell_z])
-    old_box = np.array([1e4 if cropped[0] else size[0], 1e4 if cropped[1] else size[1], cell_z])
-    periodic = cKDTree(np.mod(points, new_box), boxsize=new_box).query_pairs(threshold_nm, output_type="ndarray")
-    source = cKDTree(np.mod(points, old_box), boxsize=old_box).query_pairs(threshold_nm, output_type="ndarray")
-    inherent = {(min(int(a), int(b)), max(int(a), int(b))) for a, b in source if owner[a] != owner[b]}
-    created = [(int(owner[a]), int(owner[b])) for a, b in periodic
-               if owner[a] != owner[b] and (min(int(a), int(b)), max(int(a), int(b))) not in inherent]
-    return created, len(inherent)
-
-
 def inherent_pairs(points: np.ndarray, owner: np.ndarray, size: np.ndarray, cell_z: float, cropped: list[bool], radius: float) -> set:
     """Inter-molecule bead pairs within radius under the SOURCE periodicity (not periodic across a cropped axis)."""
     old_box = np.array([1e4 if cropped[0] else size[0], 1e4 if cropped[1] else size[1], cell_z])
@@ -219,12 +200,21 @@ def relax_seam(xyz: list[np.ndarray], size: np.ndarray, cell_z: float, cropped: 
     protein_range = repulsion_nm if protein_repulsion_nm is None else protein_repulsion_nm
     k_rep, k_intra, k_pos = 1.0, 1.0, 0.05
     minimum_image = lambda d: d - new_box * np.round(d / new_box)
+    scatter = lambda index, values: np.stack([np.bincount(index, values[:, k], len(points)) for k in range(3)], axis=1)
+    skin = 0.1  # neighbour list: pairs within repulsion_nm + skin, rebuilt once a bead has moved more than skin / 2
+    # A lipid at its starting coordinates has no shape or position force, so only lipids that something has pushed enter the
+    # intra-lipid restraints; once active a lipid stays active.
+    lipid_of, active, active_intra = owner[intra[:, 0]], np.zeros(len(xyz), bool), np.zeros(len(intra), bool)
     points, remaining, step, crowded = start.copy(), np.zeros((0, 2), int), 0, False
+    listed, candidates = points.copy(), created_pairs(points, owner, new_box, repulsion_nm + skin, inherent)
     while step < steps:
         step += 1
-        pairs = created_pairs(points, owner, new_box, repulsion_nm, inherent)
-        delta = minimum_image(points[pairs[:, 1]] - points[pairs[:, 0]]) if len(pairs) else np.zeros((0, 3))
+        if np.linalg.norm(points - listed, axis=1).max() > 0.5 * skin:
+            listed, candidates = points.copy(), created_pairs(points, owner, new_box, repulsion_nm + skin, inherent)
+        delta = minimum_image(points[candidates[:, 1]] - points[candidates[:, 0]]) if len(candidates) else np.zeros((0, 3))
         dist = np.linalg.norm(delta, axis=1)
+        close = dist <= repulsion_nm
+        pairs, delta, dist = candidates[close], delta[close], dist[close]
         remaining = pairs[dist < contact_nm]
         near, index = (protein.query(np.mod(points, new_box), distance_upper_bound=protein_range)
                        if protein is not None else (np.full(len(points), np.inf), None))
@@ -234,17 +224,21 @@ def relax_seam(xyz: list[np.ndarray], size: np.ndarray, cell_z: float, cropped: 
         force = np.zeros_like(points)
         unit = delta / np.maximum(dist, 1e-9)[:, None]
         push = (k_rep * (repulsion_nm - dist))[:, None] * unit
-        np.add.at(force, pairs[:, 0], -push)
-        np.add.at(force, pairs[:, 1], push)
+        force += scatter(pairs[:, 1], push) - scatter(pairs[:, 0], push)
         if protein is not None:
             hit = np.isfinite(near)
             away = minimum_image(np.mod(points[hit], new_box) - protein.data[index[hit]])
             force[hit] += (k_rep * (protein_range - near[hit]))[:, None] * away / np.maximum(near[hit], 1e-9)[:, None]
-        bond = points[intra[:, 1]] - points[intra[:, 0]]
-        length = np.linalg.norm(bond, axis=1)
-        pull = (k_intra * (length - d0))[:, None] * bond / np.maximum(length, 1e-9)[:, None]
-        np.add.at(force, intra[:, 0], pull)
-        np.add.at(force, intra[:, 1], -pull)
+        pushed = np.bincount(owner, force.any(axis=1), len(xyz)) > 0
+        if (pushed & ~active).any():
+            active |= pushed
+            active_intra = active[lipid_of]
+            first, second, rest = intra[active_intra, 0], intra[active_intra, 1], d0[active_intra]
+        if active_intra.any():
+            bond = points[second] - points[first]
+            length = np.linalg.norm(bond, axis=1)
+            pull = (k_intra * (length - rest))[:, None] * bond / np.maximum(length, 1e-9)[:, None]
+            force += scatter(first, pull) - scatter(second, pull)
         force -= k_pos * (points - start)
         largest = float(np.linalg.norm(force, axis=1).max())
         points += force * (min(max_step_nm / largest, 0.1) if largest > 0 else 0.0)
@@ -370,6 +364,109 @@ def selection_diagnostics(decisions: list[dict]) -> dict:
                     "area, which under-packed the cut membrane; the anchor rule keeps the lipid population of the source"}
 
 
+def periodic_image_gap(points_xy: np.ndarray, cell: np.ndarray) -> float:
+    """Closest distance (nm) between a set of points and its own periodic images in x and y."""
+    tree, nearest = cKDTree(points_xy[:, :2]), np.inf
+    for sx, sy in ((1, 0), (0, 1), (1, 1), (1, -1)):
+        nearest = min(nearest, float(tree.query(points_xy[:, :2] + np.array([sx, sy]) * cell)[0].min()))
+    return nearest
+
+
+def voronoi_shells(protein_xy: np.ndarray, lipid_xy: np.ndarray, cell: np.ndarray) -> dict:
+    """Lipid shells around the protein of one leaflet by Voronoi adjacency, periodic in x and y, with no shell width."""
+    # The protein atoms and the lipid anchors of the leaflet are generators of a 2D Voronoi tessellation of the cell tiled
+    # 3 x 3. First-shell lipids have a cell that shares an edge with a protein atom's cell; shell k+1 are the lipids
+    # adjacent to shell k not yet reached, counted from the central protein through the tiling. The number of lipid rows
+    # between the protein and its own image is the smallest shell number of a lipid (in any tile) that is adjacent to an
+    # image's protein atom; each protein owns half of those rows, so shells_per_side is that number halved and rounded down. This
+    # follows the idea of defining shells by molecular adjacency instead of a fixed width; it is not a re-implementation of
+    # any published code (those use further criteria, e.g. a boundary-proximity cut-off, that are not applied here).
+    n_lipid, n_protein = len(lipid_xy), len(protein_xy)
+    if n_lipid < 3 or n_protein == 0:
+        return {"lipids_per_shell": [0, 0, 0], "lipid_rows_between_images": None, "shells_per_side": 0}
+    wrapped = np.vstack([lipid_xy, protein_xy]) % cell
+    shifts = [(i, j) for i in (-1, 0, 1) for j in (-1, 0, 1)]
+    tiled = np.vstack([wrapped + cell * s for s in shifts])
+    total, central = len(wrapped), shifts.index((0, 0))
+
+    def block(g: int) -> int:  # which tile a generator belongs to
+        return g // total
+
+    def is_protein(g: int) -> bool:  # local index g % total is in `wrapped`
+        return g % total >= n_lipid
+
+    neighbours = [[] for _ in range(len(tiled))]
+    for a, b in Voronoi(tiled).ridge_points:
+        neighbours[a].append(b)
+        neighbours[b].append(a)
+    depth, frontier = {}, []
+    for g in range(central * total + n_lipid, (central + 1) * total):  # protein atoms of the central tile
+        for h in neighbours[g]:
+            if not is_protein(h) and h not in depth:
+                depth[h] = 1
+                frontier.append(h)
+    while frontier:
+        following = []
+        for g in frontier:
+            for h in neighbours[g]:
+                if not is_protein(h) and h not in depth:
+                    depth[h] = depth[g] + 1
+                    following.append(h)
+        frontier = following
+    in_central = [g for g in depth if block(g) == central]
+    per_shell = [sum(1 for g in in_central if depth[g] == k) for k in (1, 2, 3)]
+    rows = [depth[g] for g in depth if any(is_protein(h) and block(h) != central for h in neighbours[g])]
+    between = min(rows) if rows else None
+    return {"lipids_per_shell": per_shell, "lipid_rows_between_images": between,
+            "shells_per_side": 0 if between is None else between // 2}
+
+
+def xy_periodic_check(complex_a: list[dict], sliced: list[dict], cell: np.ndarray, midplane_nm: float, settings: Settings,
+                      cropped: tuple = ()) -> dict:
+    """Lipid shells around the transmembrane region and the complex's distance to its own periodic images in x and y."""
+    # Reported, not enforced: a violation is listed in `flags` and the caller logs it; no dimension is changed here.
+    # `cropped` says per axis whether the membrane was cut; a flag on an axis that was not cut means the source cell
+    # itself is too small, which a larger buffer cannot fix, and the message says so.
+    # estimated_shell_equivalents_per_side is a geometric proxy: half the closest approach of the TMD to its image through
+    # the membrane (each of the two proteins owns half of the lipids between them) in units of lipid_shell_nm. The
+    # shells counted from molecular adjacency (voronoi_shells, per leaflet, from the lipid coordinates) are the measure
+    # that supports a statement that two lipid shells surround the receptor.
+    heavy = np.array([[a["x"], a["y"], a["z"]] for a in complex_a if element(a["atom"]) != "H"], dtype=float) / 10.0
+    tmd = heavy[np.abs(heavy[:, 2] - midplane_nm) <= settings.tmd_half_nm]
+    if not len(tmd):
+        return {"checked": False, "reason": "no complex heavy atom within tmd_half_nm of the bilayer midplane", "flags": []}
+    tmd_gap, complex_gap = periodic_image_gap(tmd, cell), periodic_image_gap(heavy, cell)
+    anchors = np.array([anchor_xyz(m["xyz"], [b["atom"] for b in m["beads"]], anchor_bead(m["cg"])) for m in sliced])
+    distance = cKDTree(tmd[:, :2] % cell, boxsize=cell).query(anchors[:, :2] % cell)[0]
+    width = settings.lipid_shell_nm
+    counts = [int(((distance >= i * width) & (distance < (i + 1) * width)).sum()) for i in range(3)]
+    per_side = tmd_gap / 2.0 / width
+    upper = anchors[:, 2] >= midplane_nm
+    voronoi = {}
+    for name, mask, inside in (("upper", upper, (heavy[:, 2] >= midplane_nm) & (heavy[:, 2] <= midplane_nm + settings.tmd_half_nm)),
+                               ("lower", ~upper, (heavy[:, 2] < midplane_nm) & (heavy[:, 2] >= midplane_nm - settings.tmd_half_nm))):
+        voronoi[name] = voronoi_shells(heavy[inside][:, :2], anchors[mask][:, :2], cell)
+    least = min(v["shells_per_side"] for v in voronoi.values())
+    flags = []
+    remedy = ("the source membrane cell is not cut on every axis and is too small for the complex: use a larger "
+              "coarse-grained membrane (the bundled frames are 18 nm wide)" if not all(cropped) and len(cropped) else "raise --xy-buffer")
+    if per_side < settings.min_lipid_shells:
+        flags.append(f"an estimated {per_side:.1f} lipid shell equivalents ({0.5 * tmd_gap:.2f} nm) per side between the transmembrane "
+                     f"region and its image; at least {settings.min_lipid_shells:g} recommended (Feng et al. 2023): {remedy}")
+    if least < settings.min_lipid_shells:
+        flags.append(f"Voronoi adjacency gives {voronoi['upper']['shells_per_side']} (upper) and {voronoi['lower']['shells_per_side']} "
+                     f"(lower) lipid shells per side between the transmembrane region and its image; at least "
+                     f"{settings.min_lipid_shells:g} recommended: {remedy}")
+    if complex_gap < settings.min_image_clearance_nm:
+        flags.append(f"the complex is {complex_gap:.2f} nm from its own periodic image in x/y, below the "
+                     f"{settings.min_image_clearance_nm:g} nm cutoff: {remedy}")
+    return {"checked": True, "tmd_atoms": int(len(tmd)), "lipid_shell_nm": width, "tmd_image_gap_nm": round(tmd_gap, 3),
+            "shells_between_images": round(tmd_gap / width, 2), "estimated_shell_equivalents_per_side": round(per_side, 2),
+            "lipids_per_shell": counts, "voronoi_shells": voronoi, "voronoi_shells_per_side": least,
+            "complex_image_clearance_nm": round(complex_gap, 3),
+            "min_lipid_shells": settings.min_lipid_shells, "min_image_clearance_nm": settings.min_image_clearance_nm, "flags": flags}
+
+
 def slice_membrane_cg(membrane: list[dict], placed: list[dict], box: list[float], midplane_nm: float, settings: Settings,
                       requested: tuple | None = None, reference: dict | None = None) -> dict:
     """Crop the CG membrane to the placed complex plus the buffer; returns the new membrane, complex, box and a report.
@@ -441,6 +538,7 @@ def slice_membrane_cg(membrane: list[dict], placed: list[dict], box: list[float]
               "lipids_outside_window": outside, "composition_before": dict(sorted(before.items())),
               "composition_after": dict(sorted(after.items())), "leaflets_before": leaflet_counts(membrane, midplane_nm),
               "leaflets_after": leaflets, "bilayer_midplane_nm": round(midplane_nm, 4),
-              "selection": selection_diagnostics(decisions), "seam": seam}
+              "selection": selection_diagnostics(decisions), "seam": seam,
+              "xy_check": xy_periodic_check(moved_complex, sliced, np.array(new_box[:2]), midplane_nm, settings, tuple(cropped))}
     return {"membrane": sliced, "placed": moved_complex, "box": new_box, "composition": after, "report": report,
             "kept_indices": [index for _, _, index in kept]}

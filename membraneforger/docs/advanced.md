@@ -75,10 +75,10 @@ how `--embed-site free` chooses its spot.
 
 ### Bundled membranes
 
-Eight frames (50 µs, Martini 3) of a GPCR in an asymmetric ten-species cell-membrane model, in
-`membraneforger/examples/preeq_cg_cellmem/`: `KOR_Membrane1`, `KOR_Membrane2`, `KOR_Membrane3`, `KOR_Membrane5`, `KOR_Membrane6`, `KOR_Membrane7`, `KOR_Membrane9` (kappa opioid receptor) and `GPR139_Membrane5`
-(GPR139), about 18.3 × 18.3 × 19.2 nm each (the number is the simulation run the frame comes from). Leaflet
-composition in mole percent, averaged over the 8 frames
+Thirteen frames (50 µs, Martini 3) of a GPCR in an asymmetric ten-species cell-membrane model, in
+`membraneforger/examples/preeq_cg_cellmem/`: `KOR_Membrane1` to `KOR_Membrane9` (kappa opioid receptor, nine frames) and `GPR139_Membrane2` to `GPR139_Membrane5`
+(GPR139, four frames), about 18.3 × 18.3 × 19.2 nm each (the number is the simulation run the frame comes from). Leaflet
+composition in mole percent, averaged over the 13 frames
 (`membraneforger/examples/leaflet_composition.py`):
 
 | Leaflet | CHOL | POPC | DOPC | POPE | DOPE | PSM | DPG3 | POPS | DOPS | SAP6 |
@@ -124,7 +124,7 @@ into another species with the same twelve-bead Martini 3 layout (`POPC`, `DOPC`,
 ## Box size
 
 By default (`BOX = auto`) the membrane is cut before backmapping, so a large frame costs no more than the complex
-needs. The window is the complex's extent plus `--xy-buffer` (1.0 nm) in x and y; an axis as wide as the cell is not
+needs. The window is the complex's extent plus `--xy-buffer` (1.2 nm) in x and y; an axis as wide as the cell is not
 cut. z is sized from the protein height around the bilayer midplane.
 
 The cut is made lipid by lipid under periodic boundaries. Each lipid is made whole, one headgroup anchor represents it
@@ -134,10 +134,37 @@ preserves the source's lipid density and composition when `--slice-offset-search
 is relaxed in place at the coarse-grained level instead of deleting lipids.
 
 `--box-nm X Y Z` (nm) sets the box instead. x and y may only be smaller than the membrane patch; z must leave the default
-water padding. A z too short for the complex is refused before backmapping.
+water padding (2.25 nm above the highest and below the lowest atom). A z too short for the complex is refused before backmapping.
 
-The default 1.0 nm buffer is small for large complexes. If the slice gate stops the build, rerun with a larger
-`--xy-buffer` (2.0 is a common choice for production systems).
+The automatic z is the full extent of the complex and membrane plus the padding at both ends, so a receptor that reaches
+further on one side of the bilayer does not add water on the other side. The bilayer is then not at the middle of the box;
+`run_manifest.json` records the layout, the clearances and `midplane_fraction_z`. The 2.25 nm default is the CHARMM-GUI water
+thickness (22.5 A) and can give a larger box than the earlier 1.5 nm: `--z-pad-nm 1.5` keeps the smaller one, and
+`--symmetric-box-z --z-pad-nm 1.5` restores the earlier box centred on the midplane.
+
+After slicing, the log and the slice report give the lipid shells around the transmembrane region and the distance of
+the complex to its own image in x and y (`xy_check`): `estimated_shell_equivalents_per_side` is a geometric proxy (half the closest approach
+of the transmembrane region to its image, in 0.8 nm units), and `voronoi_shells` counts shells by molecular adjacency on
+the lipid coordinates of each leaflet (a periodic Voronoi tessellation of the lipid anchors and the receptor atoms near
+the leaflet; first-shell lipids share a cell edge with the receptor, each next shell is adjacent to the previous one;
+`voronoi_shells_per_side` is half the lipid rows between the receptor and its image, the lower leaflet). A build with fewer
+than two shells by either measure (at least 2-3 are recommended, Feng et al. 2023, section 10.1) or a complex closer
+than the cutoff to its image gets a WARN; nothing is resized, so widen the membrane with `--xy-buffer` if you see it.
+
+The default 1.2 nm buffer is small for large complexes. If the slice gate stops the build, or the xy check warns, rerun
+with a larger `--xy-buffer` (1.0 and 1.6 stay available; 1.6 is two 0.8 nm lipid shells, 2.4 three; 2.0 is common for production systems).
+
+### Choosing `--z-pad-nm`
+
+Measured on the bundled KOR_Membrane5 frame with GIPR_MGIP (xy buffer 1.2, EM only; every pad passed the gates, with 0 contacts and 0 bond crossings after EM):
+
+| `--z-pad-nm` | 1.5 | 1.75 | 2.0 | 2.25 |
+|---|---|---|---|---|
+| box z (nm) | 19.78 | 20.28 | 20.78 | 21.28 |
+| atoms | 266,567 | 273,023 | 281,020 | 286,711 |
+| water gap across z at EM (nm) | 2.94 | 3.39 | 3.81 | 4.45 |
+
+The box z is not constant afterwards. In the CHARMM-GUI NPT sequence (steps 6.0 to 6.6, 1.875 ns) it fell by 1.4 to 1.6 nm (2.25 nm pad: 21.28 to 19.71 nm; the earlier symmetric 1.5 nm box: 21.25 to 19.88 nm), so the padding that matters is what is left after equilibration. With the 2.25 nm pad the water gap across the boundary ended near 2.7 nm, above the 2.4 nm (two cutoffs) floor. If the same shrinkage applies to smaller pads (a projection; NPT was not run on them), 2.0 nm ends near 2.2 to 2.4 nm, borderline, and 1.5 or 1.75 nm end below the floor. Keep the 2.25 nm default; use 2.0 nm at the smallest, and check the box z and image distance after equilibration if you go lower.
 
 ## Outputs in detail
 
@@ -173,7 +200,9 @@ python -m membraneforger --membrane <out>/int/membrane.pdb --out <out>
 
 Rerunning into an `<out>` that holds an earlier build is refused unless `--overwrite` is given; checkpoints and trajectories
 there also need `--overwrite-restart` and are never deleted otherwise. With `--overwrite` the other outputs and intermediates are
-replaced and only `int/membrane.pdb` is kept. Give a new `--out` to keep the earlier build as it is.
+replaced and only `int/membrane.pdb` is kept. Give a new `--out` to keep the earlier build as it is, or add
+`--archive-previous reports` (or `all`, which also copies `em.gro`, `topol.top` and `index_ini.ndx`) to have the earlier build's reports copied to
+`<out>/previous_builds/<start time>_<status>/` before they are replaced; a build that was rejected and rebuilt in the same `--out` stays inspectable.
 
 ## Disulfides
 
