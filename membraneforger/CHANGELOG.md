@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Ligands are position-restrained in the equilibration.** The restraint file written for a ligand without its own (GDP, Mg,
+  other small molecules) used `POSRES_FC_LIG`, which the topology defaults to 0 and no equilibration mdp sets, so grompp
+  compiled it with zero force constant and the ligand moved freely in every restrained step. The rows now use `POSRES_FC_BB`,
+  as the bundled `7V7.itp` already does, so a ligand follows the backbone schedule (4000 to 50 over steps 6.0 to 6.6). The
+  minimizations are unchanged: the ligand is frozen there and no `-DPOSRES` is defined. `POSRES_FC_LIG` stays defined as 0
+  for itps that still name it.
+
 - **Backbone check after minimization (`--backbone-check yes|report|no`, default `report`).** The audit looked at C-alpha positions and
   contacts but never at peptide planes, alpha-carbon handedness or phi/psi, so a build could PASS with a twisted peptide bond or an
   inverted centre. A new `backbone` stage runs after `validate` and compares `em.unverified.gro` with `solv_ions.gro` (the same atoms before
