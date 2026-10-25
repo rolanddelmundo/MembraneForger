@@ -154,6 +154,18 @@ than the cutoff to its image gets a WARN; nothing is resized, so widen the membr
 The default 1.2 nm buffer is small for large complexes. If the slice gate stops the build, or the xy check warns, rerun
 with a larger `--xy-buffer` (1.0 and 1.6 stay available; 1.6 is two 0.8 nm lipid shells, 2.4 three; 2.0 is common for production systems).
 
+### Choosing `--z-pad-nm`
+
+Measured on the bundled KOR_Membrane5 frame with GIPR_MGIP (xy buffer 1.2, EM only; every pad passed the gates, with 0 contacts and 0 bond crossings after EM):
+
+| `--z-pad-nm` | 1.5 | 1.75 | 2.0 | 2.25 |
+|---|---|---|---|---|
+| box z (nm) | 19.78 | 20.28 | 20.78 | 21.28 |
+| atoms | 266,567 | 273,023 | 281,020 | 286,711 |
+| water gap across z at EM (nm) | 2.94 | 3.39 | 3.81 | 4.45 |
+
+The box z is not constant afterwards. In the CHARMM-GUI NPT sequence (steps 6.0 to 6.6, 1.875 ns) it fell by 1.4 to 1.6 nm (2.25 nm pad: 21.28 to 19.71 nm; the earlier symmetric 1.5 nm box: 21.25 to 19.88 nm), so the padding that matters is what is left after equilibration. With the 2.25 nm pad the water gap across the boundary ended near 2.7 nm, above the 2.4 nm (two cutoffs) floor. If the same shrinkage applies to smaller pads (a projection; NPT was not run on them), 2.0 nm ends near 2.2 to 2.4 nm, borderline, and 1.5 or 1.75 nm end below the floor. Keep the 2.25 nm default; use 2.0 nm at the smallest, and check the box z and image distance after equilibration if you go lower.
+
 ## Outputs in detail
 
 The top level of the output directory holds the final system and the reports:
