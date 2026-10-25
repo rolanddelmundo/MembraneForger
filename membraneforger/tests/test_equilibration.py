@@ -121,3 +121,12 @@ class ProfileChange(unittest.TestCase):
         change = profile_change(first, last, 20.9 / 2.0, 23.7 / 2.0 + 1.0)
         self.assertLess(change["water"], 0.05)  # the same shape relative to the midplane
         self.assertGreater(profile_change(first, last, 20.9 / 2.0, 23.7 / 2.0)["water"], 0.1)  # misplaced midplane: a real change
+
+
+class ScdRecord(unittest.TestCase):
+    def test_per_carbon_counts_become_one_count_per_chain(self):
+        from membraneforger.equilibration import scd_record
+        values = {"carbon": ["C22", "C23", "C24"], "index": [2, 3, 4], "scd": [0.20, 0.21, 0.19], "sem": [0.01] * 3, "n": [120, 118, 120]}
+        record = scd_record("POPC", "sn1", values, None)
+        self.assertEqual((record["n"], record["status"]), (120, "REFERENCE NEEDED"))
+        self.assertAlmostEqual(record["value"], 0.20, places=6)

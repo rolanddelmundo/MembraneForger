@@ -178,6 +178,13 @@ def convergence_gate(energy: dict | None, frames: dict | None, frame_time_ps: np
     return records
 
 
+def scd_record(name: str, chain: str, values: dict, reference) -> dict:
+    """The qc.metric record of one chain's S_CD profile (n is the number of lipids behind its best-sampled carbon)."""
+    graded = scd_profile_rmse(reference, values["scd"])
+    return metric(f"S_CD {name} {chain}", "final", float(np.nanmean(values["scd"])), "-", n=int(max(values["n"])),
+                  deviation=graded["rmse"], status=graded["status"], reason="mean S_CD over the chain; " + graded["reason"])
+
+
 def equilibrium_gate(energy: dict | None, frames: dict | None, frame_time_ps: np.ndarray | None, args, settings: Settings) -> list[dict]:
     """Gate 4 records on the production fraction: lateral diffusion, K_A, leaflet tension, final hydration and order."""
     records = []
@@ -245,10 +252,7 @@ def equilibrium_gate(energy: dict | None, frames: dict | None, frame_time_ps: np
                 reference_scd = (args.reference_scd or {}).get(name, {})
                 for chain, values in profile.items():
                     if values["n"]:
-                        graded = scd_profile_rmse(reference_scd.get(chain), values["scd"])
-                        records.append(metric(f"S_CD {name} {chain}", "final", float(np.nanmean(values["scd"])), "-", n=int(values["n"]),
-                                              deviation=graded["rmse"], status=graded["status"],
-                                              reason="mean S_CD over the chain; " + graded["reason"]))
+                        records.append(scd_record(name, chain, values, reference_scd.get(chain)))
     else:
         records.append(metric("lateral diffusion D", "final", None, "um^2/s", status="INSUFFICIENT SAMPLING",
                               reason="fewer than 10 frames (or no --frames)"))
