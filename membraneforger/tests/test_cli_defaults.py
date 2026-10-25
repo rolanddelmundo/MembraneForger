@@ -20,6 +20,13 @@ def parse(*argv):
 
 
 class Lengths(unittest.TestCase):
+    def test_z_padding_options(self):
+        args, _ = parse()
+        self.assertEqual((args.z_pad_nm, args.symmetric_box_z), (None, False))
+        args, _ = parse("--z-pad-nm", "1.5", "--symmetric-box-z")
+        self.assertEqual((args.z_pad_nm, args.symmetric_box_z), (1.5, True))
+        self.assertEqual((mf.SLAB_Z_PAD_NM, mf.LEGACY_Z_PAD_NM, mf.Settings().box_z_pad_nm), (2.25, 1.5, 2.25))
+
     def test_conversion_is_ten_angstrom_per_nm(self):
         self.assertAlmostEqual(mf.angstrom_to_nm(125.0), 12.5)
         self.assertAlmostEqual(mf.nm_to_angstrom(12.5), 125.0)

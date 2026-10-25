@@ -13,7 +13,8 @@ from dataclasses import replace
 from pathlib import Path
 
 from .backbone_check import parse_segments
-from .config import BOX, NSTEPS, NTERM_SIDE, ORIENT_CHAINS, ORIENT_RESIDUES, ORIENTATION, PDB_ID, PPM_MEMBRANE, Settings
+from .config import (BOX, LEGACY_Z_PAD_NM, NSTEPS, NTERM_SIDE, ORIENT_CHAINS, ORIENT_RESIDUES, ORIENTATION, PDB_ID, PPM_MEMBRANE,
+                     SLAB_Z_PAD_NM, Settings)
 from .embedding import CONVERTIBLE, EMBED_SITES, LIPID_NAMES, lipid_name
 from .orientation import NTERM_SIDES, ORIENTATION_MODES, OrientationRequest, parse_residue_ranges
 from .pipeline import Session, build
@@ -218,8 +219,16 @@ def make_parser() -> argparse.ArgumentParser:
                              "than the frame's receptor (e.g. one transmembrane helix) (default: %(default)s)")
     parser.add_argument("--box-nm", nargs=3, type=float, metavar=("X", "Y", "Z"),
                         help=f"opt-in box edges in nm (default: BOX = {BOX}: the membrane is sliced to the complex plus --xy-buffer "
-                             "in x and y, and z is sized around the bilayer midplane); x and y may only be smaller than the "
+                             "in x and y, and z is the extent of the complex and membrane plus the water padding); x and y may only be "
+                             "smaller than the "
                              "membrane patch, which is then cut around the complex, z must leave the default water padding")
+    parser.add_argument("--z-pad-nm", type=float, metavar="NM",
+                        help=f"water above the highest and below the lowest atom in the automatic box (default: {SLAB_Z_PAD_NM} nm, the "
+                             f"CHARMM-GUI default of 22.5 A; {LEGACY_Z_PAD_NM} nm with --symmetric-box-z)")
+    parser.add_argument("--symmetric-box-z", action="store_true",
+                        help="size the automatic box z symmetrically about the bilayer midplane, with the "
+                             f"{LEGACY_Z_PAD_NM} nm padding, as releases before the asymmetric layout did (default: z is the "
+                             "extent of the complex and membrane plus the padding at both ends)")
     parser.add_argument("--box", nargs=3, type=float, metavar=("X", "Y", "Z"), help=argparse.SUPPRESS)  # earlier releases: edges in A
     parser.add_argument("--bilayer-z-nm", type=float, metavar="Z",
                         help="z of the bilayer centre in the all-atom input, in nm (default: found from the hydrophobic belt)")
@@ -439,6 +448,8 @@ def main(argv: list | None = None) -> int:
     if orientation.opm_file and not orientation.opm_file.is_file():
         parser.error(f"missing --opm-file {orientation.opm_file}")
     out = (args.out or default_out(args.all_atom or args.membrane)).resolve()
+    if args.z_pad_nm is not None and not args.z_pad_nm > 0:
+        parser.error("--z-pad-nm must be positive")
     if not args.xy_buffer > 0:
         parser.error("--xy-buffer must be positive")
     if not args.apl_tolerance > 0:
@@ -452,7 +463,10 @@ def main(argv: list | None = None) -> int:
     if args.archive_previous != "no" and not args.overwrite:
         parser.error("--archive-previous archives the build --overwrite replaces; give --overwrite too")
     settings = Settings(fit_max_core_rmsd_a=args.fit_max_core_rmsd, fit_min_core_fraction=args.fit_min_core_fraction,
-                        box_xy_buffer_nm=args.xy_buffer, apl_validate=args.apl_validate == "yes", apl_slice_tolerance_percent=args.apl_tolerance,
+                        box_xy_buffer_nm=args.xy_buffer,
+                        box_z_symmetric=args.symmetric_box_z,
+                        box_z_pad_nm=args.z_pad_nm or (LEGACY_Z_PAD_NM if args.symmetric_box_z else SLAB_Z_PAD_NM),
+                        apl_validate=args.apl_validate == "yes", apl_slice_tolerance_percent=args.apl_tolerance,
                         rdf_validate=args.rdf_validate == "yes", cg_validate=args.cg_validate == "yes",
                         slice_optimize_offset=args.slice_offset_search and not args.no_slice_offset,
                         counterion_mode=args.counterion_mode, backbone_check=args.backbone_check,

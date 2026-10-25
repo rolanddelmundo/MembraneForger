@@ -7,7 +7,8 @@ from dataclasses import dataclass
 
 __all__ = ['ORIENTATION', 'ORIENT_CHAINS', 'ORIENT_RESIDUES', 'NTERM_SIDE', 'PDB_ID', 'PPM_MEMBRANE', 'BOX',
            'AMINO', 'SOLVENT', 'N_CAP', 'C_CAP', 'RENAME_RESIDUE', 'RENAME_ATOM', 'RENAME_MOLECULE', 'TERMINUS_MENU', 'N_ACYLATED',
-           'DEFAULT_LIGANDS', 'NSTEPS', 'DISULFIDE_MAX_A', 'DISULFIDE_OK_A', 'SLAB_Z_PAD_NM', 'MIN_Z_PAD_TOTAL_NM',
+           'DEFAULT_LIGANDS', 'NSTEPS', 'DISULFIDE_MAX_A', 'DISULFIDE_OK_A', 'SLAB_Z_PAD_NM', 'LEGACY_Z_PAD_NM',
+           'MIN_Z_PAD_TOTAL_NM', 'CUTOFF_NM', 'z_box_need',
            'SALT_M', 'MOLAR_PER_NM3', 'WATERS_PER_NM3', 'ION_RMIN_NM', 'GENION_ATTEMPTS', 'WATER_PROTECT_NM', 'LIPID_SCAN_A',
            'LIPID_DELETE_A', 'GENERATED', 'INTERMEDIATES', 'INDEX_GROUPS', 'FMAX_TARGET', 'H_BOND_RANGE', 'GLPA_MAX_BOND_A',
            'LYS_BACKBONE', 'ONE_LETTER', 'GM3_XML_TO_GLPA', 'LIPIDATED', 'CYSG_HDB', 'DIHRES_EM_FC', 'BB_DIHRES_DPHI', 'EM_MDP', 'LIGAND_GROUP',
@@ -31,9 +32,10 @@ PPM_MEMBRANE = ""          # advanced: PPM 3.0 membrane code, "" = undefined fla
 # BOX
 # ============================================================
 # auto: the coarse-grained membrane is sliced in x and y to the placed complex plus 1.0 nm of membrane on each side
-# (whole lipids only; an axis that would be as wide as the cell is kept whole), and z is sized around the bilayer
-# midplane with SLAB_Z_PAD_NM of water above and below. A user box is opt-in: "x,y,z" in nm, with x and y no larger
-# than the coarse-grained cell (the membrane is cut to that size around the complex) and z at least the automatic minimum.
+# (whole lipids only; an axis that would be as wide as the cell is kept whole), and z is the full extent of the
+# complex and membrane plus SLAB_Z_PAD_NM of water above the highest and below the lowest atom (not centred on the
+# bilayer). A user box is opt-in: "x,y,z" in nm, with x and y no larger than the coarse-grained cell (the membrane is
+# cut to that size around the complex) and z at least the automatic minimum.
 BOX = "auto"               # auto | "x,y,z" in nm, e.g. "14,14,22" (x and y are cut around the complex, z sizes the water)
 
 # ============================================================
@@ -85,7 +87,23 @@ N_ACYLATED = ("GLYP",)
 DEFAULT_LIGANDS = frozenset({"GDP", "MG", "V6G"})  # non-protein residues treated as ligands when no all-atom input says so
 NSTEPS = 50000  # default maximum EM steps
 DISULFIDE_MAX_A, DISULFIDE_OK_A = 3.0, (1.8, 2.2)  # SG-SG below 3.0 A is a disulfide; outside 1.8-2.2 A it is rebuilt
-SLAB_Z_PAD_NM, MIN_Z_PAD_TOTAL_NM = 1.5, 2.0  # water above/below the solute, and the least total z padding
+# Water above and below the complex: 2.25 nm (22.5 A, the CHARMM-GUI default; 1.5 nm in releases before the asymmetric
+# layout), and the least total z padding.
+SLAB_Z_PAD_NM, LEGACY_Z_PAD_NM, MIN_Z_PAD_TOTAL_NM = 2.25, 1.5, 2.0
+CUTOFF_NM = 1.2  # rvdw = rcoulomb in EM_MDP; the water across the z boundary must stay at least twice this
+
+
+def z_box_need(heavy: tuple[float, float], atoms: tuple[float, float], center: float, pad_nm: float, symmetric: bool = False) -> float:
+    """Least box z (nm) that holds the solute and membrane with pad_nm of water on each side."""
+    # heavy and atoms are the (lowest, highest) z of the heavy atoms and of all atoms, hydrogens included. Asymmetric
+    # (the default): the box is the full extent of all atoms plus the padding at both ends, and the bilayer is wherever it
+    # falls. Symmetric (the earlier layout): twice the larger heavy-atom distance from the bilayer centre plus the padding.
+    # The asymmetric layout keeps the water across the periodic boundary at least MIN_Z_PAD_TOTAL_NM and two cutoffs, so
+    # the complex does not see its own image; the symmetric layout is exactly the earlier rule (MIN_Z_PAD_TOTAL_NM only).
+    span = atoms[1] - atoms[0]
+    if symmetric:
+        return max(2.0 * (max(heavy[1] - center, center - heavy[0]) + pad_nm), span + MIN_Z_PAD_TOTAL_NM)
+    return span + max(2.0 * pad_nm, MIN_Z_PAD_TOTAL_NM, 2.0 * CUTOFF_NM)
 SALT_M, ION_RMIN_NM, GENION_ATTEMPTS = 0.15, 0.60, 3
 # Added NaCl is a concentration in the water, so the ion numbers come from the aqueous volume, not the box: protein, ligands
 # and lipids take about 30 % of a membrane box. gmx solvate fills the box from spc216.gro (216 waters in a 1.86206 nm
@@ -359,9 +377,23 @@ class Settings:
     register_min_embedded_pairs: int = 20
     # Water above and below the complex/membrane in the automatic box (nm).
     box_z_pad_nm: float = SLAB_Z_PAD_NM
+    # False: z is the full extent of the solute and membrane plus box_z_pad_nm at both ends, so the shorter side of the
+    # receptor is not given the water the taller side needs. True: the earlier layout, centred on the bilayer midplane.
+    box_z_symmetric: bool = False
     # BOX = auto slices the coarse-grained membrane to the placed complex plus this buffer on each side in x and y
-    # (1.0 nm, the slice_buffer_nm of the earlier workflow); an axis whose window reaches the cell width is not cut.
+    # (1.0 nm, the slice_buffer_nm of the earlier workflow; --xy-buffer 1.6 is two 0.8 nm lipid shells); an axis whose
+    # window reaches the cell width is not cut.
     box_xy_buffer_nm: float = 1.0
+    # Reported (never enforced) after slicing: lipid shells around the transmembrane region (atoms within tmd_half_nm of
+    # the bilayer midplane; a shell is lipid_shell_nm wide, a geometric proxy for one lipid diameter) and the distance
+    # between the complex and its own periodic image in x and y. Fewer than min_lipid_shells estimated shell equivalents
+    # between the TMD and its image on each side, fewer than min_lipid_shells lipid shells per side by Voronoi adjacency
+    # of the lipid coordinates (slicing.voronoi_shells) (Feng et al. 2023, JCTC, section 10.1: at least 2-3), or a complex closer to its image than
+    # min_image_clearance_nm (the non-bonded cutoff), is flagged in the log, run_manifest.json and the slice report.
+    tmd_half_nm: float = 1.5
+    lipid_shell_nm: float = 0.8
+    min_lipid_shells: float = 2.0
+    min_image_clearance_nm: float = CUTOFF_NM
     # A user box must leave at least this much membrane on each side of the complex.
     box_xy_min_buffer_nm: float = 0.5
     # Seam contact threshold between beads of different lipids that only the new periodicity brings together. The
