@@ -75,6 +75,36 @@ class Definitions(unittest.TestCase):
         self.assertEqual(mf.wrong_gm3_centres({**planar, "D": np.array([1.0, 1.0, 0.0])}, [], trans)[1], trans)  # 0: cis
 
 
+class AmideRestraint(unittest.TestCase):
+    """The CHARMM36 term C2S-NF-C1F-C2F (CTL1 NHL C CTL2) has k = 0, so emres holds the amide trans only through its DIHRES row."""
+
+    def test_the_amide_row_is_the_map_dat_trans_definition_in_both_gm3_topologies(self):
+        order = [gm3 for gm3, _ in mf.GM3_XML_TO_GLPA]
+        amide = next(d for d in mf.gm3_trans_definitions(DATA) if mf.GM3_TRANS_NAMES.get(d) == "ceramide amide")
+        quad = tuple(order.index(name) for name in amide)  # zero-based: the topology lists the atoms in GM3_XML_TO_GLPA order
+        for itp, molecule in (("GLPA.itp", "GLPA"), ("GM3.itp", "GM3")):
+            rows = mf.itp_dihedral_restraints([REPO / "membraneforger" / "forcefield" / "toppar" / itp])[molecule]
+            self.assertEqual([t for q, t in rows if q == quad], [180.0], itp)
+
+    def test_three_bands(self):
+        self.assertEqual([mf.trans_band(p) for p in (180.0, -150.0, 149.9, -90.0, 30.1, 30.0, 0.0, -12.0)],
+                         ["trans", "trans", "twisted", "twisted", "twisted", "cis", "cis", "cis"])
+
+    def test_twisted_between_90_and_150_is_reported_but_not_refused_and_under_90_is_refused(self):
+        _, full = correct_gm3()
+        amide = ("C2S", "NF", "C1F", "C2F")
+        a, b, c = (full[n] for n in amide[:3])
+        axis = (c - b) / np.linalg.norm(c - b)
+        start = full["C2F"] - c
+        for angle, band, refused in ((120.0, "twisted", False), (60.0, "twisted", True), (0.0, "cis", True), (175.0, "trans", False)):
+            theta = np.radians(mf.dihedral(a, b, c, full["C2F"]) - angle)  # rotate C2F about the NF-C1F axis to the wanted dihedral
+            named = {**full, "C2F": c + start * np.cos(theta) + np.cross(axis, start) * np.sin(theta) + axis * (axis @ start) * (1 - np.cos(theta))}
+            phi = mf.dihedral(a, b, c, named["C2F"])
+            self.assertAlmostEqual(abs(phi), angle, delta=0.5)
+            self.assertEqual(mf.trans_band(phi), band)
+            self.assertEqual(bool(mf.wrong_gm3_centres(named, [], [amide])[1]), refused, angle)
+
+
 class Structures(unittest.TestCase):
     def test_a_structure_without_gm3_passes_and_a_mirrored_gm3_fails(self):
         xml = (DATA / "GM3.xml").read_text() if (DATA / "GM3.xml").is_file() else ""
@@ -95,6 +125,8 @@ class Structures(unittest.TestCase):
                 self.assertEqual(report["molecules"], 1)
                 if label == "right":
                     self.assertEqual(fails, [])
+                    self.assertEqual(report["bands_by_bond"], {"ceramide C4=C5": {"trans": 1, "twisted": 0, "cis": 0},
+                                                               "ceramide amide": {"trans": 1, "twisted": 0, "cis": 0}})
                 else:
                     self.assertEqual(len(fails), 1)
                     self.assertEqual(sum(report["wrong_by_centre"].values()), 16)
