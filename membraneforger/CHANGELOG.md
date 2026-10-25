@@ -12,6 +12,14 @@
   before it was lost and a second lipidated residue type replaced the first. It now appends to the working copy, adds its block
   only if absent, and skips supplemental bonded rows that are already there. Nothing changes for a system with one lipidated
   residue type.
+
+- **The PSM ceramide amide is restrained during `emres`.** PSM has the same unrestrained amide as GM3: its CHARMM36
+  torsion C2S-NF-C1F-C2F (`CTL1 NHL C CTL2`) has a zero force constant and no DIHRES row covered it. Across 349 archived builds about
+  3 % of the PSM amides ended `emres` below 150 degrees (none cis; the lowest was 113.8 degrees). `PSM.itp` gains the row
+  `30 28 80 82 1 180.0 2.5 DIHRES_FC` (the `map.dat` `[ trans ]` amide definition) after the C4=C5 row, so its DIHRES block has 4
+  rows. It acts only under `-DDIHRES`, i.e. in `emres`, as for GM3. The audit's dihedral-restraint check reads the new row and
+  fails a PSM amide under 90 degrees.
+
 - **Ligands are position-restrained in the equilibration.** The restraint file written for a ligand without its own (GDP, Mg,
   other small molecules) used `POSRES_FC_LIG`, which the topology defaults to 0 and no equilibration mdp sets, so grompp
   compiled it with zero force constant and the ligand moved freely in every restrained step. The rows now use `POSRES_FC_BB`,
