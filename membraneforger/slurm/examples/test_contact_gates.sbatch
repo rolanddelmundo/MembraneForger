@@ -5,7 +5,7 @@
 #SBATCH -c 8                          # cores for backmapping (OpenMM) and gmx
 #SBATCH -N 1
 #SBATCH -p fast,all                   # partition(s): change to yours
-#SBATCH --mem=70G
+#SBATCH --mem=16G                     # peak RSS of a 270k-atom build is about 1.5 GB (was 70G)
 #SBATCH --time=06:00:00
 #SBATCH --output=%x_%j.log            # written in the folder you submit from
 #

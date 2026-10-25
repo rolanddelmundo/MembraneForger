@@ -5,7 +5,7 @@
 #SBATCH -c 8                          # cores for mstool (OpenMM) and gmx mdrun
 #SBATCH -N 1-1                        # single node
 #SBATCH -p compute                    # partition: change to one of yours
-#SBATCH --mem=70G                     # memory per node
+#SBATCH --mem=16G                     # memory per node; peak RSS of a 270k-atom build is about 1.5 GB (was 70G)
 #SBATCH --time=12:00:00               # Time limit hrs:min:sec
 #SBATCH --output=mforger_%A_%a.log    # Standard output and error log
 #
