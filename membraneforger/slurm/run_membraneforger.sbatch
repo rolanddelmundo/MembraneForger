@@ -15,9 +15,9 @@
 #SBATCH --output=%x_%A_%a.log         # one log per task, written in the folder you submit from
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8             # cores for backmapping (OpenMM) and GROMACS; about 1 hour per build on 8
-#SBATCH --mem=70G                     # what a build of a GPCR complex in a bundled membrane needs
-#SBATCH --time=06:00:00               # per task; add about 1 hour per extra run when RUNS > 1 (block 3)
+#SBATCH --cpus-per-task=8             # cores for backmapping (OpenMM) and GROMACS; about 15-30 min per build on 8
+#SBATCH --mem=16G                     # peak RSS of a 270k-atom GPCR build is about 1.5 GB (was 70G); 16G leaves room for larger systems
+#SBATCH --time=06:00:00               # per task; add about 30 minutes per extra run when RUNS > 1 (block 3)
 #SBATCH --array=0-0                   # 0-(number of NAMES - 1): one task per entry of NAMES in block 3
 #SBATCH --mail-type=NONE
 ##SBATCH --partition=PARTITION        # uncomment and fill in if your cluster has no usable default partition
@@ -53,7 +53,7 @@ MEMBRANE=1                                     # 1 = a random bundled GPR139 fra
                                                # one frame by name for every model (python -m membraneforger --list-membranes)
 RUNS=1                                         # > 1 with MEMBRANE=2 (GPR139 has one frame): build each model many times, once
                                                # in each of the first RUNS frames ($WORK/<name>/<frame>/em.gro);
-                                               # the runs are sequential, about 1 hour each: raise --time
+                                               # the runs are sequential, about 15 to 30 minutes each: raise --time
 EXTRA=""                                       # other options, e.g. "--xy-buffer 2.0" for production systems
 # ==============================================================================================================
 
