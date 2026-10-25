@@ -20,6 +20,13 @@
   `int/em.unverified.gro`, `topol.top`, `index_ini.ndx`) are copied to `<out>/previous_builds/<start time>_<status>/` with an `ARCHIVED.json`.
   Nothing is deleted, the folder survives the rerun, and a copy that fails stops the build with the earlier outputs intact. Without the option
   nothing changes.
+- **Faster seam and embedding relaxation.** `relax_seam` keeps a neighbour list (pairs within the repulsion range plus a
+  0.1 nm skin, rebuilt once a bead has moved 0.05 nm) instead of rebuilding a KD-tree every step, and accumulates forces with
+  `np.bincount` instead of `np.add.at`, and applies the intra-lipid shape restraints only to lipids that something has pushed
+  (a lipid at its starting coordinates has zero such force). The relaxed coordinates agree with the previous code to rounding error
+  (1e-11 nm after 200 steps); `embed_complex` on KOR_Membrane1 (15,161 beads, 1200 steps) takes 16 s instead of 59 s.
+  `align_frame_to_box` no longer scans 130 rotations of a frame that is already periodic (about 3 s per build; output
+  unchanged, since such a frame was always returned as read). The unused `slicing.seam_clashes` (superseded by `inherent_pairs` and `created_pairs`) is removed.
 
 - **Ligands are frozen during minimization.** `index_ini.ndx` gains a trailing `LIG` group (the heavy atoms of the ligand
   molecules, i.e. every non-protein residue of the input, a subset of `Protein_LIG`; hydrogens stay free so EM can correct any that were synthesized), and both minimizations (`emres` and `em`) set `freezegrps = LIG` with
