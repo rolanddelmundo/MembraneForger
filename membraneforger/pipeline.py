@@ -406,7 +406,8 @@ def build_topology_and_box(session: Session, membrane: Path, ligands: set, expec
     log(out, notes[0])
     for note in notes[1:]:  # the published system then holds one lipid fewer than the coarse-grained input
         log(out, note, "WARN")
-    topology = run_stage(session, "topology", build_topology, system, work, gmx)
+    topology = run_stage(session, "topology", build_topology, system, work, gmx, session.settings.backbone_restraints,
+                         session.settings.backbone_restraint_inset_deg)
     for note in topology["notes"]:
         log(out, note)
     box = run_stage(session, "box", rebox_system, system, topology, session.box_a[2] / 10.0 if session.box_a else None,

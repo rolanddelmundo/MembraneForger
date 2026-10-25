@@ -62,10 +62,13 @@ def run_em(out: Path, topology: dict, gmx: str, ntomp: int, nsteps: int) -> None
     freeze = freeze_text(topology)
     coulomb = "PME" if abs(topology["charge"]) < 1e-3 else "Cut-off"
     start = "solv_ions.gro"
+    # the EM-only protein backbone phi/psi restraints (BBDIHRES, --backbone-restraints) stay on in both stages; the lipid ones (DIHRES)
+    # only in emres. Both use DIHRES_FC.
+    backbone = " -DBBDIHRES" if has_backbone_dihres(out) else ""
     if has_dihedral_restraints(out):
-        _minimize(out, gmx, "emres", start, coulomb, ntomp, nsteps, f"-DDIHRES -DDIHRES_FC={DIHRES_EM_FC:g}", freeze)
+        _minimize(out, gmx, "emres", start, coulomb, ntomp, nsteps, f"-DDIHRES -DDIHRES_FC={DIHRES_EM_FC:g}" + backbone, freeze)
         start = "emres.gro"
-    _minimize(out, gmx, "em", start, coulomb, ntomp, nsteps, freeze=freeze)
+    _minimize(out, gmx, "em", start, coulomb, ntomp, nsteps, f"-DDIHRES_FC={DIHRES_EM_FC:g}{backbone}" if backbone else "", freeze)
 
 
 def _minimize(out: Path, gmx: str, name: str, structure: str, coulomb: str, ntomp: int, nsteps: int, define: str = "", freeze: str = "") -> None:

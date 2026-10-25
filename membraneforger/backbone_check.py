@@ -20,7 +20,8 @@ WARN (reported, never stops a build): new Ramachandran outliers elsewhere, new o
 already twisted in the start.
 
 What it does not do: tell a modelled residue from an observed one (give --strict-segments for that), judge the input, or catch a
-residue that drifts inside the restraint width into a borderline region. Measured on five restrained builds (GIPR/Gs, 1214 protein
+residue that drifts inside the restraint width into a borderline region (--backbone-restraints clipped keeps the restraint windows
+inside the allowed region, backbone_restraints.py). Measured on five restrained builds (GIPR/Gs, 1214 protein
 residues each) the largest drift was 35.5 degrees and none moved more than 45; on 140 older builds without restraints the median build
 had 10 residues drift by more than 60 degrees, and 65 of them gained at least one Ramachandran outlier.
 """
