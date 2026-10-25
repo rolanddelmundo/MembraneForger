@@ -77,7 +77,7 @@ def profile_change(first: dict, last: dict, midplane_first: float, midplane_last
 
 def frame_series(paths: list[Path], settings: Settings, topology: Path | None = None) -> dict:
     """Per-frame APL, thickness, core hydration and protein orientation from .gro frames, plus anchor and box series."""
-    series = {"frame": [], "apl_upper_A2": [], "apl_lower_A2": [], "thickness_A": [], "core_water_percent": [], "tilt_deg": [],
+    series = {"frame": [], "apl_upper_A2": [], "apl_lower_A2": [], "thickness_A": [], "core_water_percent": [], "core_water_free": [], "tilt_deg": [],
               "depth_A": [], "area_nm2": [], "water_path": [], "interdigitation": [],
               "image_clearance_nm": [], "tmd_image_gap_nm": []}
     anchors, boxes = [], []
@@ -93,6 +93,7 @@ def frame_series(paths: list[Path], settings: Settings, topology: Path | None = 
         series["apl_lower_A2"].append(measure["lower"]["apl_A2"])
         series["thickness_A"].append(thickness["thickness_A"])
         series["core_water_percent"].append(hydration["ratio_percent"] if hydration else np.nan)
+        series["core_water_free"].append(hydration["n_core_free"] if hydration else np.nan)
         series["tilt_deg"].append(orientation["tilt_deg"] if orientation else np.nan)
         series["depth_A"].append(orientation["depth_A"] if orientation else np.nan)
         series["area_nm2"].append(stage["box_nm"][0] * stage["box_nm"][1])
@@ -144,6 +145,47 @@ def water_path_persistence(flags: list, stage: str = "equilibrated") -> dict:
                   + (" (transient)" if 0 < fraction < 0.5 else " (persistent)" if fraction >= 0.5 else ""))
 
 
+CORE_WATER_MIN_FRAMES, CORE_WATER_MIN_MEAN_COUNT = 20, 10   # a trend needs this many frames and this many free waters per frame
+
+
+def core_water_record(ratios, counts=None, stage: str = "equilibrated") -> dict:
+    """Core hydration over the frames: occupancy statistics first, a trend only when there are enough waters to see one.
+
+    Level: the mean percent of bulk is graded like a single frame (PASS <= 1, WARNING <= 5, FAIL beyond). Trend: the
+    first-half and second-half mean counts are compared (Poisson error) only with at least CORE_WATER_MIN_FRAMES frames
+    and CORE_WATER_MIN_MEAN_COUNT free waters per frame; a significantly higher second half is a WARNING. With less data
+    a level that passes is INSUFFICIENT SAMPLING (the inconclusive verdict), not PASS, and a failing level still fails.
+    """
+    ratios = np.asarray(ratios, dtype=float)
+    ratios = ratios[np.isfinite(ratios)]
+    if not len(ratios):
+        return metric("core water", stage, None, "% of bulk", status="NOT RUN", reason="not measurable in these frames")
+    n, mean = len(ratios), float(ratios.mean())
+    level = classify(mean, 1.0, 5.0)
+    note = f"mean {mean:.3f} % of bulk, range {ratios.min():.3f}-{ratios.max():.3f}, water in {int((ratios > 0).sum())} of {n} frames"
+    trend = None
+    if counts is not None:
+        counts = np.asarray(counts, dtype=float)
+        counts = counts[np.isfinite(counts)]
+        if len(counts) == n:
+            note += f"; {counts.mean():.1f} free waters per frame on average"
+            if n >= CORE_WATER_MIN_FRAMES and counts.mean() >= CORE_WATER_MIN_MEAN_COUNT:
+                first, second = counts[:n // 2], counts[n // 2:]
+                sigma = float(np.sqrt(first.mean() / len(first) + second.mean() / len(second)))
+                trend = second.mean() - first.mean() > 2.0 * sigma
+                note += f"; second - first half {second.mean() - first.mean():+.1f} waters (2 sigma = {2.0 * sigma:.1f})"
+    if level in ("WARNING", "FAIL"):
+        status = level
+    elif trend:
+        status = "WARNING"
+    elif trend is None:
+        status = "INSUFFICIENT SAMPLING"
+        note += f"; no trend test (needs >= {CORE_WATER_MIN_FRAMES} frames and >= {CORE_WATER_MIN_MEAN_COUNT} free waters per frame)"
+    else:
+        status = "PASS"
+    return metric("core water", stage, mean, "% of bulk", n=n, deviation=mean, status=status, reason=note)
+
+
 def convergence_gate(energy: dict | None, frames: dict | None, frame_time_ps: np.ndarray | None, settings: Settings) -> list[dict]:
     """Gate 3 records: drift and half-window tests of area, volume, APL, thickness, core hydration, tilt and depth."""
     records = []
@@ -156,6 +198,9 @@ def convergence_gate(energy: dict | None, frames: dict | None, frame_time_ps: np
         for key, units, leaflet in (("apl_upper_A2", "A^2", "upper"), ("apl_lower_A2", "A^2", "lower"), ("thickness_A", "A", None),
                                     ("core_water_percent", "% of bulk", None), ("tilt_deg", "deg", None), ("depth_A", "A", None)):
             values = np.array(frames[key], dtype=float)
+            if key == "core_water_percent":
+                records.append(core_water_record(values, frames.get("core_water_free")))
+                continue
             if not np.isfinite(values).all():
                 records.append(metric(key, "equilibrated", None, units, leaflet, status="NOT RUN", reason="not measurable in these frames"))
                 continue
