@@ -230,8 +230,10 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
     record["slice"] = cut["report"]
     check = cut["report"]["xy_check"]
     if check["checked"]:
-        log(out, f"periodic xy: {check['shells_per_side']:.1f} lipid shells per side around the transmembrane region "
-                 f"(lipids per {check['lipid_shell_nm']:g} nm shell {check['lipids_per_shell']}), complex "
+        covered = check["physical_shell_coverage"]
+        log(out, f"periodic xy: {check['estimated_shell_equivalents_per_side']:.1f} estimated shell equivalents per side; lipid "
+                 f"coordinates fill {covered['upper']['shells_covered']} (upper) / {covered['lower']['shells_covered']} (lower) shells "
+                 f"around the transmembrane region (lipids per {check['lipid_shell_nm']:g} nm shell {check['lipids_per_shell']}), complex "
                  f"{check['complex_image_clearance_nm']:.2f} nm from its own image", "WARN" if check["flags"] else "PASS")
     for flag in check["flags"]:
         log(out, f"periodic xy: {flag}", "WARN")

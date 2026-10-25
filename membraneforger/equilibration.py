@@ -29,6 +29,7 @@ from .config import Settings
 from .membrane_report import AA_LIPIDS, CORE_HALF_NM, matrix_markdown, stage_from_gro, stage_matrix
 from .packing import measure_packing
 from .qc import classify, metric, overall_status, records_table
+from .slicing import periodic_image_gap
 from .structure_metrics import bilayer_thickness, core_hydration, layered_order, protein_orientation, tail_interdigitation, z_density_profiles
 from .trajectory import (
     CHARMM36_CHAINS,
@@ -50,10 +51,19 @@ from .trajectory import (
 __all__ = ['frame_series', 'convergence_gate', 'equilibrium_gate', 'write_equilibration_report', 'main']
 
 
+def image_gap(protein_nm: np.ndarray, box_nm, midplane_nm: float | None, settings: Settings) -> float:
+    """Closest x/y distance (nm) of the protein, or of its transmembrane slab, to its own periodic image in one frame."""
+    points = np.asarray(protein_nm, dtype=float)
+    if midplane_nm is not None and len(points):
+        points = points[np.abs(points[:, 2] - midplane_nm) <= settings.tmd_half_nm]
+    return periodic_image_gap(points, np.asarray(box_nm[:2], dtype=float)) if len(points) > 1 else np.nan
+
+
 def frame_series(paths: list[Path], settings: Settings, topology: Path | None = None) -> dict:
     """Per-frame APL, thickness, core hydration and protein orientation from .gro frames, plus anchor and box series."""
     series = {"frame": [], "apl_upper_A2": [], "apl_lower_A2": [], "thickness_A": [], "core_water_percent": [], "tilt_deg": [],
-              "depth_A": [], "area_nm2": [], "water_path": [], "interdigitation": []}
+              "depth_A": [], "area_nm2": [], "water_path": [], "interdigitation": [],
+              "image_clearance_nm": [], "tmd_image_gap_nm": []}
     anchors, boxes = [], []
     for k, path in enumerate(paths):
         stage = stage_from_gro(Path(path), name="equilibrated", topology=topology)  # falls back to names for stripped frames
@@ -70,6 +80,8 @@ def frame_series(paths: list[Path], settings: Settings, topology: Path | None = 
         series["tilt_deg"].append(orientation["tilt_deg"] if orientation else np.nan)
         series["depth_A"].append(orientation["depth_A"] if orientation else np.nan)
         series["area_nm2"].append(stage["box_nm"][0] * stage["box_nm"][1])
+        series["image_clearance_nm"].append(image_gap(stage["protein_nm"], stage["box_nm"], None, settings))
+        series["tmd_image_gap_nm"].append(image_gap(stage["protein_nm"], stage["box_nm"], stage["midplane_nm"], settings))
         series["water_path"].append(bool(hydration["transmembrane_water_path"]) if hydration else None)
         series["interdigitation"].append(tail_interdigitation(stage["tails"][0], stage["tails"][1], stage["midplane_nm"])["overlap"]
                                          if "tails" in stage else np.nan)
@@ -163,6 +175,15 @@ def equilibrium_gate(energy: dict | None, frames: dict | None, frame_time_ps: np
                               reason=f"{ka['reason']}; {versus['reason']}"))
     else:
         records.append(metric("area compressibility K_A", "final", None, "mN/m", status="NOT RUN", reason="no --energy xvg given"))
+    if frames is not None and len(frames["image_clearance_nm"]):
+        worst = float(np.nanmin(frames["image_clearance_nm"])) if np.isfinite(frames["image_clearance_nm"]).any() else None
+        tmd = float(np.nanmin(frames["tmd_image_gap_nm"])) if np.isfinite(frames["tmd_image_gap_nm"]).any() else float("nan")
+        limit = settings.min_image_clearance_nm
+        records.append(metric("periodic image clearance (x/y)", "final", worst, "nm", reference=limit, n=len(frames["image_clearance_nm"]),
+                              status="NOT RUN" if worst is None else "PASS" if worst >= limit else "WARNING",
+                              reason="closest approach of the protein to its own image over every frame (not only production); "
+                                     f"transmembrane slab {tmd:.2f} nm; limit is the non-bonded cutoff" if worst is not None
+                                     else "no protein in the frames"))
     if frames is not None and frame_time_ps is not None and len(frames["anchors"]) >= 10:
         n = len(frames["anchors"])
         start = int(n * (1.0 - args.production_fraction))

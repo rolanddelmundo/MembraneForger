@@ -119,7 +119,7 @@ embedding and slicing: the build does not equilibrate the coarse-grained membran
 
 ## 3. Slicing (BOX = auto)
 
-The window is the complex's x, y extent plus `--xy-buffer` (1.6 nm, two lipid shells, since this release; 1.0 nm before) on each side; an axis whose window would reach
+The window is the complex's x, y extent plus `--xy-buffer` (1.0 nm) on each side; an axis whose window would reach
 the cell is not cut. The cut is made lipid by lipid:
 
 1. every lipid is made whole under the periodic boundaries of the source cell;

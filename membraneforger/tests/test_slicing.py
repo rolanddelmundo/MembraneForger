@@ -468,28 +468,30 @@ class PeriodicXYCheck(unittest.TestCase):
         check = self.cut(1.0)  # cell 6 x 4 nm, the two atoms diagonal: closest approach to an image is sqrt(2^2 + 2^2) nm
         self.assertTrue(check["checked"])
         self.assertAlmostEqual(check["tmd_image_gap_nm"], 8.0 ** 0.5, places=3)
-        self.assertAlmostEqual(check["shells_per_side"], 8.0 ** 0.5 / 2.0 / 0.8, places=2)
-        self.assertEqual(len(check["flags"]), 1)  # 1.77 shells per side: below 2
-        self.assertIn("lipid shells", check["flags"][0])
+        self.assertAlmostEqual(check["estimated_shell_equivalents_per_side"], 8.0 ** 0.5 / 2.0 / 0.8, places=2)
+        self.assertTrue(any("estimated 1.8 lipid shell equivalents" in f for f in check["flags"]))  # below 2
         self.assertAlmostEqual(check["complex_image_clearance_nm"], 8.0 ** 0.5, places=3)
 
-    def test_a_wide_buffer_passes_and_reports_shell_counts(self):
+    def test_a_wide_buffer_passes_the_geometry_but_sparse_lipids_fill_no_shell(self):
         check = self.cut(3.0)
-        self.assertEqual(check["flags"], [])
-        self.assertGreaterEqual(check["shells_per_side"], 2.0)
+        # geometry passes; the twelve test lipids fill no shell, which only the lipid coordinates reveal
+        self.assertEqual(len(check["flags"]), 1)
+        self.assertIn("lipid coordinates fill 0 (upper) and 0 (lower)", check["flags"][0])
+        self.assertEqual(check["physical_shells_covered"], 0)
+        self.assertGreaterEqual(check["estimated_shell_equivalents_per_side"], 2.0)
         self.assertEqual(len(check["lipids_per_shell"]), 3)
 
     def test_a_complex_closer_than_the_cutoff_to_its_image_is_flagged(self):
         check = self.cut(0.4)  # 4.8 x 2.8 nm cell: atoms 0.8 nm and 0.8 nm from the images
         self.assertTrue(any("periodic image" in f for f in check["flags"]))
 
-    def test_the_default_buffer_is_two_lipid_shells_and_one_nm_stays_reachable(self):
+    def test_the_default_buffer_is_one_nm_and_two_shells_need_1_6(self):
         settings = mf.Settings()
-        self.assertAlmostEqual(settings.box_xy_buffer_nm, settings.min_lipid_shells * settings.lipid_shell_nm)
-        check = PeriodicXYCheck().cut(settings.box_xy_buffer_nm)
-        self.assertGreaterEqual(check["shells_per_side"], settings.min_lipid_shells)  # cropped on both axes: no flag
-        self.assertEqual(check["flags"], [])
-        self.assertTrue(PeriodicXYCheck().cut(1.0)["flags"])
+        self.assertEqual(settings.box_xy_buffer_nm, 1.0)
+        self.assertAlmostEqual(settings.min_lipid_shells * settings.lipid_shell_nm, 1.6)
+        check = PeriodicXYCheck().cut(1.6)
+        self.assertGreaterEqual(check["estimated_shell_equivalents_per_side"], settings.min_lipid_shells)
+        self.assertFalse([f for f in check["flags"] if "estimated" in f])
 
     def test_an_uncut_axis_blames_the_source_cell(self):
         members = [lipid("POPC", 9.0 + 0.3 * k, 10.0, MIDPLANE + (3 if k % 2 else -3)) for k in range(12)]
@@ -497,3 +499,38 @@ class PeriodicXYCheck(unittest.TestCase):
         check = mf.slice_membrane_cg(members, placed, CELL, MIDPLANE, mf.Settings(slice_min_lipids=2))["report"]["xy_check"]
         self.assertTrue(check["flags"])
         self.assertIn("source membrane cell", check["flags"][0])
+
+
+class PhysicalShellCoverage(unittest.TestCase):
+    """lipid_shell_coverage on a hand-made leaflet pair: a square lattice of anchors with a hole where the protein sits."""
+    CELL = np.array([12.0, 12.0])
+    SETTINGS = mf.Settings()
+
+    def lattice(self, hole_radius, spacing=0.6):
+        xs = np.arange(spacing / 2.0, self.CELL[0], spacing)
+        points = np.array([[x, y] for x in xs for y in xs])
+        return points[np.hypot(points[:, 0] - 6.0, points[:, 1] - 6.0) > hole_radius]
+
+    def coverage(self, anchors_upper, anchors_lower):
+        tmd = np.array([[6.0 + r * np.cos(a), 6.0 + r * np.sin(a)] for r in (0.0, 0.5, 1.0) for a in np.linspace(0, 6.28, 12)])
+        anchors = np.vstack([np.c_[anchors_upper, np.ones(len(anchors_upper))], np.c_[anchors_lower, np.zeros(len(anchors_lower))]])
+        return mf.lipid_shell_coverage(tmd, anchors[:, :2], anchors[:, 2] > 0.5, self.CELL, self.SETTINGS)
+
+    def test_a_full_leaflet_covers_three_shells(self):
+        result = self.coverage(self.lattice(1.4), self.lattice(1.4))
+        self.assertEqual((result["upper"]["shells_covered"], result["lower"]["shells_covered"]), (3, 3))
+
+    def test_a_leaflet_missing_its_second_shell_covers_one(self):
+        upper = self.lattice(1.4)
+        distance = np.hypot(upper[:, 0] - 6.0, upper[:, 1] - 6.0)
+        upper = upper[(distance < 2.6) | (distance > 3.6)]  # a lipid-free ring across the second shell (1.4 to 2.6 nm from the TMD edge)
+        result = self.coverage(upper, self.lattice(1.4))
+        self.assertEqual((result["upper"]["shells_covered"], result["lower"]["shells_covered"]), (1, 3))
+
+    def test_a_cell_too_small_to_hold_the_shells_does_not_cover_them(self):
+        small = mf.Settings(lipid_shell_nm=5.0)
+        tmd = np.array([[6.0, 6.0], [6.5, 6.0]])
+        anchors = self.lattice(0.4)
+        result = mf.lipid_shell_coverage(tmd, anchors, np.ones(len(anchors), bool), self.CELL, small)
+        self.assertEqual(result["upper"]["shells_covered"], 2)  # the third shell lies beyond the 12 nm cell
+        self.assertEqual(result["lower"]["shells_covered"], 0)  # no anchors in that leaflet

@@ -124,7 +124,7 @@ into another species with the same twelve-bead Martini 3 layout (`POPC`, `DOPC`,
 ## Box size
 
 By default (`BOX = auto`) the membrane is cut before backmapping, so a large frame costs no more than the complex
-needs. The window is the complex's extent plus `--xy-buffer` (1.6 nm, two lipid shells) in x and y; an axis as wide as the cell is not
+needs. The window is the complex's extent plus `--xy-buffer` (1.0 nm) in x and y; an axis as wide as the cell is not
 cut. z is sized from the protein height around the bilayer midplane.
 
 The cut is made lipid by lipid under periodic boundaries. Each lipid is made whole, one headgroup anchor represents it
@@ -143,12 +143,13 @@ thickness (22.5 A) and can give a larger box than the earlier 1.5 nm: `--z-pad-n
 `--symmetric-box-z --z-pad-nm 1.5` restores the earlier box centred on the midplane.
 
 After slicing, the log and the slice report give the lipid shells around the transmembrane region and the distance of
-the complex to its own image in x and y (`xy_check`). A build with fewer than two shells per side (at least 2-3 are
-recommended, Feng et al. 2023, section 10.1) or a complex closer than the cutoff to its image gets a WARN; nothing is
-resized, so widen the membrane with `--xy-buffer` if you see it.
+the complex to its own image in x and y (`xy_check`): `estimated_shell_equivalents_per_side` is a geometric proxy, and
+`physical_shell_coverage` counts the shells that the lipid coordinates of each leaflet actually fill. A build with fewer
+than two shells by either measure (at least 2-3 are recommended, Feng et al. 2023, section 10.1) or a complex closer
+than the cutoff to its image gets a WARN; nothing is resized, so widen the membrane with `--xy-buffer` if you see it.
 
-The default 1.6 nm buffer is two lipid shells. If the slice gate stops the build, or the xy check warns, rerun with a
-larger `--xy-buffer` (2.0 to 2.4 gives 2.5 to 3 shells); `--xy-buffer 1.0` reproduces the membrane of earlier releases.
+The default 1.0 nm buffer is small for large complexes. If the slice gate stops the build, or the xy check warns, rerun
+with a larger `--xy-buffer` (1.6 is two 0.8 nm lipid shells, 2.4 three; 2.0 is common for production systems).
 
 ## Outputs in detail
 

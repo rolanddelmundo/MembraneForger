@@ -96,3 +96,14 @@ class OrientationDriftAndWaterPath(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PeriodicImageClearance(unittest.TestCase):
+    def test_image_gap_of_a_slab_and_of_the_protein(self):
+        from membraneforger.equilibration import image_gap
+        protein = np.array([[1.0, 1.0, 5.0], [2.0, 1.0, 5.0], [0.5, 1.0, 9.0]])
+        box = [6.0, 6.0, 12.0]
+        full = image_gap(protein, box, None, mf.Settings())
+        slab = image_gap(protein, box, 5.0, mf.Settings())
+        self.assertAlmostEqual(full, 4.5, places=6)   # the atom at x = 0.5 is 4.5 nm from the image of the one at x = 2
+        self.assertAlmostEqual(slab, 5.0, places=6)   # only the two atoms at the midplane count: 2 to 1 + 6

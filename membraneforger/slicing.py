@@ -59,11 +59,14 @@ from .config import Settings
 from .lipids import anchor_bead, anchor_xyz, leaflet_of
 from .structio import element, xyz_nm
 
-__all__ = ['xy_periodic_check', 'solute_extent', 'crop_windows', 'image_molecule', 'make_whole', 'lipid_anchor', 'anchor_image_shift',
+__all__ = ['xy_periodic_check', 'periodic_image_gap', 'lipid_shell_coverage', 'SHELL_MIN_POINTS', 'solute_extent', 'crop_windows',
+           'image_molecule', 'make_whole', 'lipid_anchor', 'anchor_image_shift',
            'all_beads_inside', 'select_lipids', 'seam_clashes', 'created_pairs', 'pair_keys', 'offset_slack', 'relax_seam',
            'remove_hard_core_overlaps',
            'composition_distance', 'score_offset', 'choose_offset', 'leaflet_counts', 'selection_diagnostics',
            'slice_membrane_cg']
+
+SHELL_MIN_POINTS = 25  # a shell with fewer 0.2 nm grid points than this (1 nm^2) is not a shell of the cell
 
 
 def solute_extent(placed: list[dict]) -> tuple[np.ndarray, np.ndarray]:
@@ -370,45 +373,83 @@ def selection_diagnostics(decisions: list[dict]) -> dict:
                     "area, which under-packed the cut membrane; the anchor rule keeps the lipid population of the source"}
 
 
+def periodic_image_gap(points_xy: np.ndarray, cell: np.ndarray) -> float:
+    """Closest distance (nm) between a set of points and its own periodic images in x and y."""
+    tree, nearest = cKDTree(points_xy[:, :2]), np.inf
+    for sx, sy in ((1, 0), (0, 1), (1, 1), (1, -1)):
+        nearest = min(nearest, float(tree.query(points_xy[:, :2] + np.array([sx, sy]) * cell)[0].min()))
+    return nearest
+
+
+def lipid_shell_coverage(tmd_xy: np.ndarray, anchors_xy: np.ndarray, upper: np.ndarray, cell: np.ndarray, settings: Settings) -> dict:
+    """Shells around the transmembrane region that the actual lipid anchors of each leaflet fill, from the lipid coordinates."""
+    # A shell is lipid_shell_nm wide and starts shell_start_nm from the nearest TMD heavy atom (the protein surface). A point
+    # of the periodic cell in the shell counts as filled in a leaflet when an anchor of that leaflet lies within
+    # shell_fill_nm; a shell is covered in a leaflet when at least shell_covered_fraction of its points are filled, it has at
+    # least SHELL_MIN_POINTS points (a cell too small to hold the shell at all does not cover it), and every shell inside it
+    # is covered. The distance to the TMD is periodic, so the images' shells compete for the same points.
+    step = 0.2
+    axes = [np.arange(step / 2.0, c, step) for c in cell]
+    grid = np.array([[x, y] for x in axes[0] for y in axes[1]])
+    distance = cKDTree(tmd_xy % cell, boxsize=cell).query(grid)[0]
+    width, start = settings.lipid_shell_nm, settings.shell_start_nm
+    result = {}
+    for name, mask in (("upper", upper), ("lower", ~upper)):
+        if not mask.any():
+            result[name] = {"shells_covered": 0, "fractions": [None, None, None], "points": [0, 0, 0]}
+            continue
+        near = cKDTree(anchors_xy[mask] % cell, boxsize=cell).query(grid)[0]
+        covered, fractions, points = 0, [], []
+        for k in range(3):
+            inside = (distance >= start + k * width) & (distance < start + (k + 1) * width)
+            points.append(int(inside.sum()))
+            fractions.append(round(float((near[inside] <= settings.shell_fill_nm).mean()), 3) if inside.any() else None)
+        for fraction, count in zip(fractions, points):
+            if count < SHELL_MIN_POINTS or fraction is None or fraction < settings.shell_covered_fraction:
+                break
+            covered += 1
+        result[name] = {"shells_covered": covered, "fractions": fractions, "points": points}
+    return result
+
+
 def xy_periodic_check(complex_a: list[dict], sliced: list[dict], cell: np.ndarray, midplane_nm: float, settings: Settings,
                       cropped: tuple = ()) -> dict:
     """Lipid shells around the transmembrane region and the complex's distance to its own periodic images in x and y."""
     # Reported, not enforced: a violation is listed in `flags` and the caller logs it; no dimension is changed here.
     # `cropped` says per axis whether the membrane was cut; a flag on an axis that was not cut means the source cell
     # itself is too small, which a larger buffer cannot fix, and the message says so.
-    # shells_between_images is the closest approach of the TMD to its image through the membrane, in lipid shells, and
-    # shells_per_side half of it (each of the two proteins owns half of the lipids between them).
+    # estimated_shell_equivalents_per_side is a geometric proxy: half the closest approach of the TMD to its image through
+    # the membrane (each of the two proteins owns half of the lipids between them) in units of lipid_shell_nm. The
+    # physical coverage is measured from the lipid anchors of each leaflet (lipid_shell_coverage); only it supports a
+    # statement that two lipid shells surround the receptor.
     heavy = np.array([[a["x"], a["y"], a["z"]] for a in complex_a if element(a["atom"]) != "H"], dtype=float) / 10.0
     tmd = heavy[np.abs(heavy[:, 2] - midplane_nm) <= settings.tmd_half_nm]
     if not len(tmd):
         return {"checked": False, "reason": "no complex heavy atom within tmd_half_nm of the bilayer midplane", "flags": []}
-
-    def image_gap(points: np.ndarray) -> float:
-        tree, nearest = cKDTree(points[:, :2]), np.inf
-        for sx, sy in ((1, 0), (0, 1), (1, 1), (1, -1)):
-            shifted = points[:, :2] + np.array([sx, sy]) * cell
-            nearest = min(nearest, float(tree.query(shifted)[0].min()))
-        return nearest
-
-    tmd_gap, complex_gap = image_gap(tmd), image_gap(heavy)
-    anchors = np.array([anchor_xyz(m["xyz"], [b["atom"] for b in m["beads"]], anchor_bead(m["cg"])) for m in sliced])[:, :2]
-    wrapped = cKDTree(tmd[:, :2] % cell, boxsize=cell)
-    distance = wrapped.query(anchors % cell)[0]
+    tmd_gap, complex_gap = periodic_image_gap(tmd, cell), periodic_image_gap(heavy, cell)
+    anchors = np.array([anchor_xyz(m["xyz"], [b["atom"] for b in m["beads"]], anchor_bead(m["cg"])) for m in sliced])
+    distance = cKDTree(tmd[:, :2] % cell, boxsize=cell).query(anchors[:, :2] % cell)[0]
     width = settings.lipid_shell_nm
     counts = [int(((distance >= i * width) & (distance < (i + 1) * width)).sum()) for i in range(3)]
     per_side = tmd_gap / 2.0 / width
+    physical = lipid_shell_coverage(tmd[:, :2], anchors[:, :2], anchors[:, 2] >= midplane_nm, cell, settings)
     flags = []
     remedy = ("the source membrane cell is not cut on every axis and is too small for the complex: use a larger "
               "coarse-grained membrane (the bundled frames are 18 nm wide)" if not all(cropped) and len(cropped) else "raise --xy-buffer")
     if per_side < settings.min_lipid_shells:
-        flags.append(f"{per_side:.1f} lipid shells ({0.5 * tmd_gap:.2f} nm) per side between the transmembrane region and its image; "
-                     f"at least {settings.min_lipid_shells:g} recommended (Feng et al. 2023): {remedy}")
+        flags.append(f"an estimated {per_side:.1f} lipid shell equivalents ({0.5 * tmd_gap:.2f} nm) per side between the transmembrane "
+                     f"region and its image; at least {settings.min_lipid_shells:g} recommended (Feng et al. 2023): {remedy}")
+    least = min(v["shells_covered"] for v in physical.values())
+    if least < settings.min_lipid_shells:
+        flags.append(f"the lipid coordinates fill {physical['upper']['shells_covered']} (upper) and {physical['lower']['shells_covered']} "
+                     f"(lower) shells around the transmembrane region; at least {settings.min_lipid_shells:g} recommended: {remedy}")
     if complex_gap < settings.min_image_clearance_nm:
         flags.append(f"the complex is {complex_gap:.2f} nm from its own periodic image in x/y, below the "
                      f"{settings.min_image_clearance_nm:g} nm cutoff: {remedy}")
     return {"checked": True, "tmd_atoms": int(len(tmd)), "lipid_shell_nm": width, "tmd_image_gap_nm": round(tmd_gap, 3),
-            "shells_between_images": round(tmd_gap / width, 2), "shells_per_side": round(per_side, 2),
-            "lipids_per_shell": counts, "complex_image_clearance_nm": round(complex_gap, 3),
+            "shells_between_images": round(tmd_gap / width, 2), "estimated_shell_equivalents_per_side": round(per_side, 2),
+            "lipids_per_shell": counts, "physical_shell_coverage": physical, "physical_shells_covered": least,
+            "complex_image_clearance_nm": round(complex_gap, 3),
             "min_lipid_shells": settings.min_lipid_shells, "min_image_clearance_nm": settings.min_image_clearance_nm, "flags": flags}
 
 

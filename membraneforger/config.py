@@ -377,18 +377,23 @@ class Settings:
     # receptor is not given the water the taller side needs. True: the earlier layout, centred on the bilayer midplane.
     box_z_symmetric: bool = False
     # BOX = auto slices the coarse-grained membrane to the placed complex plus this buffer on each side in x and y
-    # (1.6 nm = two lipid shells of lipid_shell_nm, min_lipid_shells x lipid_shell_nm, so the transmembrane region has at
-    # least two shells between it and its image; 1.0 nm, the slice_buffer_nm of the earlier workflow, is --xy-buffer 1.0);
-    # an axis whose window reaches the cell width is not cut.
-    box_xy_buffer_nm: float = 1.6
+    # (1.0 nm, the slice_buffer_nm of the earlier workflow; --xy-buffer 1.6 is two 0.8 nm lipid shells); an axis whose
+    # window reaches the cell width is not cut.
+    box_xy_buffer_nm: float = 1.0
     # Reported (never enforced) after slicing: lipid shells around the transmembrane region (atoms within tmd_half_nm of
-    # the bilayer midplane; a shell is lipid_shell_nm wide, about one lipid diameter) and the water-free distance between
-    # the complex and its own periodic image in x and y. Fewer than min_lipid_shells shells between the TMD and its
-    # image on each side (Feng et al. 2023, JCTC, section 10.1: at least 2-3), or a complex closer to its image than
-    # min_image_clearance_nm (the non-bonded cutoff), is flagged in the log, run_manifest.json and the slice report.
+    # the bilayer midplane; a shell is lipid_shell_nm wide, a geometric proxy for one lipid diameter) and the distance
+    # between the complex and its own periodic image in x and y. Fewer than min_lipid_shells estimated shell equivalents
+    # between the TMD and its image on each side, fewer than min_lipid_shells shells actually filled by the lipid
+    # coordinates (a shell starts shell_start_nm from the protein; it is filled where shell_covered_fraction of its
+    # points have a lipid anchor of the leaflet within shell_fill_nm) (Feng et al. 2023, JCTC, section 10.1: at least
+    # 2-3), or a complex closer to its image than min_image_clearance_nm (the non-bonded cutoff), is flagged in the log,
+    # run_manifest.json and the slice report.
     tmd_half_nm: float = 1.5
     lipid_shell_nm: float = 0.8
     min_lipid_shells: float = 2.0
+    shell_start_nm: float = 0.4
+    shell_fill_nm: float = 0.6
+    shell_covered_fraction: float = 0.95
     min_image_clearance_nm: float = CUTOFF_NM
     # A user box must leave at least this much membrane on each side of the complex.
     box_xy_min_buffer_nm: float = 0.5
