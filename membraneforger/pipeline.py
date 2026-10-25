@@ -303,11 +303,11 @@ def backmap_and_assemble(session: Session, prepared: dict, seed: int) -> Path:
     # minimization, and a wrong one counts as a wrong configuration: the verdict then tries another seed.
     gm3, _ = run_stage(session, "backmap", check_gm3_stereo, out / "membrane.pdb", session.data)
     isomers["gm3_sugar_centres_or_cis_bonds"] = sum(gm3["wrong_by_centre"].values()) + sum(gm3["cis_by_bond"].values())
-    isomers["gm3_stereochemistry"] = {k: gm3[k] for k in ("molecules", "wrong_by_centre", "cis_by_bond", "affected_molecules")}
+    isomers["gm3_stereochemistry"] = {k: gm3[k] for k in ("molecules", "wrong_by_centre", "cis_by_bond", "bands_by_bond", "affected_molecules")}
     if isomers["gm3_sugar_centres_or_cis_bonds"]:
         log(out, f"GM3 stereochemistry of membrane.pdb: {len(gm3['affected_molecules'])} of {gm3['molecules']} molecules have an inverted "
-                 f"sugar centre or a cis ceramide bond ({isomers['gm3_sugar_centres_or_cis_bonds']} in all); counted as wrong configurations",
-            "WARN")
+                 f"sugar centre or a cis or half-twisted ceramide bond ({isomers['gm3_sugar_centres_or_cis_bonds']} in all); counted as wrong "
+                 "configurations", "WARN")
     elif gm3["molecules"]:
         log(out, f"GM3 stereochemistry of membrane.pdb: all 16 sugar stereocentres and both ceramide trans bonds correct in every one "
                  f"of the {gm3['molecules']} molecules", "PASS")
