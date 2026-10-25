@@ -31,7 +31,7 @@ PPM_MEMBRANE = ""          # advanced: PPM 3.0 membrane code, "" = undefined fla
 # ============================================================
 # BOX
 # ============================================================
-# auto: the coarse-grained membrane is sliced in x and y to the placed complex plus 1.0 nm of membrane on each side
+# auto: the coarse-grained membrane is sliced in x and y to the placed complex plus 1.2 nm of membrane on each side
 # (whole lipids only; an axis that would be as wide as the cell is kept whole), and z is the full extent of the
 # complex and membrane plus SLAB_Z_PAD_NM of water above the highest and below the lowest atom (not centred on the
 # bilayer). A user box is opt-in: "x,y,z" in nm, with x and y no larger than the coarse-grained cell (the membrane is
@@ -377,9 +377,9 @@ class Settings:
     # receptor is not given the water the taller side needs. True: the earlier layout, centred on the bilayer midplane.
     box_z_symmetric: bool = False
     # BOX = auto slices the coarse-grained membrane to the placed complex plus this buffer on each side in x and y
-    # (1.0 nm, the slice_buffer_nm of the earlier workflow; --xy-buffer 1.6 is two 0.8 nm lipid shells); an axis whose
-    # window reaches the cell width is not cut.
-    box_xy_buffer_nm: float = 1.0
+    # (1.2 nm, the smallest buffer that gives two lipid shells in the bundled KOR and GPR139 frames; 1.0 and 1.6, two
+    # 0.8 nm lipid shells, stay available through --xy-buffer); an axis whose window reaches the cell width is not cut.
+    box_xy_buffer_nm: float = 1.2
     # Reported (never enforced) after slicing: lipid shells around the transmembrane region (atoms within tmd_half_nm of
     # the bilayer midplane; a shell is lipid_shell_nm wide, a geometric proxy for one lipid diameter) and the distance
     # between the complex and its own periodic image in x and y. Fewer than min_lipid_shells estimated shell equivalents
