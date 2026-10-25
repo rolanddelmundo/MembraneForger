@@ -26,6 +26,7 @@ from .minimization import *
 from .stereo import *
 from .audit import *
 from .backbone_check import *
+from .backbone_restraints import *
 from .contacts import *
 from .reporting import *
 from .pipeline import *

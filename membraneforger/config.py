@@ -11,7 +11,8 @@ __all__ = ['ORIENTATION', 'ORIENT_CHAINS', 'ORIENT_RESIDUES', 'NTERM_SIDE', 'PDB
            'MIN_Z_PAD_TOTAL_NM', 'CUTOFF_NM', 'z_box_need',
            'SALT_M', 'MOLAR_PER_NM3', 'WATERS_PER_NM3', 'ION_RMIN_NM', 'GENION_ATTEMPTS', 'WATER_PROTECT_NM', 'LIPID_SCAN_A',
            'LIPID_DELETE_A', 'GENERATED', 'INTERMEDIATES', 'INDEX_GROUPS', 'FMAX_TARGET', 'H_BOND_RANGE', 'GLPA_MAX_BOND_A',
-           'LYS_BACKBONE', 'ONE_LETTER', 'GM3_XML_TO_GLPA', 'LIPIDATED', 'CYSG_HDB', 'DIHRES_EM_FC', 'BB_DIHRES_DPHI', 'EM_MDP', 'LIGAND_GROUP',
+           'LYS_BACKBONE', 'ONE_LETTER', 'GM3_XML_TO_GLPA', 'LIPIDATED', 'CYSG_HDB', 'DIHRES_EM_FC', 'BB_DIHRES_DPHI', 'BB_DIHRES_MIN_HALF_DEG',
+           'EM_MDP', 'LIGAND_GROUP',
            'APL_VALIDATE', 'APL_SLICE_WARNING_PERCENT', 'APL_SLICE_TOLERANCE_PERCENT', 'RDF_VALIDATE', 'CG_VALIDATE', 'Settings']
 
 # ============================================================
@@ -119,7 +120,8 @@ GENERATED = ("oriented.pdb", "orientation_report.json", "membrane.pdb", "aa_cg_m
              "ions_mdout.mdp", "em.mdp", "mdout.mdp", "em_mdout.mdp", "emres_mdout.mdp", "em.tpr", "em.log", "em.edr",
              "em.trr", "em.gro", "em.unverified.gro", "emres.mdp", "emres.tpr", "emres.log", "emres.edr", "emres.trr",
              "emres.gro", "em.cpt", "emres.cpt", "em_prev.cpt", "emres_prev.cpt", "toppar",
-             "audit.json", "backbone_check.json", "run_manifest.json", "ring_piercing.json", "membrane_validation.json", "membrane_validation.md",
+             "audit.json", "backbone_check.json", "backbone_restraints.tsv", "run_manifest.json", "ring_piercing.json",
+             "membrane_validation.json", "membrane_validation.md",
              "membrane_validation_lipids.tsv", "membrane_validation_apl.png", "membrane_validation_species.png",
              "membrane_validation_rdf.png", "membrane_validation_composition.png", "membrane_validation_protein_density.png",
              "em_clash_trace.json", "contacts.json", "work", "int")
@@ -261,9 +263,12 @@ CYSG_HDB = """CYSG		37
 # EM that is validated and published starts from its result.
 DIHRES_EM_FC = 1000.0
 
-# Half-width (degrees) of the flat-bottom backbone phi/psi restraints that a topology may carry for EM only (#ifdef BBDIHRES);
-# the backbone check allows a drift of this width plus --backbone-drift-margin when such restraints are present.
+# Half-width (degrees) of the flat-bottom backbone phi/psi restraints that a topology may carry for EM only (#ifdef BBDIHRES,
+# written by --backbone-restraints fixed|clipped, backbone_restraints.py); the backbone check allows a drift of this width plus
+# --backbone-drift-margin when such restraints are present. A clipped window narrower than BB_DIHRES_MIN_HALF_DEG on either side is
+# not used: the residue keeps +-BB_DIHRES_DPHI and is flagged (flag_narrow) for refinement.
 BB_DIHRES_DPHI = 30.0
+BB_DIHRES_MIN_HALF_DEG = 5.0
 
 EM_MDP = """{define}integrator      = steep
 emtol           = {emtol}
@@ -436,6 +441,11 @@ class Settings:
     # With the restraints on, five builds of a 1214-residue receptor-G protein complex drifted at most 35.5 degrees and none beyond 45.
     backbone_check: str = "report"
     backbone_drift_margin_deg: float = 30.0
+    # EM-only backbone phi/psi restraints (backbone_restraints.py): "off" (none), "fixed" (input +-BB_DIHRES_DPHI) or "clipped" (that
+    # window cut back to the backbone check's allowed Ramachandran region, backbone_restraint_inset_deg inside its boundary). The inset
+    # is a numerical guard against the finite restraint, not a physical tolerance. Off by default, as in every earlier release.
+    backbone_restraints: str = "off"
+    backbone_restraint_inset_deg: float = 5.0
     rdf_peak_warning_a: float = 0.5
     rdf_max_peak_shift_a: float = 1.0
     rdf_max_noise_units: float = 3.0
