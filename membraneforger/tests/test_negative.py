@@ -8,8 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from .common import (AA_PDB, CG_GRO, CHOL3, FORCEFIELD, MAPPING, POPC, REPO, failure, gmx_skip_reason, mf, residue, skip_if,
-                     small_system)
+from .common import AA_PDB, CG_GRO, CHOL3, FORCEFIELD, MAPPING, POPC, REPO, failure, gmx_skip_reason, mf, residue, skip_if, small_system
 
 AA_LINES = [l for l in AA_PDB.read_text().splitlines() if l[:6] in ("ATOM  ", "HETATM")]
 GRO_LINES = CG_GRO.read_text().splitlines()
