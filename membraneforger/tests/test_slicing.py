@@ -485,9 +485,9 @@ class PeriodicXYCheck(unittest.TestCase):
         check = self.cut(0.4)  # 4.8 x 2.8 nm cell: atoms 0.8 nm and 0.8 nm from the images
         self.assertTrue(any("periodic image" in f for f in check["flags"]))
 
-    def test_the_default_buffer_is_one_nm_and_two_shells_need_1_6(self):
+    def test_the_default_buffer_is_1_2_nm_and_two_shells_need_1_6(self):
         settings = mf.Settings()
-        self.assertEqual(settings.box_xy_buffer_nm, 1.0)
+        self.assertEqual(settings.box_xy_buffer_nm, 1.2)
         self.assertAlmostEqual(settings.min_lipid_shells * settings.lipid_shell_nm, 1.6)
         check = PeriodicXYCheck().cut(1.6)
         self.assertGreaterEqual(check["estimated_shell_equivalents_per_side"], settings.min_lipid_shells)

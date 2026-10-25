@@ -50,7 +50,7 @@ The complete complex (partners, peptides, ligands, ions) is moved as one rigid b
 
 | Option | Meaning | Default |
 |---|---|---|
-| `--xy-buffer NM` | Membrane kept around the complex on each side in x and y when the box is automatic. `--xy-buffer 1.6` is two 0.8 nm lipid shells; the xy check after slicing warns when the lipids fill fewer than two. Large complexes and single helices often need 2–3. | `1.0` nm |
+| `--xy-buffer NM` | Membrane kept around the complex on each side in x and y when the box is automatic. `1.0` and `1.6` (two 0.8 nm lipid shells) stay available; the xy check after slicing warns when the lipids fill fewer than two. Large complexes and single helices often need 2–3. | `1.2` nm |
 | `--z-pad-nm NM` | Water above the highest and below the lowest atom in the automatic box. | 2.25 (1.5 with `--symmetric-box-z`) |
 | `--symmetric-box-z` | Size the automatic box z symmetrically about the bilayer midplane with 1.5 nm of water, as releases before the asymmetric layout did; `--symmetric-box-z --z-pad-nm 1.5` is the earlier box. By default z is the extent of the complex and membrane plus the padding at both ends. | off |
 | `--box-nm X Y Z` | Opt-in box edges in nm. x and y may only be smaller than the membrane patch, which is then cut around the complex. z must leave the default water padding above and below the complex and membrane. | automatic |

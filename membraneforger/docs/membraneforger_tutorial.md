@@ -119,7 +119,7 @@ embedding and slicing: the build does not equilibrate the coarse-grained membran
 
 ## 3. Slicing (BOX = auto)
 
-The window is the complex's x, y extent plus `--xy-buffer` (1.0 nm) on each side; an axis whose window would reach
+The window is the complex's x, y extent plus `--xy-buffer` (1.2 nm) on each side; an axis whose window would reach
 the cell is not cut. The cut is made lipid by lipid:
 
 1. every lipid is made whole under the periodic boundaries of the source cell;
@@ -658,7 +658,7 @@ the build's own checks). Where the thresholds live: `Settings` in `config.py`
 
 ## 8. Settings
 
-`membraneforger/config.py` carries the defaults, each with the reasoning: `box_xy_buffer_nm` (1.0), the slice
+`membraneforger/config.py` carries the defaults, each with the reasoning: `box_xy_buffer_nm` (1.2), the slice
 the opt-in offset search (`slice_optimize_offset` False, `slice_offset_search_nm` 0.5, `slice_offset_step_nm` 0.1), the ion mode (`counterion_mode` additive), the seam
 (`seam_min_bead_nm` 0.30, `seam_hard_core_nm` 0.15, `seam_relax_steps` 400), the force-field contact gate
 (`contact_rmin_fraction` 0.6, `bond_crossing_nm` 0.12), the gate (`APL_VALIDATE`,
