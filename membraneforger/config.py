@@ -10,7 +10,7 @@ __all__ = ['ORIENTATION', 'ORIENT_CHAINS', 'ORIENT_RESIDUES', 'NTERM_SIDE', 'PDB
            'DEFAULT_LIGANDS', 'NSTEPS', 'DISULFIDE_MAX_A', 'DISULFIDE_OK_A', 'SLAB_Z_PAD_NM', 'MIN_Z_PAD_TOTAL_NM',
            'SALT_M', 'MOLAR_PER_NM3', 'WATERS_PER_NM3', 'ION_RMIN_NM', 'GENION_ATTEMPTS', 'WATER_PROTECT_NM', 'LIPID_SCAN_A',
            'LIPID_DELETE_A', 'GENERATED', 'INTERMEDIATES', 'INDEX_GROUPS', 'FMAX_TARGET', 'H_BOND_RANGE', 'GLPA_MAX_BOND_A',
-           'LYS_BACKBONE', 'ONE_LETTER', 'GM3_XML_TO_GLPA', 'LIPIDATED', 'CYSG_HDB', 'DIHRES_EM_FC', 'EM_MDP', 'LIGAND_GROUP',
+           'LYS_BACKBONE', 'ONE_LETTER', 'GM3_XML_TO_GLPA', 'LIPIDATED', 'CYSG_HDB', 'DIHRES_EM_FC', 'BB_DIHRES_DPHI', 'EM_MDP', 'LIGAND_GROUP',
            'APL_VALIDATE', 'APL_SLICE_WARNING_PERCENT', 'APL_SLICE_TOLERANCE_PERCENT', 'RDF_VALIDATE', 'CG_VALIDATE', 'Settings']
 
 # ============================================================
@@ -101,7 +101,7 @@ GENERATED = ("oriented.pdb", "orientation_report.json", "membrane.pdb", "aa_cg_m
              "ions_mdout.mdp", "em.mdp", "mdout.mdp", "em_mdout.mdp", "emres_mdout.mdp", "em.tpr", "em.log", "em.edr",
              "em.trr", "em.gro", "em.unverified.gro", "emres.mdp", "emres.tpr", "emres.log", "emres.edr", "emres.trr",
              "emres.gro", "em.cpt", "emres.cpt", "em_prev.cpt", "emres_prev.cpt", "toppar",
-             "audit.json", "run_manifest.json", "ring_piercing.json", "membrane_validation.json", "membrane_validation.md",
+             "audit.json", "backbone_check.json", "run_manifest.json", "ring_piercing.json", "membrane_validation.json", "membrane_validation.md",
              "membrane_validation_lipids.tsv", "membrane_validation_apl.png", "membrane_validation_species.png",
              "membrane_validation_rdf.png", "membrane_validation_composition.png", "membrane_validation_protein_density.png",
              "em_clash_trace.json", "contacts.json", "work", "int")
@@ -242,6 +242,10 @@ CYSG_HDB = """CYSG		37
 # restraints on (force constant in kJ/mol/rad^2, the strongest CHARMM-GUI equilibration value) and the unrestrained
 # EM that is validated and published starts from its result.
 DIHRES_EM_FC = 1000.0
+
+# Half-width (degrees) of the flat-bottom backbone phi/psi restraints that a topology may carry for EM only (#ifdef BBDIHRES);
+# the backbone check allows a drift of this width plus --backbone-drift-margin when such restraints are present.
+BB_DIHRES_DPHI = 30.0
 
 EM_MDP = """{define}integrator      = steep
 emtol           = {emtol}
@@ -393,6 +397,12 @@ class Settings:
     apl_slice_tolerance_percent: float = APL_SLICE_TOLERANCE_PERCENT
     rdf_validate: bool = RDF_VALIDATE.lower() == "yes"
     cg_validate: bool = CG_VALIDATE.lower() == "yes"
+    # Backbone check after EM (backbone_check.py), measured against the structure EM started from. "yes" stops the build on a peptide
+    # bond EM twisted or changed, a C-alpha / C-beta it inverted, a --strict-segments residue in a Ramachandran outlier region, or (backbone
+    # restraints on) a phi/psi that moved more than BB_DIHRES_DPHI + backbone_drift_margin_deg; "report" lists the same as warnings; "no" skips it.
+    # With the restraints on, five builds of a 1214-residue receptor-G protein complex drifted at most 35.5 degrees and none beyond 45.
+    backbone_check: str = "report"
+    backbone_drift_margin_deg: float = 30.0
     rdf_peak_warning_a: float = 0.5
     rdf_max_peak_shift_a: float = 1.0
     rdf_max_noise_units: float = 3.0

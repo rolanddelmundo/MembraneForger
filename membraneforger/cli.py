@@ -12,6 +12,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
+from .backbone_check import parse_segments
 from .config import BOX, NSTEPS, NTERM_SIDE, ORIENT_CHAINS, ORIENT_RESIDUES, ORIENTATION, PDB_ID, PPM_MEMBRANE, Settings
 from .embedding import CONVERTIBLE, EMBED_SITES, LIPID_NAMES, lipid_name
 from .orientation import NTERM_SIDES, ORIENTATION_MODES, OrientationRequest, parse_residue_ranges
@@ -301,6 +302,22 @@ def make_parser() -> argparse.ArgumentParser:
                        help="opt in to shifting the slice window by up to 0.5 nm to the offset that best preserves lipid density "
                             "(default: the window is centred on the complex, which had the smaller APL deviation in the bundled frames)")
     check.add_argument("--no-slice-offset", action="store_true", help=argparse.SUPPRESS)  # kept from earlier releases: centring is now the default
+    after = parser.add_argument_group("checks after minimization and handling of an earlier build")
+    after.add_argument("--backbone-check", choices=("yes", "no", "report"), default=defaults.backbone_check,
+                       help="compare the protein backbone after EM with the structure EM started from: yes stops the build on a peptide "
+                            "bond EM twisted or flipped to another isomer, a C-alpha or Thr/Ile C-beta it inverted, or (with the EM backbone "
+                            "restraints on) a phi/psi that moved more than 30 deg beyond the restraint width; report lists the same as "
+                            "warnings; no skips it (default: %(default)s)")
+    after.add_argument("--backbone-drift-margin", type=float, default=defaults.backbone_drift_margin_deg, metavar="DEG",
+                       help="degrees added to the 30 deg restraint width before a phi/psi drift fails the backbone check (default: %(default)s)")
+    after.add_argument("--strict-segments", metavar="CHAIN:FIRST-LAST[,...]", default="",
+                       help="residues of the input that were modelled rather than observed (e.g. R:338-345,A:5-9): a Ramachandran outlier after EM "
+                            "in one of them fails the backbone check, even if the residue was not an outlier before; chain letters and residue "
+                            "numbers are those of the all-atom input")
+    after.add_argument("--archive-previous", choices=("no", "reports", "all"), default="no",
+                       help="with --overwrite, first copy the earlier build's reports (reports) or reports and structures (all: em.gro, "
+                            "topol.top, index_ini.ndx) to <out>/previous_builds/<start time>_<status>/ so a rejected attempt survives its "
+                            "rebuild (default: %(default)s)")
     return parser
 
 
@@ -426,16 +443,26 @@ def main(argv: list | None = None) -> int:
         parser.error("--xy-buffer must be positive")
     if not args.apl_tolerance > 0:
         parser.error("--apl-tolerance must be positive")
+    if args.backbone_drift_margin < 0:
+        parser.error("--backbone-drift-margin must not be negative")
+    try:
+        strict_segments = parse_segments(args.strict_segments)
+    except ValueError as exc:
+        parser.error(f"--strict-segments: {exc}")
+    if args.archive_previous != "no" and not args.overwrite:
+        parser.error("--archive-previous archives the build --overwrite replaces; give --overwrite too")
     settings = Settings(fit_max_core_rmsd_a=args.fit_max_core_rmsd, fit_min_core_fraction=args.fit_min_core_fraction,
                         box_xy_buffer_nm=args.xy_buffer, apl_validate=args.apl_validate == "yes", apl_slice_tolerance_percent=args.apl_tolerance,
                         rdf_validate=args.rdf_validate == "yes", cg_validate=args.cg_validate == "yes",
                         slice_optimize_offset=args.slice_offset_search and not args.no_slice_offset,
-                        counterion_mode=args.counterion_mode)
+                        counterion_mode=args.counterion_mode, backbone_check=args.backbone_check,
+                        backbone_drift_margin_deg=args.backbone_drift_margin)
     session = Session(out=out, name=args.name or out.name, gmx=gmx, forcefield=forcefield, data=data, python=python,
                       ntomp=args.ntomp, nsteps=args.nsteps, settings=settings, embed=embed, embed_site=args.embed_site,
                       box_a=box, bilayer_z_a=args.bilayer_z, delete_lipids=list(args.dellipid), add_lipid=args.addlipid,
                       exclude_disulfides=exclude_disulfides, orientation=orientation,
-                      overwrite=args.overwrite, overwrite_restart=args.overwrite_restart)
+                      overwrite=args.overwrite, overwrite_restart=args.overwrite_restart,
+                      archive_previous=args.archive_previous, strict_segments=strict_segments)
     resolved = [p.resolve() if p else None for p in (args.all_atom, args.coarse_grain, args.membrane)]
     if args.runs > 1:
         return run_sessions(session, resolved[0], frames, [sys.executable] + sys.argv)
