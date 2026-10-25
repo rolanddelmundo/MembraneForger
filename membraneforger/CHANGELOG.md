@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **A lipidated residue no longer discards what `setup_forcefield` or an earlier lipidated residue put in the private force field.**
+  `add_lipidated_residue` rebuilt `merged.rtp` and `ffbonded.itp` from the pristine files, so an RTP block or backbone CMAP added
+  before it was lost and a second lipidated residue type replaced the first. It now appends to the working copy, adds its block
+  only if absent, and skips supplemental bonded rows that are already there. Nothing changes for a system with one lipidated
+  residue type.
 - **Ligands are position-restrained in the equilibration.** The restraint file written for a ligand without its own (GDP, Mg,
   other small molecules) used `POSRES_FC_LIG`, which the topology defaults to 0 and no equilibration mdp sets, so grompp
   compiled it with zero force constant and the ligand moved freely in every restrained step. The rows now use `POSRES_FC_BB`,

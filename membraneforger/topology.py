@@ -246,8 +246,11 @@ def add_lipidated_residue(work: Path, name: str, body: list[dict], forcefield: P
     block += ["     C     +N", "  [ impropers ]", "     N     -C     CA     HN", "     C     CA     +N     O",
               "  [ cmap ]", "    -C      N     CA      C    +N", ""]
     ff = work / "charmm36.ff"
-    (ff / "merged.rtp").unlink()
-    (ff / "merged.rtp").write_text((forcefield / "charmm36.ff" / "merged.rtp").read_text() + "\n".join(block))
+    # append to the working copy (anything setup_forcefield or an earlier lipidated residue added), never restart from the pristine file
+    rtp = (ff / "merged.rtp").read_text()
+    if f"[ {name} ]" not in rtp:   # a second chain with the same residue reuses the block
+        (ff / "merged.rtp").unlink()
+        (ff / "merged.rtp").write_text(rtp + "\n".join(block))
     angle = ("CG2O1", "CG321", "OG301")
     dihedrals = {("NG2S1", "CG2O1", "CG321", "OG301"), ("OG2D1", "CG2O1", "CG321", "OG301"),
                  ("CG2O1", "CG321", "OG301", "CG321"), ("NG2S1", "CG321", "CG321", "OG301")}
@@ -260,9 +263,13 @@ def add_lipidated_residue(work: Path, name: str, body: list[dict], forcefield: P
             extra_dihedrals.append(line)
     if len(extra_angles) != 1 or len(extra_dihedrals) != 8:
         raise SystemExit(f"{name}: supplemental CGenFF bonded parameters changed")
-    (ff / "ffbonded.itp").unlink()
-    (ff / "ffbonded.itp").write_text((forcefield / "charmm36.ff" / "ffbonded.itp").read_text() + "\n[ angletypes ]\n"
-                                     + "".join(extra_angles) + "\n[ dihedraltypes ]\n" + "".join(extra_dihedrals))
+    bonded = (ff / "ffbonded.itp").read_text()
+    have = set(bonded.splitlines(True))   # each supplemental row once, whichever lipidated residue brought it
+    extra_angles, extra_dihedrals = [x for x in extra_angles if x not in have], [x for x in extra_dihedrals if x not in have]
+    if extra_angles or extra_dihedrals:
+        (ff / "ffbonded.itp").unlink()
+        (ff / "ffbonded.itp").write_text(bonded + ("\n[ angletypes ]\n" + "".join(extra_angles) if extra_angles else "")
+                                         + ("\n[ dihedraltypes ]\n" + "".join(extra_dihedrals) if extra_dihedrals else ""))
     return f"{name} polymer RTP: {len(names)} atoms, {len(kept_bonds)} bonds, NZ-{spec['junction']}, charge -2"
 
 
