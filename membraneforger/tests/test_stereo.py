@@ -75,6 +75,22 @@ class Definitions(unittest.TestCase):
         self.assertEqual(mf.wrong_gm3_centres({**planar, "D": np.array([1.0, 1.0, 0.0])}, [], trans)[1], trans)  # 0: cis
 
 
+class MapDatBlocks(unittest.TestCase):
+    def test_a_residue_block_is_found_with_trailing_blanks_and_windows_line_ends(self):
+        text = (DATA / "map.dat").read_text().replace("RESI GM3\n", "RESI GM3  \n").replace("RESI SAPI25\n", "RESI SAPI25 \n")
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "map.dat").write_text(text.replace("\n", "\r\n"), newline="")
+            self.assertEqual(sorted(d[1] for d in mf.gm3_chiral_definitions(Path(tmp))), sorted(mf.GM3_POSITIONS))
+            self.assertEqual(sorted(d[1] for d in mf.pi_chiral_definitions(Path(tmp))), sorted(mf.PI_POSITIONS))
+            self.assertEqual([d for d in mf.gm3_trans_definitions(Path(tmp))], [tuple(d) for d in mf.gm3_trans_definitions(DATA)])
+
+    def test_a_missing_block_is_named(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "map.dat").write_text("RESI PSM\n\n[ chiral ]\n")
+            with self.assertRaisesRegex(SystemExit, "no RESI SAPI25 block"):
+                mf.pi_chiral_definitions(Path(tmp))
+
+
 class AmideRestraint(unittest.TestCase):
     """The CHARMM36 term C2S-NF-C1F-C2F (CTL1 NHL C CTL2) has k = 0, so emres holds the amide trans only through its DIHRES row."""
 

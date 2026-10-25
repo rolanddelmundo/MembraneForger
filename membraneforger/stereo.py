@@ -26,6 +26,7 @@ The six inositol carbons of SAPI25 (PIP2) are tested the same way at the end of 
 GLPA is read by atom order (its three sugars reuse the names C1..C6), GM3 by atom name; in a .gro the molecule is
 four consecutive CHARMM residues (CER160, BGLC, BGAL, ANE5AC).
 """
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -55,7 +56,11 @@ def trans_band(phi: float) -> str:
 
 def map_section(data: Path, name: str, residue: str = "GM3") -> list:
     """The rows of one [ name ] section of the block of one residue (GM3 unless given) of map.dat."""
-    block = (data / "map.dat").read_text().split(f"RESI {residue}\n")[1].split("RESI ")[0]
+    text = (data / "map.dat").read_text()
+    start = re.search(rf"(?m)^RESI[ \t]+{re.escape(residue)}[ \t]*\r?$", text)
+    if start is None:
+        raise SystemExit(f"{data / 'map.dat'} has no RESI {residue} block")
+    block = text[start.end():].split("RESI ")[0]
     body = block.split(f"[ {name} ]")[1].split("[")[0] if f"[ {name} ]" in block else ""
     return [line.split() for line in body.splitlines() if line.strip()]
 
