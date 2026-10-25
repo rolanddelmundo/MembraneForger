@@ -53,21 +53,18 @@ Orientation determines the reference frame and slicing operates in it; nothing h
 from collections import Counter
 
 import numpy as np
-from scipy.spatial import cKDTree
+from scipy.spatial import Voronoi, cKDTree
 
 from .config import Settings
 from .lipids import anchor_bead, anchor_xyz, leaflet_of
 from .structio import element, xyz_nm
 
-__all__ = ['xy_periodic_check', 'periodic_image_gap', 'lipid_shell_coverage', 'SHELL_MIN_POINTS', 'solute_extent', 'crop_windows',
+__all__ = ['xy_periodic_check', 'periodic_image_gap', 'voronoi_shells', 'solute_extent', 'crop_windows',
            'image_molecule', 'make_whole', 'lipid_anchor', 'anchor_image_shift',
            'all_beads_inside', 'select_lipids', 'seam_clashes', 'created_pairs', 'pair_keys', 'offset_slack', 'relax_seam',
            'remove_hard_core_overlaps',
            'composition_distance', 'score_offset', 'choose_offset', 'leaflet_counts', 'selection_diagnostics',
            'slice_membrane_cg']
-
-SHELL_MIN_POINTS = 25  # a shell with fewer 0.2 nm grid points than this (1 nm^2) is not a shell of the cell
-
 
 def solute_extent(placed: list[dict]) -> tuple[np.ndarray, np.ndarray]:
     """Lowest and highest x, y of every placed solute atom (protein and ligands), in nm."""
@@ -381,35 +378,53 @@ def periodic_image_gap(points_xy: np.ndarray, cell: np.ndarray) -> float:
     return nearest
 
 
-def lipid_shell_coverage(tmd_xy: np.ndarray, anchors_xy: np.ndarray, upper: np.ndarray, cell: np.ndarray, settings: Settings) -> dict:
-    """Shells around the transmembrane region that the actual lipid anchors of each leaflet fill, from the lipid coordinates."""
-    # A shell is lipid_shell_nm wide and starts shell_start_nm from the nearest TMD heavy atom (the protein surface). A point
-    # of the periodic cell in the shell counts as filled in a leaflet when an anchor of that leaflet lies within
-    # shell_fill_nm; a shell is covered in a leaflet when at least shell_covered_fraction of its points are filled, it has at
-    # least SHELL_MIN_POINTS points (a cell too small to hold the shell at all does not cover it), and every shell inside it
-    # is covered. The distance to the TMD is periodic, so the images' shells compete for the same points.
-    step = 0.2
-    axes = [np.arange(step / 2.0, c, step) for c in cell]
-    grid = np.array([[x, y] for x in axes[0] for y in axes[1]])
-    distance = cKDTree(tmd_xy % cell, boxsize=cell).query(grid)[0]
-    width, start = settings.lipid_shell_nm, settings.shell_start_nm
-    result = {}
-    for name, mask in (("upper", upper), ("lower", ~upper)):
-        if not mask.any():
-            result[name] = {"shells_covered": 0, "fractions": [None, None, None], "points": [0, 0, 0]}
-            continue
-        near = cKDTree(anchors_xy[mask] % cell, boxsize=cell).query(grid)[0]
-        covered, fractions, points = 0, [], []
-        for k in range(3):
-            inside = (distance >= start + k * width) & (distance < start + (k + 1) * width)
-            points.append(int(inside.sum()))
-            fractions.append(round(float((near[inside] <= settings.shell_fill_nm).mean()), 3) if inside.any() else None)
-        for fraction, count in zip(fractions, points):
-            if count < SHELL_MIN_POINTS or fraction is None or fraction < settings.shell_covered_fraction:
-                break
-            covered += 1
-        result[name] = {"shells_covered": covered, "fractions": fractions, "points": points}
-    return result
+def voronoi_shells(protein_xy: np.ndarray, lipid_xy: np.ndarray, cell: np.ndarray) -> dict:
+    """Lipid shells around the protein of one leaflet by Voronoi adjacency, periodic in x and y, with no shell width."""
+    # The protein atoms and the lipid anchors of the leaflet are generators of a 2D Voronoi tessellation of the cell tiled
+    # 3 x 3. First-shell lipids have a cell that shares an edge with a protein atom's cell; shell k+1 are the lipids
+    # adjacent to shell k not yet reached, counted from the central protein through the tiling. The number of lipid rows
+    # between the protein and its own image is the smallest shell number of a lipid (in any tile) that is adjacent to an
+    # image's protein atom; each protein owns half of those rows, so shells_per_side is that number halved and rounded down. This
+    # follows the idea of defining shells by molecular adjacency instead of a fixed width; it is not a re-implementation of
+    # any published code (those use further criteria, e.g. a boundary-proximity cut-off, that are not applied here).
+    n_lipid, n_protein = len(lipid_xy), len(protein_xy)
+    if n_lipid < 3 or n_protein == 0:
+        return {"lipids_per_shell": [0, 0, 0], "lipid_rows_between_images": None, "shells_per_side": 0}
+    wrapped = np.vstack([lipid_xy, protein_xy]) % cell
+    shifts = [(i, j) for i in (-1, 0, 1) for j in (-1, 0, 1)]
+    tiled = np.vstack([wrapped + cell * s for s in shifts])
+    total, central = len(wrapped), shifts.index((0, 0))
+
+    def block(g: int) -> int:  # which tile a generator belongs to
+        return g // total
+
+    def is_protein(g: int) -> bool:  # local index g % total is in `wrapped`
+        return g % total >= n_lipid
+
+    neighbours = [[] for _ in range(len(tiled))]
+    for a, b in Voronoi(tiled).ridge_points:
+        neighbours[a].append(b)
+        neighbours[b].append(a)
+    depth, frontier = {}, []
+    for g in range(central * total + n_lipid, (central + 1) * total):  # protein atoms of the central tile
+        for h in neighbours[g]:
+            if not is_protein(h) and h not in depth:
+                depth[h] = 1
+                frontier.append(h)
+    while frontier:
+        following = []
+        for g in frontier:
+            for h in neighbours[g]:
+                if not is_protein(h) and h not in depth:
+                    depth[h] = depth[g] + 1
+                    following.append(h)
+        frontier = following
+    in_central = [g for g in depth if block(g) == central]
+    per_shell = [sum(1 for g in in_central if depth[g] == k) for k in (1, 2, 3)]
+    rows = [depth[g] for g in depth if any(is_protein(h) and block(h) != central for h in neighbours[g])]
+    between = min(rows) if rows else None
+    return {"lipids_per_shell": per_shell, "lipid_rows_between_images": between,
+            "shells_per_side": 0 if between is None else between // 2}
 
 
 def xy_periodic_check(complex_a: list[dict], sliced: list[dict], cell: np.ndarray, midplane_nm: float, settings: Settings,
@@ -420,8 +435,8 @@ def xy_periodic_check(complex_a: list[dict], sliced: list[dict], cell: np.ndarra
     # itself is too small, which a larger buffer cannot fix, and the message says so.
     # estimated_shell_equivalents_per_side is a geometric proxy: half the closest approach of the TMD to its image through
     # the membrane (each of the two proteins owns half of the lipids between them) in units of lipid_shell_nm. The
-    # physical coverage is measured from the lipid anchors of each leaflet (lipid_shell_coverage); only it supports a
-    # statement that two lipid shells surround the receptor.
+    # shells counted from molecular adjacency (voronoi_shells, per leaflet, from the lipid coordinates) are the measure
+    # that supports a statement that two lipid shells surround the receptor.
     heavy = np.array([[a["x"], a["y"], a["z"]] for a in complex_a if element(a["atom"]) != "H"], dtype=float) / 10.0
     tmd = heavy[np.abs(heavy[:, 2] - midplane_nm) <= settings.tmd_half_nm]
     if not len(tmd):
@@ -432,23 +447,28 @@ def xy_periodic_check(complex_a: list[dict], sliced: list[dict], cell: np.ndarra
     width = settings.lipid_shell_nm
     counts = [int(((distance >= i * width) & (distance < (i + 1) * width)).sum()) for i in range(3)]
     per_side = tmd_gap / 2.0 / width
-    physical = lipid_shell_coverage(tmd[:, :2], anchors[:, :2], anchors[:, 2] >= midplane_nm, cell, settings)
+    upper = anchors[:, 2] >= midplane_nm
+    voronoi = {}
+    for name, mask, inside in (("upper", upper, (heavy[:, 2] >= midplane_nm) & (heavy[:, 2] <= midplane_nm + settings.tmd_half_nm)),
+                               ("lower", ~upper, (heavy[:, 2] < midplane_nm) & (heavy[:, 2] >= midplane_nm - settings.tmd_half_nm))):
+        voronoi[name] = voronoi_shells(heavy[inside][:, :2], anchors[mask][:, :2], cell)
+    least = min(v["shells_per_side"] for v in voronoi.values())
     flags = []
     remedy = ("the source membrane cell is not cut on every axis and is too small for the complex: use a larger "
               "coarse-grained membrane (the bundled frames are 18 nm wide)" if not all(cropped) and len(cropped) else "raise --xy-buffer")
     if per_side < settings.min_lipid_shells:
         flags.append(f"an estimated {per_side:.1f} lipid shell equivalents ({0.5 * tmd_gap:.2f} nm) per side between the transmembrane "
                      f"region and its image; at least {settings.min_lipid_shells:g} recommended (Feng et al. 2023): {remedy}")
-    least = min(v["shells_covered"] for v in physical.values())
     if least < settings.min_lipid_shells:
-        flags.append(f"the lipid coordinates fill {physical['upper']['shells_covered']} (upper) and {physical['lower']['shells_covered']} "
-                     f"(lower) shells around the transmembrane region; at least {settings.min_lipid_shells:g} recommended: {remedy}")
+        flags.append(f"Voronoi adjacency gives {voronoi['upper']['shells_per_side']} (upper) and {voronoi['lower']['shells_per_side']} "
+                     f"(lower) lipid shells per side between the transmembrane region and its image; at least "
+                     f"{settings.min_lipid_shells:g} recommended: {remedy}")
     if complex_gap < settings.min_image_clearance_nm:
         flags.append(f"the complex is {complex_gap:.2f} nm from its own periodic image in x/y, below the "
                      f"{settings.min_image_clearance_nm:g} nm cutoff: {remedy}")
     return {"checked": True, "tmd_atoms": int(len(tmd)), "lipid_shell_nm": width, "tmd_image_gap_nm": round(tmd_gap, 3),
             "shells_between_images": round(tmd_gap / width, 2), "estimated_shell_equivalents_per_side": round(per_side, 2),
-            "lipids_per_shell": counts, "physical_shell_coverage": physical, "physical_shells_covered": least,
+            "lipids_per_shell": counts, "voronoi_shells": voronoi, "voronoi_shells_per_side": least,
             "complex_image_clearance_nm": round(complex_gap, 3),
             "min_lipid_shells": settings.min_lipid_shells, "min_image_clearance_nm": settings.min_image_clearance_nm, "flags": flags}
 

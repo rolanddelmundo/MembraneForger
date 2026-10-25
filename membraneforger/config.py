@@ -383,17 +383,12 @@ class Settings:
     # Reported (never enforced) after slicing: lipid shells around the transmembrane region (atoms within tmd_half_nm of
     # the bilayer midplane; a shell is lipid_shell_nm wide, a geometric proxy for one lipid diameter) and the distance
     # between the complex and its own periodic image in x and y. Fewer than min_lipid_shells estimated shell equivalents
-    # between the TMD and its image on each side, fewer than min_lipid_shells shells actually filled by the lipid
-    # coordinates (a shell starts shell_start_nm from the protein; it is filled where shell_covered_fraction of its
-    # points have a lipid anchor of the leaflet within shell_fill_nm) (Feng et al. 2023, JCTC, section 10.1: at least
-    # 2-3), or a complex closer to its image than min_image_clearance_nm (the non-bonded cutoff), is flagged in the log,
-    # run_manifest.json and the slice report.
+    # between the TMD and its image on each side, fewer than min_lipid_shells lipid shells per side by Voronoi adjacency
+    # of the lipid coordinates (slicing.voronoi_shells) (Feng et al. 2023, JCTC, section 10.1: at least 2-3), or a complex closer to its image than
+    # min_image_clearance_nm (the non-bonded cutoff), is flagged in the log, run_manifest.json and the slice report.
     tmd_half_nm: float = 1.5
     lipid_shell_nm: float = 0.8
     min_lipid_shells: float = 2.0
-    shell_start_nm: float = 0.4
-    shell_fill_nm: float = 0.6
-    shell_covered_fraction: float = 0.95
     min_image_clearance_nm: float = CUTOFF_NM
     # A user box must leave at least this much membrane on each side of the complex.
     box_xy_min_buffer_nm: float = 0.5

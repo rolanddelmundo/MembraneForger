@@ -474,10 +474,10 @@ class PeriodicXYCheck(unittest.TestCase):
 
     def test_a_wide_buffer_passes_the_geometry_but_sparse_lipids_fill_no_shell(self):
         check = self.cut(3.0)
-        # geometry passes; the twelve test lipids fill no shell, which only the lipid coordinates reveal
+        # geometry passes; the twelve test lipids form no shells, which only the lipid coordinates reveal
         self.assertEqual(len(check["flags"]), 1)
-        self.assertIn("lipid coordinates fill 0 (upper) and 0 (lower)", check["flags"][0])
-        self.assertEqual(check["physical_shells_covered"], 0)
+        self.assertIn("Voronoi adjacency gives", check["flags"][0])
+        self.assertLess(check["voronoi_shells_per_side"], 2)
         self.assertGreaterEqual(check["estimated_shell_equivalents_per_side"], 2.0)
         self.assertEqual(len(check["lipids_per_shell"]), 3)
 
@@ -501,36 +501,32 @@ class PeriodicXYCheck(unittest.TestCase):
         self.assertIn("source membrane cell", check["flags"][0])
 
 
-class PhysicalShellCoverage(unittest.TestCase):
-    """lipid_shell_coverage on a hand-made leaflet pair: a square lattice of anchors with a hole where the protein sits."""
-    CELL = np.array([12.0, 12.0])
-    SETTINGS = mf.Settings()
+class VoronoiShells(unittest.TestCase):
+    """voronoi_shells on a hand-made leaflet: a square lattice of anchors around a one-atom protein."""
 
-    def lattice(self, hole_radius, spacing=0.6):
-        xs = np.arange(spacing / 2.0, self.CELL[0], spacing)
+    def lattice(self, cell, spacing=1.0, hole=0.0, centre=None):
+        xs = np.arange(spacing / 2.0, cell, spacing)
         points = np.array([[x, y] for x in xs for y in xs])
-        return points[np.hypot(points[:, 0] - 6.0, points[:, 1] - 6.0) > hole_radius]
+        if centre is not None:
+            points = points[np.hypot(points[:, 0] - centre[0], points[:, 1] - centre[1]) > hole]
+        return points
 
-    def coverage(self, anchors_upper, anchors_lower):
-        tmd = np.array([[6.0 + r * np.cos(a), 6.0 + r * np.sin(a)] for r in (0.0, 0.5, 1.0) for a in np.linspace(0, 6.28, 12)])
-        anchors = np.vstack([np.c_[anchors_upper, np.ones(len(anchors_upper))], np.c_[anchors_lower, np.zeros(len(anchors_lower))]])
-        return mf.lipid_shell_coverage(tmd, anchors[:, :2], anchors[:, 2] > 0.5, self.CELL, self.SETTINGS)
+    def test_rows_between_a_protein_and_its_image_set_the_shells_per_side(self):
+        # a 1 nm lattice in a 10 nm cell with the protein at a lattice vertex: ten lipid rows from the protein to its image
+        cell = np.array([10.0, 10.0])
+        lipids = self.lattice(10.0, hole=0.6, centre=(5.0, 5.0))
+        result = mf.voronoi_shells(np.array([[5.0, 5.0]]), lipids, cell)
+        self.assertEqual(result["lipid_rows_between_images"], 10)
+        self.assertEqual(result["shells_per_side"], 5)
+        self.assertEqual(result["lipids_per_shell"], [4, 8, 12])  # the four diagonal neighbours, then rings of 8 and 12
 
-    def test_a_full_leaflet_covers_three_shells(self):
-        result = self.coverage(self.lattice(1.4), self.lattice(1.4))
-        self.assertEqual((result["upper"]["shells_covered"], result["lower"]["shells_covered"]), (3, 3))
+    def test_a_narrower_cell_leaves_fewer_shells(self):
+        cell = np.array([6.0, 6.0])
+        lipids = self.lattice(6.0, hole=0.6, centre=(3.0, 3.0))
+        result = mf.voronoi_shells(np.array([[3.0, 3.0]]), lipids, cell)
+        self.assertEqual((result["lipid_rows_between_images"], result["shells_per_side"]), (6, 3))
 
-    def test_a_leaflet_missing_its_second_shell_covers_one(self):
-        upper = self.lattice(1.4)
-        distance = np.hypot(upper[:, 0] - 6.0, upper[:, 1] - 6.0)
-        upper = upper[(distance < 2.6) | (distance > 3.6)]  # a lipid-free ring across the second shell (1.4 to 2.6 nm from the TMD edge)
-        result = self.coverage(upper, self.lattice(1.4))
-        self.assertEqual((result["upper"]["shells_covered"], result["lower"]["shells_covered"]), (1, 3))
-
-    def test_a_cell_too_small_to_hold_the_shells_does_not_cover_them(self):
-        small = mf.Settings(lipid_shell_nm=5.0)
-        tmd = np.array([[6.0, 6.0], [6.5, 6.0]])
-        anchors = self.lattice(0.4)
-        result = mf.lipid_shell_coverage(tmd, anchors, np.ones(len(anchors), bool), self.CELL, small)
-        self.assertEqual(result["upper"]["shells_covered"], 2)  # the third shell lies beyond the 12 nm cell
-        self.assertEqual(result["lower"]["shells_covered"], 0)  # no anchors in that leaflet
+    def test_no_lipids_or_no_protein_gives_zero(self):
+        cell = np.array([6.0, 6.0])
+        self.assertEqual(mf.voronoi_shells(np.zeros((0, 2)), self.lattice(6.0), cell)["shells_per_side"], 0)
+        self.assertEqual(mf.voronoi_shells(np.array([[3.0, 3.0]]), np.zeros((1, 2)), cell)["shells_per_side"], 0)

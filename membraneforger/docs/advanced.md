@@ -143,8 +143,11 @@ thickness (22.5 A) and can give a larger box than the earlier 1.5 nm: `--z-pad-n
 `--symmetric-box-z --z-pad-nm 1.5` restores the earlier box centred on the midplane.
 
 After slicing, the log and the slice report give the lipid shells around the transmembrane region and the distance of
-the complex to its own image in x and y (`xy_check`): `estimated_shell_equivalents_per_side` is a geometric proxy, and
-`physical_shell_coverage` counts the shells that the lipid coordinates of each leaflet actually fill. A build with fewer
+the complex to its own image in x and y (`xy_check`): `estimated_shell_equivalents_per_side` is a geometric proxy (half the closest approach
+of the transmembrane region to its image, in 0.8 nm units), and `voronoi_shells` counts shells by molecular adjacency on
+the lipid coordinates of each leaflet (a periodic Voronoi tessellation of the lipid anchors and the receptor atoms near
+the leaflet; first-shell lipids share a cell edge with the receptor, each next shell is adjacent to the previous one;
+`voronoi_shells_per_side` is half the lipid rows between the receptor and its image, the lower leaflet). A build with fewer
 than two shells by either measure (at least 2-3 are recommended, Feng et al. 2023, section 10.1) or a complex closer
 than the cutoff to its image gets a WARN; nothing is resized, so widen the membrane with `--xy-buffer` if you see it.
 
