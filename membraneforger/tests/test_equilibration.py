@@ -107,7 +107,6 @@ class CoreWaterRecord(unittest.TestCase):
         self.assertIn("water in 10 of 11 frames", record["reason"])
 
     def test_a_steady_well_sampled_core_passes_and_a_rising_one_warns(self):
-        rng = np.random.default_rng(1)
         steady = self.record(np.full(40, 12.0) + np.tile([-1.0, 1.0], 20))
         self.assertEqual(steady["status"], "PASS")
         rising = self.record(np.linspace(8.0, 20.0, 40))
