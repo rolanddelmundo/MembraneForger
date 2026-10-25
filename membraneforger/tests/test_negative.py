@@ -8,7 +8,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from .common import AA_PDB, CG_GRO, CHOL3, FORCEFIELD, MAPPING, POPC, REPO, failure, mf, residue, small_system
+from .common import (AA_PDB, CG_GRO, CHOL3, FORCEFIELD, MAPPING, POPC, REPO, failure, gmx_skip_reason, mf, residue, skip_if,
+                     small_system)
 
 AA_LINES = [l for l in AA_PDB.read_text().splitlines() if l[:6] in ("ATOM  ", "HETATM")]
 GRO_LINES = CG_GRO.read_text().splitlines()
@@ -208,6 +209,7 @@ class CommandLineRefusals(unittest.TestCase):
         self.assertIn("--aa is required", self.run_cli("--cg", CG_GRO)[1])
         self.assertIn("--aa is required", self.run_cli("--cg", "1")[1])
 
+    @skip_if(gmx_skip_reason)
     def test_bundled_membrane_is_the_default_and_needs_no_cg(self):
         out = self.tmp / "bundled"
         code, output = self.run_cli("--aa", AA_PDB, "--out", out, "--gmx", self.gmx, "--mstool-python", self.no_mstool)
@@ -223,6 +225,7 @@ class CommandLineRefusals(unittest.TestCase):
                                     "--mstool-python", self.no_mstool, "--overwrite")
         self.assertIn("GCGR_MTZP_cg_cellmem.gro", output)
 
+    @skip_if(gmx_skip_reason)
     def test_a_bundled_frame_can_be_named(self):
         out = self.tmp / "named"
         code, output = self.run_cli("--aa", AA_PDB, "--cg", "kor5", "--out", out, "--gmx", self.gmx, "--mstool-python", self.no_mstool)
@@ -236,6 +239,7 @@ class CommandLineRefusals(unittest.TestCase):
         for name in mf.bundled_frames():
             self.assertIn(f"{name}_cg_cellmem.gro", output)
 
+    @skip_if(gmx_skip_reason)
     def test_runs_build_in_several_bundled_membranes(self):
         out = self.tmp / "runs"
         code, output = self.run_cli("--aa", AA_PDB, "--cg", "2", "--runs", "3", "--out", out, "--gmx", self.gmx,
@@ -272,12 +276,14 @@ class CommandLineRefusals(unittest.TestCase):
         self.assertNotEqual(code, 0)
         self.assertIn("GROMACS not found", output)
 
+    @skip_if(gmx_skip_reason)
     def test_missing_mapping_data(self):
         code, output = self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--out", self.tmp / "o", "--gmx", self.gmx,
                                     "--data", self.tmp)
         self.assertNotEqual(code, 0)
         self.assertIn("has no map.dat", output)
 
+    @skip_if(gmx_skip_reason)
     def test_interpreter_without_mstool(self):
         out = self.tmp / "nomstool"
         code, output = self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--out", out, "--gmx", self.gmx,
@@ -288,6 +294,7 @@ class CommandLineRefusals(unittest.TestCase):
         self.assertFalse((out / "em.gro").exists())
         self.assertTrue((out / "run_manifest.json").exists())
 
+    @skip_if(gmx_skip_reason)
     def test_stale_outputs_do_not_survive_a_failed_run(self):
         out = self.tmp / "stale"
         out.mkdir()
@@ -305,6 +312,7 @@ class CommandLineRefusals(unittest.TestCase):
         self.assertFalse((out / "em.gro").exists())
         self.assertFalse((out / "topol.top").exists())
 
+    @skip_if(gmx_skip_reason)
     def test_input_overwrite_is_refused_and_input_untouched(self):
         out = self.tmp / "clash"
         out.mkdir()
