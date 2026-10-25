@@ -29,6 +29,16 @@ replaced: the build only minimizes them where they are.
 - PPM 3.0, only if your structure is not already oriented and has no matching OPM entry
   (see [Advanced options](membraneforger/docs/advanced.md#ppm-30)).
 
+Python can only run a real `gmx` executable. A shell alias or function is invisible to it, so put the executable
+itself on `PATH` (or pass `--gmx /path/to/gmx`). To point at PPM, set one variable, with `res.lib` in the same folder:
+
+```bash
+export MEMBRANEFORGER_PPM=/path/to/ppm3_code/immers
+```
+
+Tests that need `gmx`, PPM or `res.lib` skip with the reason printed when they are missing
+(`python -m unittest -v membraneforger.tests.test_negative membraneforger.tests.test_orientation`).
+
 ## Installation
 
 Clone the repository and install the Python packages. MembraneForger runs from the clone; there is nothing else to

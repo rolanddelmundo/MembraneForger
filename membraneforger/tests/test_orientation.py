@@ -2,7 +2,7 @@
 
 The PPM 3.0 provider is exercised through a stand-in executable that reproduces the real program's I/O contract
 (input on stdin, res.lib in the working directory, anchorout.pdb + datapar1 + datasub1 as outputs, dummy atoms,
-hydrogens dropped). Tests that need the real program run only when MEMBRANEFORGER_PPM points at it, or `immers`
+hydrogens dropped). Tests that need the real program are skipped unless MEMBRANEFORGER_PPM points at it (res.lib beside it), or `immers`
 is on PATH; tests that need the network (OPM download) run only when MEMBRANEFORGER_TEST_NETWORK is set.
 """
 import json
@@ -18,7 +18,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .common import AA_PDB, CG_GRO, FORCEFIELD, MAPPING, REPO, failure, mf
+from .common import AA_PDB, CG_GRO, FORCEFIELD, MAPPING, REPO, failure, gmx_skip_reason, mf, ppm_skip_reason, skip_if
 
 OPM_6WHC = Path(__file__).parent / "data" / "6whc_opm_chainR.pdb"  # chain R and the dummy atoms of the OPM entry 6WHC
 
@@ -653,17 +653,17 @@ class BoxSizing(unittest.TestCase):
                 coords.append({"atom": atom, "group": "Protein_LIG", "resid": n + 1, "resname": "GLY", "x": 50.0, "y": 50.0, "z": float(z) + dz})
         return coords
 
-    def rebox(self, requested_z=None, pad=1.5):
+    def rebox(self, requested_z=None, pad=1.5, symmetric=False):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)
             (out / mf.LOG_NAME).write_text("")
             system = {"cryst1": "CRYST1  100.000  100.000  150.000  90.00  90.00  90.00 P 1           1", "out": out, "name": "t"}
-            box = mf.rebox_system(system, {"coords": self.make_system()}, requested_z, pad)
+            box = mf.rebox_system(system, {"coords": self.make_system()}, requested_z, pad, symmetric)
             atoms, gro_box = mf.read_gro(out / "boxed.gro")
             return box, system["box_report"], atoms, gro_box
 
-    def test_auto_box_is_centred_on_the_phosphate_midplane(self):
-        box, report, atoms, gro_box = self.rebox()
+    def test_symmetric_box_is_centred_on_the_phosphate_midplane(self):
+        box, report, atoms, gro_box = self.rebox(symmetric=True)
         self.assertEqual(report["mode"], "auto")
         self.assertEqual(box[:2], [10.0, 10.0])
         self.assertAlmostEqual(report["bilayer_midplane_nm"], 6.0)  # not shifted by the stray head group at 9.5 nm
@@ -673,11 +673,20 @@ class BoxSizing(unittest.TestCase):
         z = np.array([a["z"] for a in atoms])
         self.assertAlmostEqual(z[[a["atom"] == "P" for a in atoms]].mean(), box[2] / 2.0, places=6)
 
+    def test_asymmetric_box_is_the_extent_plus_the_padding_at_both_ends(self):
+        box, report, atoms, gro_box = self.rebox()
+        self.assertAlmostEqual(report["bilayer_midplane_nm"], 6.0)
+        self.assertAlmostEqual(box[2], 11.1 + 3.0, places=3)  # solute 2.0-13.1 nm (hydrogen), 1.5 nm of water at each end
+        z = np.array([a["z"] for a in atoms])
+        self.assertAlmostEqual(z.min(), 1.5, places=3)
+        self.assertAlmostEqual(box[2] - z.max(), 1.5, places=3)
+        self.assertEqual(report["z_layout"], "asymmetric")
+
     def test_user_box_is_opt_in_and_validated(self):
         box, report, _, _ = self.rebox(requested_z=20.0)
         self.assertEqual((report["mode"], box[2]), ("user", 20.0))
         self.assertEqual(box[:2], [10.0, 10.0])                    # x and y are the cell this stage receives
-        self.assertIn("is below the 170 A", failure(self.rebox, requested_z=15.0))
+        self.assertIn("is below the 141 A", failure(self.rebox, requested_z=13.0))
 
     def test_cli_box_parsing(self):
         self.assertIsNone(mf.parse_box("auto"))
@@ -696,6 +705,7 @@ class CommandLine(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp())
         self.gmx = os.environ.get("MEMBRANEFORGER_GMX") or shutil.which("gmx") or "gmx"
 
+    @skip_if(gmx_skip_reason)
     def test_option_validation(self):
         self.assertIn("invalid choice", self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--orientation", "maybe")[1])
         self.assertIn("expected 3 arguments", self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--box", "100", "100")[1])
@@ -711,7 +721,7 @@ class CommandLine(unittest.TestCase):
                                    "--orient-residues", "349-376")[1])
 
     def test_multiple_chains_fail_early_with_instructions(self):
-        if not shutil.which(self.gmx):
+        if not shutil.which(self.gmx.split()[0]):
             self.skipTest("GROMACS is needed to reach the orientation stage")
         code, output = self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--out", self.tmp / "o", "--gmx", self.gmx)
         self.assertEqual(code, 1)
@@ -722,7 +732,7 @@ class CommandLine(unittest.TestCase):
         self.assertEqual(manifest["error"]["stage"], "orient")
 
     def test_nterm_side_is_requested_before_anything_expensive(self):
-        if not shutil.which(self.gmx):
+        if not shutil.which(self.gmx.split()[0]):
             self.skipTest("GROMACS is needed to reach the orientation stage")
         exe = Fixtures.fake_ppm(self.tmp)
         code, output = self.run_cli("--all-atom", AA_PDB, "--coarse-grain", CG_GRO, "--out", self.tmp / "o", "--gmx", self.gmx,
@@ -732,7 +742,7 @@ class CommandLine(unittest.TestCase):
         self.assertNotIn("stage mstool", output)
 
 
-@unittest.skipUnless(os.environ.get("MEMBRANEFORGER_PPM") or shutil.which("immers"), "real PPM 3.0 not installed")
+@skip_if(ppm_skip_reason)
 class RealPPM(unittest.TestCase):
     """With the real program: the output is an exact rigid copy and the receptor straddles the slab with its N terminus out."""
 

@@ -306,10 +306,10 @@ class AuditDihedralRestraints(unittest.TestCase):
     def test_glpa_restraints_are_parsed(self):
         rows = mf.itp_dihedral_restraints([FORCEFIELD / "toppar/GLPA.itp"])["GLPA"]
         targets = [t for _, t in rows]
-        self.assertEqual(len(rows), 23)
+        self.assertEqual(len(rows), 24)
         self.assertEqual(sum(abs(abs(t) - 120) < 1 for t in targets), 4)  # ceramide C2S, C3S; Neu5Ac C7, C8
         self.assertEqual(sum(abs(abs(t) - 60) < 1 for t in targets), 18)  # three pyranose chairs
-        self.assertEqual(sum(abs(t) == 180 for t in targets), 1)  # sphingosine C4=C5 trans
+        self.assertEqual(sum(abs(t) == 180 for t in targets), 2)  # sphingosine C4=C5 trans and the ceramide amide
         with tempfile.TemporaryDirectory() as tmp:
             (Path(tmp) / "toppar").mkdir()
             (Path(tmp) / "toppar/POPC.itp").write_text((FORCEFIELD / "toppar/POPC.itp").read_text())

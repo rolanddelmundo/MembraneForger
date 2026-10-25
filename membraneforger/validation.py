@@ -3,8 +3,10 @@
 #// Input validation and output-directory protection.
 #//=============================================================
 """Read and validate both inputs, and keep a build from overwriting inputs or reusing stale outputs."""
+import json
 import math
 import shutil
+import time
 from collections import Counter
 from pathlib import Path
 
@@ -17,7 +19,7 @@ from .runtools import LOG_NAME, sha256
 from .structio import read_pdb, xyz_nm
 
 __all__ = ['read_cg', 'read_all_atom', 'protect_inputs', 'SIMULATION_PATTERNS', 'existing_outputs', 'refuse_overwrite',
-           'clear_stale_outputs', 'check_inputs_unchanged', 'frame_overlaps', 'align_frame_to_box']
+           'clear_stale_outputs', 'ARCHIVE_DIR', 'archive_previous_outputs', 'check_inputs_unchanged', 'frame_overlaps', 'align_frame_to_box']
 
 # Files a GROMACS simulation started from a build leaves in its directory: checkpoints (mdrun -cpi continues from them, with
 # -append or -noappend) and trajectories. The build itself runs steepest-descent minimizations only; it never reads, writes or
@@ -156,6 +158,53 @@ def refuse_overwrite(out: Path, keep: Path | None = None, overwrite: bool = Fals
                          "--overwrite to replace it")
 
 
+# --archive-previous: what is copied out of an earlier build before --overwrite replaces it. "reports" is the small set that explains
+# the earlier outcome (tens of kB); "all" adds its structures (about 10 MB for a 200k-atom system). Files are looked up in the output
+# directory and in int/, where a failed build leaves em.unverified.gro and its intermediates.
+ARCHIVE_DIR = "previous_builds"
+ARCHIVE_REPORTS = (LOG_NAME, "run_manifest.json", "audit.json", "backbone_check.json", "contacts.json", "ring_piercing.json",
+                   "orientation_report.json", "aa_cg_mapping.tsv", "membrane_validation.json", "membrane_validation.md",
+                   "membrane_validation_lipids.tsv")
+ARCHIVE_STRUCTURES = ("em.gro", "em.unverified.gro", "topol.top", "index_ini.ndx")
+
+
+def archive_previous_outputs(out: Path, mode: str, keep: Path | None = None) -> Path | None:
+    """Copy the reports (mode "reports") or reports and structures (mode "all") of an earlier build to <out>/previous_builds/<time>_<status>/.
+
+    Returns that folder, or None when `out` holds no earlier build. Call it after refuse_overwrite and before clear_stale_outputs: the
+    folder is not a GENERATED name, so the rerun leaves it alone, and nothing is deleted here. A file that cannot be copied raises
+    OSError, so the caller can stop before anything is replaced."""
+    out = Path(out)
+    if mode == "no" or not existing_outputs(out, keep)["build"]:
+        return None
+    status, stamp = "unknown", None
+    manifest = out / "run_manifest.json"
+    if manifest.is_file():
+        try:
+            record = json.loads(manifest.read_text())
+            status = str(record.get("status", "unknown"))
+            stamp = time.strftime("%Y%m%dT%H%M%S", time.strptime(str(record.get("started", ""))[:19], "%Y-%m-%dT%H:%M:%S"))
+        except (ValueError, AttributeError):
+            pass
+    stamp = stamp or time.strftime("%Y%m%dT%H%M%S", time.localtime((manifest if manifest.is_file() else out).stat().st_mtime))
+    folder, n = out / ARCHIVE_DIR / f"{stamp}_{status}", 1
+    while folder.exists():
+        n += 1
+        folder = out / ARCHIVE_DIR / f"{stamp}_{status}_{n}"
+    folder.mkdir(parents=True)
+    names = ARCHIVE_REPORTS + (ARCHIVE_STRUCTURES if mode == "all" else ())
+    copied = []
+    for name in names:
+        for source in (out / name, out / "int" / name):
+            if source.is_file():
+                shutil.copy2(source, folder / name)
+                copied.append(name)
+                break
+    (folder / "ARCHIVED.json").write_text(json.dumps({"from": str(out), "mode": mode, "status": status, "files": copied,
+                                                      "archived": time.strftime("%Y-%m-%dT%H:%M:%S%z")}, indent=1) + "\n")
+    return folder
+
+
 def clear_stale_outputs(out: Path, keep: Path | None = None) -> list[str]:
     """Delete every file a previous build could have left in the output directory; returns what was removed."""
     removed = []
@@ -227,7 +276,8 @@ def align_frame_to_box(atoms: list[dict], box: list[float]) -> tuple[list[dict],
     as_read = score(0.0)
     square = bool(abs(cell[0] - cell[1]) < 0.01)
     best = (0.0, as_read)
-    if square:
+    tolerated = max(5, len(kept) // 2000)  # a handful of inherent near-contacts is data, thousands are the rotation
+    if square and as_read > tolerated:  # a frame that is already periodic is returned as read, so the scan is skipped
         for step, span in ((1.0, 90.0), (0.1, 1.0), (0.01, 0.1)):
             start = best[0] if span < 90.0 else 0.0
             for deg in np.arange(start - (span if span < 90.0 else 0.0), start + span, step):
@@ -235,7 +285,6 @@ def align_frame_to_box(atoms: list[dict], box: list[float]) -> tuple[list[dict],
                 if n < best[1]:
                     best = (round(float(deg), 2), n)
     angle, remaining = best
-    tolerated = max(5, len(kept) // 2000)  # a handful of inherent near-contacts is data, thousands are the rotation
     if remaining > tolerated and remaining > 0.1 * as_read:
         raise SystemExit(f"the coarse-grained frame is not periodic in its {cell[0]:.3f} x {cell[1]:.3f} nm box: {as_read} bead pairs of "
                          f"different molecules overlap (< {FRAME_OVERLAP_NM} nm) once wrapped, and no rotation about z removes them "

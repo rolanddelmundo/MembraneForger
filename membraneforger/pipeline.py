@@ -12,13 +12,14 @@ from pathlib import Path
 
 from .alignment import map_all_atom_to_cg
 from .audit import audit_run, check_ring_piercing, closest_contact_between
+from .backbone_check import backbone_residues, chain_labels, check_backbone, write_backbone_report
 from .backmapping import assemble_membrane_pdb, backmap_membrane, read_mapping
 from .config import AMINO, DEFAULT_LIGANDS, INTERMEDIATES, RENAME_MOLECULE, Settings
 from .contacts import check_contacts, describe_contacts, record_contacts
 from .embedding import FRAME_PROTEIN_CLEARANCE_NM, check_box_z, edit_lipids, embed_complex, frame_protein_in_slice
 from .martini import bilayer_midplane, classify_cg, make_membrane_whole
 from .membrane_report import MembraneValidation, protein_of_cg_frame, stage_from_gro, stage_from_membrane_pdb
-from .minimization import run_em, validate_em
+from .minimization import has_backbone_dihres, run_em, validate_em
 from .orientation import OrientationRequest, check_orientation_preserved, orient_complex
 from .reporting import write_run_manifest
 from .runtools import INT_DIR, LOG_NAME, gromacs_version, log, sha256
@@ -27,10 +28,19 @@ from .solvation import add_ions, make_index, rebox_system, solvate_system
 from .stereo import check_gm3_stereo
 from .structio import xyz_nm
 from .topology import build_topology, lipid_clashes, prepare_structure, repair_structure, resolve_lipid_clashes
-from .validation import align_frame_to_box, check_inputs_unchanged, clear_stale_outputs, protect_inputs, read_all_atom, read_cg, refuse_overwrite
+from .validation import (
+    align_frame_to_box,
+    archive_previous_outputs,
+    check_inputs_unchanged,
+    clear_stale_outputs,
+    protect_inputs,
+    read_all_atom,
+    read_cg,
+    refuse_overwrite,
+)
 
 __all__ = ['Session', 'StageFailure', 'run_stage', 'prepare_inputs', 'backmap_and_assemble', 'heavy_atom_piercings', 'membrane_piercings',
-           'backmap_verdict', 'refuse_frame_protein_in_slice', 'review_contacts', 'refuse_overlaps',
+           'backmap_verdict', 'refuse_frame_protein_in_slice', 'review_contacts', 'review_backbone', 'refuse_overlaps',
            'build_topology_and_box', 'finish_system', 'build_from_two_inputs', 'build']
 
 # What to look at when a stage fails; {out}, {work} and {int} (the folder of intermediates) are filled in at run time.
@@ -58,6 +68,7 @@ STAGE_HINTS = {
                 "the structure it reports",
     "minimize": "{int}/em.log and the grompp/mdrun transcript in {out}/" + LOG_NAME,
     "validate": "{int}/em.log and {int}/em.unverified.gro (and {out}/em_clash_trace.json for a lipid)",
+    "backbone": "{out}/backbone_check.json (every residue it names) and {int}/em.unverified.gro; --backbone-check report lists the same as warnings",
     "audit": "{out}/audit.json",
     "publish": "{int}/em.unverified.gro",
 }
@@ -87,6 +98,8 @@ class Session:
     exclude_disulfides: tuple = ()
     overwrite: bool = False  # replace the outputs of an earlier build in `out` (--overwrite); otherwise such a directory is refused
     overwrite_restart: bool = False  # also allow it when checkpoints or trajectories of a simulation are there (--overwrite-restart)
+    archive_previous: str = "no"  # with --overwrite: first copy the earlier build's reports ("reports") or reports and structures ("all") aside
+    strict_segments: tuple = ()  # (chain, first, last) input ranges that were modelled, not observed: an outlier there fails the backbone check
     work: Path | None = None
     timings: dict = field(default_factory=dict)
     record: dict = field(default_factory=dict)
@@ -228,6 +241,15 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
     cut = run_stage(session, "slice", slice_membrane_cg, membrane, placed, box, midplane, session.settings, requested,
                     session.analysis.slice_reference())
     record["slice"] = cut["report"]
+    check = cut["report"]["xy_check"]
+    if check["checked"]:
+        voronoi = check["voronoi_shells"]
+        log(out, f"periodic xy: {check['estimated_shell_equivalents_per_side']:.1f} estimated shell equivalents per side; Voronoi "
+                 f"adjacency gives {voronoi['upper']['shells_per_side']} (upper) / {voronoi['lower']['shells_per_side']} (lower) lipid "
+                 f"shells per side (lipids in shells 1-3: {voronoi['upper']['lipids_per_shell']} / {voronoi['lower']['lipids_per_shell']}), complex "
+                 f"{check['complex_image_clearance_nm']:.2f} nm from its own image", "WARN" if check["flags"] else "PASS")
+    for flag in check["flags"]:
+        log(out, f"periodic xy: {flag}", "WARN")
     if session.embed and session.embed_site == "free":
         reached = run_stage(session, "slice", refuse_frame_protein_in_slice, cg["protein"], slab, box, placed, cut)
         record["slice"]["frame_protein_beads_in_window"] = reached
@@ -266,7 +288,8 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
         "PASS" if record["slice_check"]["pass"] else "WARN")
     placed, membrane, box = cut["placed"], cut["membrane"], cut["box"]
     if session.box_a:  # refuse a z that cannot hold the complex now, not after the slow backmapping
-        run_stage(session, "mapping", check_box_z, placed, slab, session.box_a[2] / 10.0)
+        run_stage(session, "mapping", check_box_z, placed, slab, session.box_a[2] / 10.0,
+                  session.settings.box_z_pad_nm, session.settings.box_z_symmetric)
     return {"placed": placed, "membrane": membrane, "box": box, "mapping": mapping,
             "composition": Counter(RENAME_MOLECULE.get(m["aa"], m["aa"]) for m in membrane),
             "ligands": DEFAULT_LIGANDS | {a["resname"] for a in aa_atoms if a["resname"] not in AMINO}}
@@ -303,11 +326,11 @@ def backmap_and_assemble(session: Session, prepared: dict, seed: int) -> Path:
     # minimization, and a wrong one counts as a wrong configuration: the verdict then tries another seed.
     gm3, _ = run_stage(session, "backmap", check_gm3_stereo, out / "membrane.pdb", session.data)
     isomers["gm3_sugar_centres_or_cis_bonds"] = sum(gm3["wrong_by_centre"].values()) + sum(gm3["cis_by_bond"].values())
-    isomers["gm3_stereochemistry"] = {k: gm3[k] for k in ("molecules", "wrong_by_centre", "cis_by_bond", "affected_molecules")}
+    isomers["gm3_stereochemistry"] = {k: gm3[k] for k in ("molecules", "wrong_by_centre", "cis_by_bond", "bands_by_bond", "affected_molecules")}
     if isomers["gm3_sugar_centres_or_cis_bonds"]:
         log(out, f"GM3 stereochemistry of membrane.pdb: {len(gm3['affected_molecules'])} of {gm3['molecules']} molecules have an inverted "
-                 f"sugar centre or a cis ceramide bond ({isomers['gm3_sugar_centres_or_cis_bonds']} in all); counted as wrong configurations",
-            "WARN")
+                 f"sugar centre or a cis or half-twisted ceramide bond ({isomers['gm3_sugar_centres_or_cis_bonds']} in all); counted as wrong "
+                 "configurations", "WARN")
     elif gm3["molecules"]:
         log(out, f"GM3 stereochemistry of membrane.pdb: all 16 sugar stereocentres and both ceramide trans bonds correct in every one "
                  f"of the {gm3['molecules']} molecules", "PASS")
@@ -387,7 +410,7 @@ def build_topology_and_box(session: Session, membrane: Path, ligands: set, expec
     for note in topology["notes"]:
         log(out, note)
     box = run_stage(session, "box", rebox_system, system, topology, session.box_a[2] / 10.0 if session.box_a else None,
-                    session.settings.box_z_pad_nm)
+                    session.settings.box_z_pad_nm, session.settings.box_z_symmetric)
     session.record["box"] = system["box_report"]
     rings = run_stage(session, "rings", review_ring_piercing, out, "boxed.gro")
     solute_atoms = sum(n * len(atoms) for _, n, atoms, group in topology["molecules"] if group == "Protein_LIG")
@@ -395,6 +418,30 @@ def build_topology_and_box(session: Session, membrane: Path, ligands: set, expec
     overlaps = run_stage(session, "contacts", review_contacts, session, "boxed.gro", solute_atoms, "boxed")
     return {"system": system, "topology": topology, "box": box, "rings": rings, "solute_atoms": solute_atoms, "contact": contact,
             "overlaps": overlaps}
+
+
+def review_backbone(session: Session, system: dict) -> dict:
+    """Compare the protein backbone of em.unverified.gro with solv_ions.gro, which EM started from; stop the build on a failure."""
+    out, settings = session.out, session.settings
+    if settings.backbone_check == "no":
+        return {"status": "off"}
+    report = check_backbone(backbone_residues(out / "solv_ions.gro"), backbone_residues(out / "em.unverified.gro"), chain_labels(system),
+                            has_backbone_dihres(out), settings.backbone_drift_margin_deg, session.strict_segments, settings.backbone_check)
+    write_backbone_report(out, report)
+    if report["status"] == "skipped":
+        log(out, f"backbone check skipped: {report['reason']}", "WARN")
+    else:
+        log(out, f"backbone after EM: {report['residues']} residues, {report['bonds_compared']} peptide bonds compared, largest phi/psi drift "
+                 f"{report['max_drift_deg']:g} deg (restraints {'on' if report['restraints_active'] else 'off'}), "
+                 f"{len(report['omega_made_twisted'])} bond(s) twisted, {len(report['chirality_changed'])} centre(s) inverted",
+            "ERROR" if report["failures"] else "PASS")
+    for warning in report["warnings"]:
+        log(out, f"backbone: {warning}", "WARN")
+    if report["failures"]:
+        raise SystemExit(f"{len(report['failures'])} backbone defect(s) made by minimization: " + "; ".join(report["failures"][:3])
+                         + (" ..." if len(report["failures"]) > 3 else ""))
+    keys = ("status", "residues", "bonds_compared", "restraints_active", "drift_limit_deg", "max_drift_deg", "mode")
+    return {k: report[k] for k in keys if k in report}
 
 
 def review_contacts(session: Session, structure: str, solute_atoms: int, stage: str) -> dict:
@@ -457,6 +504,7 @@ def finish_system(session: Session, staged: dict) -> str:
     run_stage(session, "minimize", run_em, out, topology, gmx, session.ntomp, session.nsteps)
     record["em"] = run_stage(session, "validate", validate_em, system, topology, index, session.settings)
     log(out, f"EM validated: {record['em']['summary']}", "PASS")
+    record["backbone"] = run_stage(session, "backbone", review_backbone, session, system)
     if session.analysis is not None:
         minimized = stage_from_gro(out / "em.unverified.gro", topology=out / "topol.top")
         if minimized["unrecognized"]:
@@ -581,12 +629,22 @@ def build(session: Session, all_atom: Path | None, coarse_grain: Path | None, me
         print(f"[{out.name}] ERROR: output directory: {exc}. Inspect: the --out path")
         print(f"{session.name}\tFAIL\t{exc}")
         return 1
+    archived = None
+    if session.archive_previous != "no":  # before anything is replaced; a copy that fails stops the build with the earlier outputs intact
+        try:
+            archived = archive_previous_outputs(out, session.archive_previous, keep=membrane)
+        except OSError as exc:
+            print(f"[{out.name}] ERROR: output directory: could not archive the earlier build ({exc}); nothing was replaced. Inspect: the --out path")
+            print(f"{session.name}\tFAIL\tcould not archive the earlier build: {exc}")
+            return 1
     removed = clear_stale_outputs(out, keep=membrane)
     for extra in ("run_manifest.json", "audit.json"):
         (out / extra).unlink(missing_ok=True)
     (out / LOG_NAME).write_text(f"INFO: membraneforger {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
     if removed:
         log(out, f"removed stale outputs from an earlier run: {', '.join(removed)}", "WARN")
+    if archived:
+        log(out, f"earlier build ({session.archive_previous}) archived in {archived}")
     session.work = out / INT_DIR / "work"  # inside the output directory so the intermediates survive on any node
     session.work.mkdir(parents=True)
     try:
