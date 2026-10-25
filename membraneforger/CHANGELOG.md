@@ -15,6 +15,22 @@
   the SAPI25 block of `map.dat` on the final structure (molecules made whole across the cell, as for GM3) and fails the
   audit on any inverted centre; the report has a `sapi25_stereochemistry` entry.
 
+- **EM-only backbone phi/psi restraints (`--backbone-restraints off|fixed|clipped`, default `off`; `--backbone-restraint-inset DEG`,
+  default 5).** `fixed` adds to every protein `.itp` a flat-bottom `[ dihedral_restraints ]` row per phi and psi at the input angle,
+  +-30 degrees with zero force and `DIHRES_FC` beyond, under `#ifdef BBDIHRES`; both minimizations define it, MD never does, and the
+  lipid restraint audit skips these rows. `clipped` cuts each window back to the allowed Ramachandran region of the backbone check
+  (`rama_outlier`, through `PARENT_RESIDUE`, so HSD/HSE/HSP, CYSG/CYSP, GLYP and the lipidated lysines are judged as their parents),
+  `--backbone-restraint-inset` degrees inside its boundary: per residue, the largest phi x psi box around the input in which every
+  point is allowed, re-centred because GROMACS restraints are symmetric, with windows that run through +-180 handled. Without it a
+  residue that starts near a boundary can be pushed across it while staying inside +-30 degrees: in a GLP-1R/Gs build the Gamma
+  Phe66 phi went from -29 to +1..+4 (the phi > -20 band) in 19 of 19 minimizations of two membrane frames, which the drift test cannot
+  see and `--strict-segments` then fails; with clipped windows both frames passed. Residues the check does not judge (no standard
+  parent, Gly, chain ends and breaks), inputs already outside the region, inputs inside the inset band (`flag_margin`) and windows
+  narrower than 5 degrees (`flag_narrow`) keep +-30, and the flags are named in the log as residues to refine. Every window is in
+  `backbone_restraints.tsv` in the output directory (not in `toppar/`, where the audit requires every file to be included). The
+  restraint is finite, so a window bounds where it starts to push, not where the angle ends: keep the backbone check on.
+  The audit's `grompp (posres)` rebuild now adds `-DPOSRES` to an existing `define` line of `em.mdp` instead of writing a second
+  `define` key, which grompp rejects (every restrained build failed the audit before this).
 - **Backbone check after minimization (`--backbone-check yes|report|no`, default `report`).** The audit looked at C-alpha positions and
   contacts but never at peptide planes, alpha-carbon handedness or phi/psi, so a build could PASS with a twisted peptide bond or an
   inverted centre. A new `backbone` stage runs after `validate` and compares `em.unverified.gro` with `solv_ions.gro` (the same atoms before
