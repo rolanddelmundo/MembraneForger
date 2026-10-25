@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Ligands are position-restrained in the equilibration.** The restraint file written for a ligand without its own (GDP, Mg,
+  other small molecules) used `POSRES_FC_LIG`, which the topology defaults to 0 and no equilibration mdp sets, so grompp
+  compiled it with zero force constant and the ligand moved freely in every restrained step. The rows now use `POSRES_FC_BB`,
+  as the bundled `7V7.itp` already does, so a ligand follows the backbone schedule (4000 to 50 over steps 6.0 to 6.6). The
+  minimizations are unchanged: the ligand is frozen there and no `-DPOSRES` is defined. `POSRES_FC_LIG` stays defined as 0
+  for itps that still name it.
+
 - **The GM3 ceramide amide is restrained during `emres`.** In the CHARMM36 topology the torsion C2S-NF-C1F-C2F
   (`CTL1 NHL C CTL2`) has a zero force constant and no DIHRES row covered the amide, so nothing but two symmetric
   planarity terms resisted its rotation. In one test build (GCGR, 27 GM3) the restrained minimization turned one amide from
