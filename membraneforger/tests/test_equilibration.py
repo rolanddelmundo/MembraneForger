@@ -107,3 +107,17 @@ class PeriodicImageClearance(unittest.TestCase):
         slab = image_gap(protein, box, 5.0, mf.Settings())
         self.assertAlmostEqual(full, 4.5, places=6)   # the atom at x = 0.5 is 4.5 nm from the image of the one at x = 2
         self.assertAlmostEqual(slab, 5.0, places=6)   # only the two atoms at the midplane count: 2 to 1 + 6
+
+
+class ProfileChange(unittest.TestCase):
+    def profile(self, length, shift):
+        n = int(round(length / 0.1))
+        z = (np.arange(n) + 0.5) * (length / n)
+        return {"z_nm": z, "bin_nm": length / n, "density_nm3": {"water": 1.0 / (1.0 + np.exp(-(z - length / 2.0 - shift) * 4.0))}}
+
+    def test_profiles_of_different_box_height_and_position_compare_after_shifting_to_the_midplane(self):
+        from membraneforger.equilibration import profile_change
+        first, last = self.profile(20.9, 0.0), self.profile(23.7, 1.0)  # taller box, membrane moved up by 1 nm
+        change = profile_change(first, last, 20.9 / 2.0, 23.7 / 2.0 + 1.0)
+        self.assertLess(change["water"], 0.05)  # the same shape relative to the midplane
+        self.assertGreater(profile_change(first, last, 20.9 / 2.0, 23.7 / 2.0)["water"], 0.1)  # misplaced midplane: a real change

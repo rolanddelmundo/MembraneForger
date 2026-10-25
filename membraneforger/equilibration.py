@@ -59,6 +59,22 @@ def image_gap(protein_nm: np.ndarray, box_nm, midplane_nm: float | None, setting
     return periodic_image_gap(points, np.asarray(box_nm[:2], dtype=float)) if len(points) > 1 else np.nan
 
 
+def profile_change(first: dict, last: dict, midplane_first: float, midplane_last: float) -> dict:
+    """RMS change of every group's density profile over its peak, on a common z grid relative to each frame's midplane."""
+    # The box height drifts during NPT, so the two profiles may have different bin counts and the membrane may have moved:
+    # both are shifted to their own midplane and resampled (periodically) onto the span the two boxes share.
+    def relative(profile: dict, midplane: float, grid: np.ndarray) -> dict:
+        length = float(profile["z_nm"][-1] - profile["z_nm"][0] + profile["bin_nm"])
+        rel = ((profile["z_nm"] - midplane + length / 2.0) % length) - length / 2.0
+        order = np.argsort(rel)
+        return {k: np.interp(grid, rel[order], v[order], period=None) for k, v in profile["density_nm3"].items()}
+
+    half = 0.5 * min(float(first["z_nm"][-1] - first["z_nm"][0] + first["bin_nm"]), float(last["z_nm"][-1] - last["z_nm"][0] + last["bin_nm"]))
+    grid = np.arange(-half + 0.05, half - 0.05, 0.1)
+    a, b = relative(first, midplane_first, grid), relative(last, midplane_last, grid)
+    return {k: float(np.sqrt(np.mean((b[k] - a[k]) ** 2)) / max(float(a[k].max()), 1e-9)) for k in b if k in a}
+
+
 def frame_series(paths: list[Path], settings: Settings, topology: Path | None = None) -> dict:
     """Per-frame APL, thickness, core hydration and protein orientation from .gro frames, plus anchor and box series."""
     series = {"frame": [], "apl_upper_A2": [], "apl_lower_A2": [], "thickness_A": [], "core_water_percent": [], "tilt_deg": [],
@@ -87,6 +103,7 @@ def frame_series(paths: list[Path], settings: Settings, topology: Path | None = 
                                          if "tails" in stage else np.nan)
         if k == 0:
             series["first_profiles"] = z_density_profiles(stage["z_groups"], stage["box_nm"]) if "z_groups" in stage else None
+            series["first_midplane_nm"] = stage["midplane_nm"]
         anchors.append(np.array([[r["x_nm"], r["y_nm"]] for r in stage["lipids"]]))
         boxes.append(stage["box_nm"][:2])
         if k == len(paths) - 1:
@@ -152,8 +169,8 @@ def convergence_gate(energy: dict | None, frames: dict | None, frame_time_ps: np
             layered = layered_order(frames["last_profiles"], frames["last_stage"]["midplane_nm"], stage="equilibrated")
             records.append(layered["record"])
             if frames.get("first_profiles"):
-                first, last = frames["first_profiles"]["density_nm3"], frames["last_profiles"]["density_nm3"]
-                change = {k: float(np.sqrt(np.mean((last[k] - first[k]) ** 2)) / max(float(first[k].max()), 1e-9)) for k in last if k in first}
+                change = profile_change(frames["first_profiles"], frames["last_profiles"], frames["first_midplane_nm"],
+                                        frames["last_stage"]["midplane_nm"])
                 records.append(metric("Z-density profile change first-to-last frame", "equilibrated", max(change.values()) if change else None,
                                       "fraction of peak", status="NOT RUN", reason="largest RMS change of a group profile over its peak; reported"))
     else:
