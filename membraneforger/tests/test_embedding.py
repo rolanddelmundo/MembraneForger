@@ -459,9 +459,11 @@ class LipidEdits(unittest.TestCase):
 class RequestedBoxZ(unittest.TestCase):
     def test_too_small_z_is_refused_before_backmapping(self):
         placed = [{"atom": "CA", "resname": "ALA", "x": 0.0, "y": 0.0, "z": z} for z in (20.0, 80.0)]
-        slab = (3.0, 7.0)  # centre 5 nm; complex 2-8 nm -> 2 x (3 + 1.5) = 9 nm
-        self.assertAlmostEqual(mf.check_box_z(placed, slab, 9.0), 9.0)
-        self.assertIn("below the 90 A", failure(mf.check_box_z, placed, slab, 8.0))
+        slab = (3.0, 7.0)  # complex 2-8 nm -> 6 + 2 x 2.25 = 10.5 nm
+        self.assertAlmostEqual(mf.check_box_z(placed, slab, 10.5), 10.5)
+        self.assertIn("below the 105 A", failure(mf.check_box_z, placed, slab, 10.0))
+        self.assertAlmostEqual(mf.check_box_z(placed, slab, 9.0, mf.LEGACY_Z_PAD_NM), 9.0)  # 6 + 2 x 1.5
+        self.assertIn("below the 90 A", failure(mf.check_box_z, placed, slab, 8.0, mf.LEGACY_Z_PAD_NM))
 
     def system(self):
         coords = [{"resid": 1, "resname": "ALA", "atom": "CA", "group": "Protein_LIG", "x": 10.0, "y": 10.0, "z": 50.0 + dz}
