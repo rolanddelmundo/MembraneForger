@@ -72,6 +72,16 @@
   them, and a count of two shells here is not a statement of CHARMM-GUI compliance. `python -m membraneforger.equilibration`
   also reports, over every analysed frame, the closest approach of the protein (and of its transmembrane slab) to its own
   image in x and y.
+- **The GM3 ceramide amide is restrained during `emres`.** In the CHARMM36 topology the torsion C2S-NF-C1F-C2F
+  (`CTL1 NHL C CTL2`) has a zero force constant and no DIHRES row covered the amide, so nothing but two symmetric
+  planarity terms resisted its rotation. In one test build (GCGR, 27 GM3) the restrained minimization turned one amide from
+  -173.5 to -70.7 degrees, which the audit then counted as a cis bond; backmapping had produced it trans. `GLPA.itp` and
+  `GM3.itp` gain the row `6 4 56 58 1 180.0 2.5 DIHRES_FC` (the `map.dat` `[ trans ]` amide definition) after the C4=C5 row,
+  so the DIHRES block has 24 rows. The row acts only under `-DDIHRES`, i.e. in `emres`; the unrestrained `em` that
+  follows keeps the amide trans. The GM3 stereochemistry check places each ceramide trans bond in a band, trans
+  (|dihedral| >= 150), twisted (30 to 150) or cis (<= 30), and `bands_by_bond` in the report and in the backmapping
+  isomer review shows them; a bond is still refused below 90 degrees, and one between 90 and 150 degrees is reported, not
+  refused. PSM has the same unrestrained amide and is unchanged here.
 
 - **Ligands are frozen during minimization.** `index_ini.ndx` gains a trailing `LIG` group (the heavy atoms of the ligand
   molecules, i.e. every non-protein residue of the input, a subset of `Protein_LIG`; hydrogens stay free so EM can correct any that were synthesized), and both minimizations (`emres` and `em`) set `freezegrps = LIG` with
