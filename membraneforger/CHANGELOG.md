@@ -27,6 +27,23 @@
   (1e-11 nm after 200 steps); `embed_complex` on KOR_Membrane1 (15,161 beads, 1200 steps) takes 16 s instead of 59 s.
   `align_frame_to_box` no longer scans 130 rotations of a frame that is already periodic (about 3 s per build; output
   unchanged, since such a frame was always returned as read). The unused `slicing.seam_clashes` (superseded by `inherent_pairs` and `created_pairs`) is removed.
+- **The slice composition gate is graded against shell-stratified draws.** The control for the composition distance was the
+  144 equal-size windows spread over the embedded cell, which rarely contain the protein, while a slice is cut around the
+  complex and always holds its annular shell (cholesterol and PIP2 are enriched there). The control is now 5000 random
+  re-draws of the slice that keep its number of lipids in each shell of 0.5, 1.0, 1.5, 2.0 and 3.0 nm around the protein
+  (`packing.shell_stratified_null`, `Settings.slice_shell_edges_nm`, `Settings.slice_null_draws`). The grading is unchanged
+  (PASS up to the 95th percentile, WARNING up to the 99th, FAIL above); the percentile against the equal-size windows is
+  still recorded as `composition_percentile_uniform_windows`. On the 50 µs frames cut around the GCGR complex, a slice with 10 %
+  of its lipids relabelled as another species fails under both controls, and `GPR139_Membrane2`, whose lower leaflet failed
+  against the equal-size windows (percentile 0.993), is at percentile 0.80 under the new control.
+
+- **Five more 50 µs bundled membranes.** `KOR_Membrane4` and `KOR_Membrane8` complete the nine kappa opioid receptor
+  runs, and `GPR139_Membrane2`, `GPR139_Membrane3` and `GPR139_Membrane4` join `GPR139_Membrane5`, for 13 frames
+  (9 KOR, 4 GPR139). Each is the unmodified 50 µs frame of its run (runs 1 and 6-9 of GPR139 had not reached 50 µs). `--cg 1`
+  now draws from four GPR139 frames, `--runs N` takes the first N of the longer series (`--runs 5 --cg 2` is now
+  KOR_Membrane1-5 instead of 1, 2, 3, 5, 6), and the leaflet composition is unchanged to the whole percent. The ranges the
+  documentation quotes for the bundled frames (for example the 8-frame tutorial tables) were measured on the original
+  eight frames and are not re-measured here.
 
 - **Ligands are frozen during minimization.** `index_ini.ndx` gains a trailing `LIG` group (the heavy atoms of the ligand
   molecules, i.e. every non-protein residue of the input, a subset of `Protein_LIG`; hydrogens stay free so EM can correct any that were synthesized), and both minimizations (`emres` and `em`) set `freezegrps = LIG` with

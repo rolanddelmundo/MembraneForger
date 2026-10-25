@@ -32,7 +32,7 @@ from .structio import element, xyz_nm
 
 __all__ = ['LEAFLETS', 'cg_stage', 'aa_stage', 'lipid_midplane', 'periodic_voronoi_areas', 'leaflet_slab',
            'tessellate_leaflet', 'measure_packing', 'reference_packing', 'species_table', 'composition_table',
-           'expected_composition_distance', 'compare_packing', 'per_lipid_rows', 'region_reference', 'window_distribution']
+           'expected_composition_distance', 'compare_packing', 'per_lipid_rows', 'region_reference', 'window_distribution', 'shell_stratified_null']
 
 LEAFLETS = ("lower", "upper")
 NM2_TO_A2 = 100.0
@@ -306,4 +306,45 @@ def window_distribution(stage: dict, size_nm: np.ndarray, cropped: list[bool], s
                 counts.append(int(inside.sum()))
         out[leaflet] = {"window_apl_A2": np.array(apl), "window_composition_distance": np.array(distance), "window_lipids": np.array(counts),
                         "whole_cell_apl_A2": float(areas.mean()) if len(areas) else float("nan"), "windows": len(apl)}
+    return out
+
+
+def shell_stratified_null(stage: dict, kept_indices: list[int], edges_nm: tuple, draws: int, seed: int = 1) -> dict:
+    """Composition distance of random re-draws of a slice that keep its number of lipids in each shell around the protein.
+
+    The uniform windows of window_distribution rarely contain the protein, while a slice is cut around the complex and
+    always holds its annular shell, where cholesterol and PIP2 are enriched. Here every lipid of the embedded leaflet is
+    put in a shell by its xy distance (periodic) to the nearest bead of the complex; a draw takes, in each shell, as many
+    lipids as the slice kept there, at random and without replacement from all lipids of that shell, and its distance to
+    the whole-leaflet composition is the control value. The shells the slice holds completely (next to the protein) have
+    no variance, so the shell enrichment is part of the expectation, and only the bulk the slice samples varies. Returns
+    per leaflet {"strata_composition_distance": array of `draws`}; empty arrays when the stage has no complex.
+    """
+    protein = np.asarray(stage.get("protein_nm", np.empty((0, 3))), dtype=float).reshape(-1, 3)[:, :2]
+    cell = np.array(stage["box_nm"][:2], dtype=float)
+    chosen, out = set(kept_indices), {}
+    edges = np.asarray(edges_nm, dtype=float)
+    for leaflet in LEAFLETS:
+        rows = [r for r in stage["lipids"] if r["leaflet"] == leaflet and "voronoi_area_nm2" in r]
+        if not len(protein) or not rows:
+            out[leaflet] = {"strata_composition_distance": np.array([])}
+            continue
+        xy = np.array([[r["x_nm"], r["y_nm"]] for r in rows])
+        delta = np.abs(xy[:, None, :] - protein[None, :, :])
+        delta = np.minimum(delta, cell - delta)
+        shell = np.digitize(np.sqrt((delta ** 2).sum(axis=2)).min(axis=1), edges)
+        names = sorted({r["resname"] for r in rows})
+        code = np.array([names.index(r["resname"]) for r in rows])
+        reference = np.bincount(code, minlength=len(names)).astype(float)
+        reference /= reference.sum()
+        kept = np.array([r["index"] in chosen for r in rows])
+        pools = [(np.flatnonzero(shell == s), int((kept & (shell == s)).sum())) for s in range(len(edges) + 1)]
+        pools = [(pool, n) for pool, n in pools if n]
+        rng = np.random.default_rng(seed)
+        values = np.empty(draws)
+        for d in range(draws):
+            picked = np.concatenate([rng.choice(pool, size=n, replace=False) for pool, n in pools]) if pools else np.array([], dtype=int)
+            counts = np.bincount(code[picked], minlength=len(names)).astype(float)
+            values[d] = 0.5 * np.abs(counts / max(counts.sum(), 1.0) - reference).sum()
+        out[leaflet] = {"strata_composition_distance": values}
     return out
