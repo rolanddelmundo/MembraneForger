@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **The E/Z configuration of the S-geranylgeranyl cysteine is checked and can be corrected.** A natural geranylgeranyl group is all-E, but the
+  bundled GCGR-Gs input (and the models derived from it) carry the three CH=C(CH3) bonds of `CYSG` in Z (dihedral 0 to 5 degrees), which
+  minimization and the force field keep. `--prenyl-configuration report` (default, as in earlier releases) warns, `yes` stops the build on a
+  Z bond and fails the audit if one remains after EM (new audit check `prenyl_configuration`), `fix` converts each Z bond to E by a
+  rigid 180 degree rotation of the group beyond it (bond lengths and angles unchanged) and refuses a conversion that would leave a prenyl atom
+  within 2.0 A of another residue. Applies to `CYSG` and its methyl ester `CYSM`.
 - **Core hydration is graded by occupancy, not by a drift fit.** The gate 3 core-water check fitted a line to a few frames with 0-9 free
   waters each and failed on counting noise (drift +48 / +51 % on the archived KOR frames). `core_water_record` grades the mean percent of
   bulk water with the single-frame limits and tests a trend (second against first half, Poisson error) only with at least 20 frames and

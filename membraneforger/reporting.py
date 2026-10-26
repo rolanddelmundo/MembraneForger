@@ -92,6 +92,7 @@ def write_run_manifest(session, status: str, error: dict | None, started: str, h
         "ring_piercing_before_em": record.get("ring_piercing_before_em"),
         "closest_membrane_solute_contact_before_em": record.get("closest_membrane_solute_contact_before_em"),
         "disulfides": record.get("disulfides"), "excluded_disulfides": record.get("excluded_disulfides"),
+        "prenyl": record.get("prenyl"),
         "removed_lipids": record.get("removed_lipids"), "box_nm": record.get("box_nm"),
         "topology": record.get("topology"), "ions": record.get("ions"),
         "em": record.get("em"), "audit": record.get("audit"),

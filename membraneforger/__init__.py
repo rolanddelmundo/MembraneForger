@@ -26,6 +26,7 @@ from .minimization import *
 from .stereo import *
 from .audit import *
 from .backbone_check import *
+from .prenyl import *
 from .backbone_restraints import *
 from .contacts import *
 from .reporting import *
