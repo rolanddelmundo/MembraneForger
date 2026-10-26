@@ -494,7 +494,9 @@ Convergence (gate 3): box area and volume come from the energy file; APL per lea
 protein tilt and depth from the frames. A series passes when its drift over the final window (the last half of the run)
 is below 1 % of the window mean and the first-half / second-half means of the whole series differ by less than 2 % of
 its mean (definitions in 5.13); WARNING to 3 / 5 %; FAIL beyond or when the block means are monotonic with more than 1 % drift; block standard
-errors are reported. S_CD profiles per species and chain are computed from the last frame and reported as
+errors are reported. Core hydration is the exception: its counts are too small for a drift fit, so it is graded by occupancy (the mean
+percent of bulk water with the single-frame limits, 1 / 5 %) and a trend is tested only with at least 20 frames and at least 10 free waters
+per frame; with less, a passing level is INSUFFICIENT SAMPLING. S_CD profiles per species and chain are computed from the last frame and reported as
 REFERENCE NEEDED unless a matched profile is supplied (then RMSE 0.03 / 0.05).
 
 Gate 4 uses the production fraction only: lateral diffusion from the drift-corrected x, y MSD of the anchors
@@ -579,6 +581,9 @@ protein tilt               theta = arccos |e_z|, e = leading eigenvector of the 
                            1.5 nm of the midplane
 core water                 C = 100 * [N_free / (2 h A_xy)] / rho_bulk,  h = half-height of the core, N_free = core waters
                            not associated with the protein, rho_bulk = bulk water number density
+core water [trajectory]    level = mean of C over the frames, graded like one frame (PASS <= 1 %, WARNING <= 5 %, FAIL beyond);
+                           trend (>= 20 frames and >= 10 free waters per frame only) = mean N_free of the second half minus
+                           the first half, WARNING if above 2 sigma (Poisson error); otherwise INSUFFICIENT SAMPLING
 tail interdigitation       Omega = sum_z min(rho_u, rho_l) / sum_z 1/2 (rho_u + rho_l)  (0 = disjoint, 1 = identical tail
                            profiles). Not the local overlap integral of 4 rho_u rho_l / (rho_u + rho_l)^2 used elsewhere
 ion count [solvation]      N = round half up (c * 0.6022 nm^-3 per M * V_aq),  V_aq = N_water / 33.46 nm^-3;

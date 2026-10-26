@@ -13,6 +13,7 @@ from pathlib import Path
 from .alignment import map_all_atom_to_cg
 from .audit import audit_run, check_ring_piercing, closest_contact_between
 from .backbone_check import backbone_residues, chain_labels, check_backbone, write_backbone_report
+from .backbone_restraints import require_backbone_check
 from .backmapping import assemble_membrane_pdb, backmap_membrane, read_mapping
 from .config import AMINO, DEFAULT_LIGANDS, INTERMEDIATES, RENAME_MOLECULE, Settings
 from .contacts import check_contacts, describe_contacts, record_contacts
@@ -390,6 +391,7 @@ def build_topology_and_box(session: Session, membrane: Path, ligands: set, expec
                            attempt: int = 0) -> dict:
     """Take an assembled protein + membrane PDB through repair, topology and box, and review ring threading."""
     out, gmx = session.out, session.gmx
+    require_backbone_check(session.settings.backbone_restraints, session.settings.backbone_check)   # before any work is spent
     work = session.work / f"topology_{attempt}"  # pdb2gmx scratch; one per backmapping attempt
     work.mkdir()
     system = run_stage(session, "structure", prepare_structure, membrane, out, session.name, session.forcefield, ligands,
@@ -406,7 +408,8 @@ def build_topology_and_box(session: Session, membrane: Path, ligands: set, expec
     log(out, notes[0])
     for note in notes[1:]:  # the published system then holds one lipid fewer than the coarse-grained input
         log(out, note, "WARN")
-    topology = run_stage(session, "topology", build_topology, system, work, gmx)
+    topology = run_stage(session, "topology", build_topology, system, work, gmx, session.settings.backbone_restraints,
+                         session.settings.backbone_restraint_inset_deg)
     for note in topology["notes"]:
         log(out, note)
     box = run_stage(session, "box", rebox_system, system, topology, session.box_a[2] / 10.0 if session.box_a else None,
@@ -423,6 +426,7 @@ def build_topology_and_box(session: Session, membrane: Path, ligands: set, expec
 def review_backbone(session: Session, system: dict) -> dict:
     """Compare the protein backbone of em.unverified.gro with solv_ions.gro, which EM started from; stop the build on a failure."""
     out, settings = session.out, session.settings
+    require_backbone_check(settings.backbone_restraints, settings.backbone_check)   # also for a Session built without the CLI
     if settings.backbone_check == "no":
         return {"status": "off"}
     report = check_backbone(backbone_residues(out / "solv_ions.gro"), backbone_residues(out / "em.unverified.gro"), chain_labels(system),
@@ -430,6 +434,8 @@ def review_backbone(session: Session, system: dict) -> dict:
     write_backbone_report(out, report)
     if report["status"] == "skipped":
         log(out, f"backbone check skipped: {report['reason']}", "WARN")
+        if settings.backbone_restraints == "clipped":   # fail closed: clipped is only accepted together with a check that ran
+            raise SystemExit(f"--backbone-restraints clipped needs a completed backbone check, but it was skipped: {report['reason']}")
     else:
         log(out, f"backbone after EM: {report['residues']} residues, {report['bonds_compared']} peptide bonds compared, largest phi/psi drift "
                  f"{report['max_drift_deg']:g} deg (restraints {'on' if report['restraints_active'] else 'off'}), "

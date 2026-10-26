@@ -20,8 +20,10 @@ import numpy as np
 from networkx.algorithms import isomorphism as iso
 from scipy.spatial import cKDTree
 
+from .backbone_restraints import RECORD_NAME, summarize_record, write_backbone_dihres, write_restraint_record
 from .config import (
     AMINO,
+    BB_DIHRES_DPHI,
     C_CAP,
     CYSG_HDB,
     DISULFIDE_MAX_A,
@@ -244,8 +246,11 @@ def add_lipidated_residue(work: Path, name: str, body: list[dict], forcefield: P
     block += ["     C     +N", "  [ impropers ]", "     N     -C     CA     HN", "     C     CA     +N     O",
               "  [ cmap ]", "    -C      N     CA      C    +N", ""]
     ff = work / "charmm36.ff"
-    (ff / "merged.rtp").unlink()
-    (ff / "merged.rtp").write_text((forcefield / "charmm36.ff" / "merged.rtp").read_text() + "\n".join(block))
+    # append to the working copy (anything setup_forcefield or an earlier lipidated residue added), never restart from the pristine file
+    rtp = (ff / "merged.rtp").read_text()
+    if f"[ {name} ]" not in rtp:   # a second chain with the same residue reuses the block
+        (ff / "merged.rtp").unlink()
+        (ff / "merged.rtp").write_text(rtp + "\n".join(block))
     angle = ("CG2O1", "CG321", "OG301")
     dihedrals = {("NG2S1", "CG2O1", "CG321", "OG301"), ("OG2D1", "CG2O1", "CG321", "OG301"),
                  ("CG2O1", "CG321", "OG301", "CG321"), ("NG2S1", "CG321", "CG321", "OG301")}
@@ -258,9 +263,13 @@ def add_lipidated_residue(work: Path, name: str, body: list[dict], forcefield: P
             extra_dihedrals.append(line)
     if len(extra_angles) != 1 or len(extra_dihedrals) != 8:
         raise SystemExit(f"{name}: supplemental CGenFF bonded parameters changed")
-    (ff / "ffbonded.itp").unlink()
-    (ff / "ffbonded.itp").write_text((forcefield / "charmm36.ff" / "ffbonded.itp").read_text() + "\n[ angletypes ]\n"
-                                     + "".join(extra_angles) + "\n[ dihedraltypes ]\n" + "".join(extra_dihedrals))
+    bonded = (ff / "ffbonded.itp").read_text()
+    have = set(bonded.splitlines(True))   # each supplemental row once, whichever lipidated residue brought it
+    extra_angles, extra_dihedrals = [x for x in extra_angles if x not in have], [x for x in extra_dihedrals if x not in have]
+    if extra_angles or extra_dihedrals:
+        (ff / "ffbonded.itp").unlink()
+        (ff / "ffbonded.itp").write_text(bonded + ("\n[ angletypes ]\n" + "".join(extra_angles) if extra_angles else "")
+                                         + ("\n[ dihedraltypes ]\n" + "".join(extra_dihedrals) if extra_dihedrals else ""))
     return f"{name} polymer RTP: {len(names)} atoms, {len(kept_bonds)} bonds, NZ-{spec['junction']}, charge -2"
 
 
@@ -499,8 +508,11 @@ def check_disulfides(itp: Path, mol: str, expected: list[tuple[int, int]]) -> No
         raise SystemExit(f"{mol} disulfides {sorted(actual)} != expected {sorted(expected)}")
 
 
-def build_protein(system: dict, label: str, work: Path, toppar: Path, gmx: str, patches: dict) -> list[str]:
-    """Build one protein chain's .itp, posre and coordinates with pdb2gmx (plus cap patching)."""
+def build_protein(system: dict, label: str, work: Path, toppar: Path, gmx: str, patches: dict, restraints: tuple = ("off", 5.0),
+                  record: list | None = None) -> list[str]:
+    """Build one protein chain's .itp, posre and coordinates with pdb2gmx (plus cap patching).
+
+    restraints = (mode, inset) of the EM-only backbone phi/psi restraints (backbone_restraints.py); their rows are appended to record."""
     out, mol = system["out"], f"PRO{label}"
     residues = residues_in_order(system["chains"][label])
     nterm, cterm = chain_termini(residues)
@@ -532,6 +544,15 @@ def build_protein(system: dict, label: str, work: Path, toppar: Path, gmx: str, 
     else:
         itp.write_text(moleculetype_block(top, mol))
     write_posre(itp, mol)
+    if restraints[0] != "off":
+        rows = write_backbone_dihres(itp, pdb_out, *restraints)
+        counts, flagged = summarize_record(rows)
+        notes.append(f"{mol}: {len(rows)} EM-only backbone phi/psi restraints (BBDIHRES, {restraints[0]}): {counts}")
+        if flagged:
+            notes.append(f"{mol}: input phi/psi too close to a Ramachandran boundary for a clipped window (kept +-{BB_DIHRES_DPHI:g} deg; "
+                         f"refine the model there): " + ", ".join(flagged))
+        if record is not None:
+            record += rows
     check_disulfides(itp, mol, system["disulfides"][label])
     if excluded:
         notes.append(f"{mol}: kept reduced " + ", ".join(f"CYS{x}/CYS{y}" for x, y in excluded))
@@ -689,8 +710,10 @@ def forcefield_includes(ff: Path) -> list[str]:
     return needed
 
 
-def build_topology(system: dict, work: Path, gmx: str) -> dict:
-    """Write toppar/, topol.top and prot-memb.pdb, with coordinates in exact topology order."""
+def build_topology(system: dict, work: Path, gmx: str, backbone_restraints: str = "off", restraint_inset: float = 5.0) -> dict:
+    """Write toppar/, topol.top and prot-memb.pdb, with coordinates in exact topology order.
+
+    backbone_restraints off|fixed|clipped adds the EM-only phi/psi restraints to every protein chain and writes backbone_restraints.tsv."""
     out, forcefield, ligands = system["out"], system["forcefield"], system["ligands"]
     toppar = out / "toppar"
     shutil.rmtree(toppar, ignore_errors=True)
@@ -698,11 +721,14 @@ def build_topology(system: dict, work: Path, gmx: str) -> dict:
     protein_names = {RENAME_RESIDUE.get(a["resname"], a["resname"]) for c in system["chains"].values() for a in c}
     setup_forcefield(work, protein_names, forcefield)
     patches = charmm_patches(forcefield)
-    molecules, coords, notes = [], [], []
+    molecules, coords, notes, record = [], [], [], []
+    (out / RECORD_NAME).unlink(missing_ok=True)
     for label in system["chains"]:
-        notes += build_protein(system, label, work, toppar, gmx, patches)
+        notes += build_protein(system, label, work, toppar, gmx, patches, (backbone_restraints, restraint_inset), record)
         molecules.append((f"PRO{label}", 1, read_itp(toppar / f"PRO{label}.itp")["atoms"], "Protein_LIG"))
         coords += [dict(a, chain=label, segid=f"PRO{label}", group="Protein_LIG") for a in read_pdb(work / f"PRO{label}.pdb")[0]]
+    if record:
+        notes.append(f"backbone restraint windows: {write_restraint_record(out, record).name}")
     residues: OrderedDict[str, list] = OrderedDict()
     for key, atoms in system["others"].items():
         residues.setdefault(key[0], []).append(atoms)

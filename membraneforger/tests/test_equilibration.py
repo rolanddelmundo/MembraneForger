@@ -94,6 +94,46 @@ class OrientationDriftAndWaterPath(unittest.TestCase):
         self.assertEqual(equilibration.water_path_persistence([None, None])["status"], "NOT RUN")
 
 
+class CoreWaterRecord(unittest.TestCase):
+    """Core hydration over frames: occupancy first, a trend only with enough frames and waters."""
+    def record(self, counts, bulk=31.5, area=130.0):
+        from membraneforger.equilibration import core_water_record
+        counts = np.asarray(counts, dtype=float)
+        return core_water_record(100.0 * counts / (area * 1.6) / bulk, counts)
+
+    def test_a_few_frames_with_a_handful_of_waters_is_inconclusive_not_a_fail(self):
+        record = self.record([5, 9, 5, 6, 4, 5, 3, 0, 4, 6, 5])                                   # the KOR config A series
+        self.assertEqual(record["status"], "INSUFFICIENT SAMPLING")
+        self.assertIn("water in 10 of 11 frames", record["reason"])
+
+    def test_a_steady_well_sampled_core_passes_and_a_rising_one_warns(self):
+        steady = self.record(np.full(40, 12.0) + np.tile([-1.0, 1.0], 20))
+        self.assertEqual(steady["status"], "PASS")
+        rising = self.record(np.linspace(8.0, 20.0, 40))
+        self.assertEqual(rising["status"], "WARNING")
+
+    def test_a_high_level_fails_whatever_the_sampling(self):
+        self.assertEqual(self.record([400, 410, 390])["status"], "FAIL")
+
+    def test_no_measurable_water_is_not_run(self):
+        from membraneforger.equilibration import core_water_record
+        self.assertEqual(core_water_record([np.nan, np.nan])["status"], "NOT RUN")
+
+    def test_the_report_keeps_the_free_water_counts_the_trend_verdict_used(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        from membraneforger.equilibration import write_equilibration_report
+        keys = ("frame", "apl_upper_A2", "apl_lower_A2", "thickness_A", "core_water_percent", "core_water_free", "tilt_deg", "depth_A", "area_nm2")
+        series = {k: [1.0, 2.0] for k in keys}
+        series["core_water_free"] = [5.0, float("nan")]
+        with tempfile.TemporaryDirectory() as tmp:
+            write_equilibration_report(Path(tmp), [], series)
+            saved = json.loads((Path(tmp) / "equilibration_validation.json").read_text())["series"]
+        self.assertEqual(saved["core_water_free"], [5.0, None])
+
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -13,7 +13,10 @@ from dataclasses import replace
 from pathlib import Path
 
 from .backbone_check import parse_segments
+from .backbone_restraints import RESTRAINT_MODES
 from .config import (
+    BB_DIHRES_DPHI,
+    BB_DIHRES_MIN_HALF_DEG,
     BOX,
     LEGACY_Z_PAD_NM,
     NSTEPS,
@@ -330,6 +333,15 @@ def make_parser() -> argparse.ArgumentParser:
                             "warnings; no skips it (default: %(default)s)")
     after.add_argument("--backbone-drift-margin", type=float, default=defaults.backbone_drift_margin_deg, metavar="DEG",
                        help="degrees added to the 30 deg restraint width before a phi/psi drift fails the backbone check (default: %(default)s)")
+    after.add_argument("--backbone-restraints", choices=RESTRAINT_MODES, default=defaults.backbone_restraints,
+                       help="EM-only flat-bottom phi/psi restraints on every protein residue (never in MD): fixed holds each angle within 30 deg "
+                            "of the input; clipped also cuts each window back to the allowed Ramachandran region of the backbone check, "
+                            "--backbone-restraint-inset deg inside its boundary, so minimization cannot push a residue that starts near a "
+                            "boundary across it; windows and residues too close to a boundary are listed in backbone_restraints.tsv; "
+                            "off writes none (default: %(default)s)")
+    after.add_argument("--backbone-restraint-inset", type=float, default=defaults.backbone_restraint_inset_deg, metavar="DEG",
+                       help="with --backbone-restraints clipped: degrees the windows stay inside the allowed region; a numerical guard "
+                            "for the finite restraint, not a physical tolerance (default: %(default)s)")
     after.add_argument("--strict-segments", metavar="CHAIN:FIRST-LAST[,...]", default="",
                        help="residues of the input that were modelled rather than observed (e.g. R:338-345,A:5-9): a Ramachandran outlier after EM "
                             "in one of them fails the backbone check, even if the residue was not an outlier before; chain letters and residue "
@@ -467,6 +479,10 @@ def main(argv: list | None = None) -> int:
         parser.error("--apl-tolerance must be positive")
     if args.backbone_drift_margin < 0:
         parser.error("--backbone-drift-margin must not be negative")
+    if args.backbone_restraints == "clipped" and args.backbone_check != "yes":
+        parser.error("--backbone-restraints clipped requires --backbone-check yes")
+    if not 0 <= args.backbone_restraint_inset < BB_DIHRES_DPHI - BB_DIHRES_MIN_HALF_DEG:
+        parser.error(f"--backbone-restraint-inset must be at least 0 and below {BB_DIHRES_DPHI - BB_DIHRES_MIN_HALF_DEG:g}")
     try:
         strict_segments = parse_segments(args.strict_segments)
     except ValueError as exc:
@@ -481,7 +497,8 @@ def main(argv: list | None = None) -> int:
                         rdf_validate=args.rdf_validate == "yes", cg_validate=args.cg_validate == "yes",
                         slice_optimize_offset=args.slice_offset_search and not args.no_slice_offset,
                         counterion_mode=args.counterion_mode, backbone_check=args.backbone_check,
-                        backbone_drift_margin_deg=args.backbone_drift_margin)
+                        backbone_drift_margin_deg=args.backbone_drift_margin, backbone_restraints=args.backbone_restraints,
+                        backbone_restraint_inset_deg=args.backbone_restraint_inset)
     session = Session(out=out, name=args.name or out.name, gmx=gmx, forcefield=forcefield, data=data, python=python,
                       ntomp=args.ntomp, nsteps=args.nsteps, settings=settings, embed=embed, embed_site=args.embed_site,
                       box_a=box, bilayer_z_a=args.bilayer_z, delete_lipids=list(args.dellipid), add_lipid=args.addlipid,

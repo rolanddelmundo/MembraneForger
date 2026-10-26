@@ -140,7 +140,12 @@ def check_grompp(run: Path, gmx: str, structure: str) -> tuple[dict, list]:
     scratch = audit_scratch(run)
     for label, mdp_extra, extra in (("as_built", "", []), ("posres", "define = -DPOSRES\n", ["-r", str(run_path(run, structure))])):
         mdp = scratch / f"{label}.mdp"
-        mdp.write_text(mdp_extra + run_path(run, "em.mdp").read_text())
+        text = run_path(run, "em.mdp").read_text()
+        if mdp_extra and re.search(r"(?m)^define\s*=", text):   # em.mdp already defines (BBDIHRES): add to it, never repeat the key
+            added = mdp_extra.split("=", 1)[1].strip()
+            text = re.sub(r"(?m)^(define\s*=.*)$", lambda m, added=added: f"{m.group(1)} {added}", text, count=1)
+            mdp_extra = ""
+        mdp.write_text(mdp_extra + text)
         code, output = gromacs(gmx, ["grompp", "-f", str(mdp), "-c", str(run_path(run, structure)), "-p", str(run / "topol.top"),
                                      "-n", str(run / "index_ini.ndx"), "-o", str(scratch / f"{label}.tpr"),
                                      "-po", str(scratch / f"{label}_out.mdp"), "-maxwarn", "0"] + extra, run)
@@ -314,11 +319,16 @@ def itp_bonds(paths: list[Path]) -> dict:
 
 def itp_dihedral_restraints(paths: list[Path]) -> dict:
     """Map each moleculetype to its [ dihedral_restraints ] rows: (zero-based atom quadruple, target angle in degrees)."""
-    molecules, current, section, fresh = {}, None, "", False
+    molecules, current, section, fresh, backbone = {}, None, "", False, False
     for path in paths:
         for raw in path.read_text(errors="replace").splitlines():
             s = raw.split(";", 1)[0].strip()
-            if not s or s.startswith("#"):  # rows inside #ifdef DIHRES are read: the check needs them either way
+            # the protein backbone phi/psi rows (#ifdef BBDIHRES, EM only) are not lipid stereo/ring restraints: skip them
+            if s.startswith("#ifdef BBDIHRES"):
+                backbone = True
+            elif s.startswith("#endif") and backbone:
+                backbone = False
+            if backbone or not s or s.startswith("#"):  # rows inside #ifdef DIHRES are read: the check needs them either way
                 continue
             if s.startswith("["):
                 section, fresh = s.strip("[] \t").lower(), True
