@@ -102,6 +102,16 @@ class AmideRestraint(unittest.TestCase):
             rows = mf.itp_dihedral_restraints([REPO / "membraneforger" / "forcefield" / "toppar" / itp])[molecule]
             self.assertEqual([t for q, t in rows if q == quad], [180.0], itp)
 
+    def test_the_psm_amide_row_is_the_map_dat_trans_definition(self):
+        itp = REPO / "membraneforger" / "forcefield" / "toppar" / "PSM.itp"
+        names = [name for name, _ in mf.itp_atoms([itp])["PSM"]]
+        amide = next(tuple(d) for d in mf.map_section(DATA, "trans", "PSM") if d[1] == "NF")
+        quad = tuple(names.index(name) for name in amide)
+        self.assertEqual(amide, ("C2S", "NF", "C1F", "C2F"))
+        rows = mf.itp_dihedral_restraints([itp])["PSM"]
+        self.assertEqual([t for q, t in rows if q == quad], [180.0])
+        self.assertEqual(len(rows), 4)  # the two centres, the C4=C5 bond and the amide
+
     def test_three_bands(self):
         self.assertEqual([mf.trans_band(p) for p in (180.0, -150.0, 149.9, -90.0, 30.1, 30.0, 0.0, -12.0)],
                          ["trans", "trans", "twisted", "twisted", "twisted", "cis", "cis", "cis"])
