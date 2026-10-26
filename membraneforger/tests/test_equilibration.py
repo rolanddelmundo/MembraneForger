@@ -119,6 +119,20 @@ class CoreWaterRecord(unittest.TestCase):
         from membraneforger.equilibration import core_water_record
         self.assertEqual(core_water_record([np.nan, np.nan])["status"], "NOT RUN")
 
+    def test_the_report_keeps_the_free_water_counts_the_trend_verdict_used(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        from membraneforger.equilibration import write_equilibration_report
+        keys = ("frame", "apl_upper_A2", "apl_lower_A2", "thickness_A", "core_water_percent", "core_water_free", "tilt_deg", "depth_A", "area_nm2")
+        series = {k: [1.0, 2.0] for k in keys}
+        series["core_water_free"] = [5.0, float("nan")]
+        with tempfile.TemporaryDirectory() as tmp:
+            write_equilibration_report(Path(tmp), [], series)
+            saved = json.loads((Path(tmp) / "equilibration_validation.json").read_text())["series"]
+        self.assertEqual(saved["core_water_free"], [5.0, None])
+
 
 if __name__ == "__main__":
     unittest.main()

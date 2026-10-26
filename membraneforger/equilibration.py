@@ -319,7 +319,7 @@ def write_equilibration_report(out: Path, records: list[dict], series: dict | No
     """Write equilibration_validation.json/.md and append gates 3 and 4 to membrane_validation.json when it exists."""
     gate3 = [r for r in records if r["stage"] == "equilibrated"]
     gate4 = [r for r in records if r["stage"] == "final"]
-    keys = ("frame", "apl_upper_A2", "apl_lower_A2", "thickness_A", "core_water_percent", "tilt_deg", "depth_A", "area_nm2")
+    keys = ("frame", "apl_upper_A2", "apl_lower_A2", "thickness_A", "core_water_percent", "core_water_free", "tilt_deg", "depth_A", "area_nm2")
     clean = lambda v: None if (isinstance(v, float) and not np.isfinite(v)) else v
     result = {"records": records,
               "gates": {"3 equilibration convergence": overall_status(gate3), "4 equilibrium physical properties": overall_status(gate4)},

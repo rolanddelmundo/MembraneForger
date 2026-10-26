@@ -27,6 +27,9 @@ residue, a Gly parent, or no phi or no psi because it ends a chain or a chain br
 (input_outlier); its input lies inside the inset band at a boundary (flag_margin); or the best box has a half-width below
 BB_DIHRES_MIN_HALF_DEG (flag_narrow). flag_* rows mean the model is too close to a boundary for a safe window and should be refined.
 
+Known gap: in a chain with ACE/CT3 caps the cap atoms (CY, NT) are folded into the first and last residue, so those residues have
+no neighbouring residue for phi (first) or psi (last) and get no restraint.
+
 The restraint is finite, so a window bounds where the restraint starts to push, not where the angle ends: check the result with the
 backbone check (--strict-segments for residues that were modelled rather than observed).
 """

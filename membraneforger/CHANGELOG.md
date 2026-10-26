@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Core hydration is graded by occupancy, not by a drift fit.** The gate 3 core-water check fitted a line to a few frames with 0-9 free
+  waters each and failed on counting noise (drift +48 / +51 % on the archived KOR frames). `core_water_record` grades the mean percent of
+  bulk water with the single-frame limits and tests a trend (second against first half, Poisson error) only with at least 20 frames and
+  10 free waters per frame; a passing level with less data is INSUFFICIENT SAMPLING. The per-frame free-water count is stored in the
+  frame series and in `equilibration_validation.json` (`core_water_free`).
 - **A lipidated residue no longer discards what `setup_forcefield` or an earlier lipidated residue put in the private force field.**
   `add_lipidated_residue` rebuilt `merged.rtp` and `ffbonded.itp` from the pristine files, so an RTP block or backbone CMAP added
   before it was lost and a second lipidated residue type replaced the first. It now appends to the working copy, adds its block
