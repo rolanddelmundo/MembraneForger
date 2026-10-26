@@ -13,6 +13,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from .backbone_check import parse_segments
+from .prenyl import PRENYL_MODES
 from .backbone_restraints import RESTRAINT_MODES
 from .config import (
     BB_DIHRES_DPHI,
@@ -331,6 +332,11 @@ def make_parser() -> argparse.ArgumentParser:
                             "bond EM twisted or flipped to another isomer, a C-alpha or Thr/Ile C-beta it inverted, or (with the EM backbone "
                             "restraints on) a phi/psi that moved more than 30 deg beyond the restraint width; report lists the same as "
                             "warnings; no skips it (default: %(default)s)")
+    after.add_argument("--prenyl-configuration", choices=PRENYL_MODES, default=defaults.prenyl_configuration,
+                       help="E/Z configuration of the S-geranylgeranyl cysteines (CYSG, CYSM): a natural prenyl group is all-E and minimization cannot "
+                            "turn a Z double bond into E. report warns about Z bonds in the input (default: %(default)s); yes stops the build on one "
+                            "and fails the audit if one remains after EM; fix converts Z to E in the input by a rigid 180 deg rotation of the "
+                            "distal group (bond lengths and angles unchanged); no skips the check")
     after.add_argument("--backbone-drift-margin", type=float, default=defaults.backbone_drift_margin_deg, metavar="DEG",
                        help="degrees added to the 30 deg restraint width before a phi/psi drift fails the backbone check (default: %(default)s)")
     after.add_argument("--backbone-restraints", choices=RESTRAINT_MODES, default=defaults.backbone_restraints,
@@ -496,7 +502,7 @@ def main(argv: list | None = None) -> int:
                         apl_validate=args.apl_validate == "yes", apl_slice_tolerance_percent=args.apl_tolerance,
                         rdf_validate=args.rdf_validate == "yes", cg_validate=args.cg_validate == "yes",
                         slice_optimize_offset=args.slice_offset_search and not args.no_slice_offset,
-                        counterion_mode=args.counterion_mode, backbone_check=args.backbone_check,
+                        counterion_mode=args.counterion_mode, backbone_check=args.backbone_check, prenyl_configuration=args.prenyl_configuration,
                         backbone_drift_margin_deg=args.backbone_drift_margin, backbone_restraints=args.backbone_restraints,
                         backbone_restraint_inset_deg=args.backbone_restraint_inset)
     session = Session(out=out, name=args.name or out.name, gmx=gmx, forcefield=forcefield, data=data, python=python,

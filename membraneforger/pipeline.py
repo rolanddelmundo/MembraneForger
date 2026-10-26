@@ -14,6 +14,7 @@ from .alignment import map_all_atom_to_cg
 from .audit import audit_run, check_ring_piercing, closest_contact_between
 from .backbone_check import backbone_residues, chain_labels, check_backbone, write_backbone_report
 from .backbone_restraints import require_backbone_check
+from .prenyl import apply_prenyl_configuration
 from .backmapping import assemble_membrane_pdb, backmap_membrane, read_mapping
 from .config import AMINO, DEFAULT_LIGANDS, INTERMEDIATES, RENAME_MOLECULE, Settings
 from .contacts import check_contacts, describe_contacts, record_contacts
@@ -140,6 +141,10 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
     aa_atoms, notes = run_stage(session, "inputs", read_all_atom, all_atom, session.forcefield)
     for note in notes:
         log(out, note)
+    aa_atoms, prenyl_notes, record["prenyl"] = run_stage(session, "inputs", apply_prenyl_configuration, aa_atoms,
+                                                           session.settings.prenyl_configuration, all_atom.name)
+    for level, text in prenyl_notes:
+        log(out, text, level)
     # Orientation first: it needs only the all-atom input, and it must fail before anything expensive runs.
     (work / "orientation").mkdir(exist_ok=True)
     oriented = run_stage(session, "orient", orient_complex, aa_atoms, all_atom, session.orientation, session.settings,

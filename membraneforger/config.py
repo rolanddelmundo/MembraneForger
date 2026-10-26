@@ -440,6 +440,10 @@ class Settings:
     # restraints on) a phi/psi that moved more than BB_DIHRES_DPHI + backbone_drift_margin_deg; "report" lists the same as warnings; "no" skips it.
     # With the restraints on, five builds of a 1214-residue receptor-G protein complex drifted at most 35.5 degrees and none beyond 45.
     backbone_check: str = "report"
+    # E/Z configuration of the S-geranylgeranyl cysteine (CYSG / CYSM) in the all-atom input and in the minimized structure (prenyl.py). A natural
+    # geranylgeranyl group is all-E and minimization cannot turn a Z double bond into E. "report" warns (the default, as in earlier releases), "yes" stops the
+    # build on a Z bond (and fails the audit if one remains after EM), "fix" converts Z to E in the input by a rigid 180 degree rotation, "no" skips it.
+    prenyl_configuration: str = "report"
     backbone_drift_margin_deg: float = 30.0
     # EM-only backbone phi/psi restraints (backbone_restraints.py): "off" (none), "fixed" (input +-BB_DIHRES_DPHI) or "clipped" (that
     # window cut back to the backbone check's allowed Ramachandran region, backbone_restraint_inset_deg inside its boundary). The inset
