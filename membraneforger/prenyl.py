@@ -145,14 +145,16 @@ def apply_prenyl_configuration(atoms: list, mode: str, source: str) -> tuple:
         new, converted = convert_to_e(coords)
         if not converted:
             continue
-        others = [j for j in range(len(atoms)) if j not in set(idx) and not atoms[j]["atom"].startswith(("H", "Q")) and atoms[j]["resname"] not in ("TIP3", "SOL")]
+        own = set(idx)
+        others = [j for j in range(len(atoms)) if j not in own and not atoms[j]["atom"].startswith(("H", "Q"))
+                  and atoms[j]["resname"] not in ("TIP3", "SOL")]
         if others:
             tree = cKDTree(np.array([[atoms[j]["x"], atoms[j]["y"], atoms[j]["z"]] for j in others]))
             moved = [i for i in idx if atoms[i]["atom"] in HEAVY_NAMES and not np.allclose(new[atoms[i]["atom"]], coords[atoms[i]["atom"]])]
             close = min((float(tree.query(new[atoms[i]["atom"]])[0]) for i in moved), default=99.0)
             if close < MIN_CLEARANCE_A:
-                raise SystemExit(f"all-atom input {source}: converting {resname}{key[2]} to E leaves a prenyl atom {close:.2f} A from another residue "
-                                 f"(limit {MIN_CLEARANCE_A} A); re-place the group in the input")
+                raise SystemExit(f"all-atom input {source}: converting {resname}{key[2]} to E leaves a prenyl atom {close:.2f} A "
+                                 f"from another residue (limit {MIN_CLEARANCE_A} A); re-place the group in the input")
         for i in idx:
             x, y, z = new[atoms[i]["atom"]]
             atoms[i]["x"], atoms[i]["y"], atoms[i]["z"] = float(x), float(y), float(z)

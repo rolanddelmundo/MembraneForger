@@ -13,7 +13,6 @@ from dataclasses import replace
 from pathlib import Path
 
 from .backbone_check import parse_segments
-from .prenyl import PRENYL_MODES
 from .backbone_restraints import RESTRAINT_MODES
 from .config import (
     BB_DIHRES_DPHI,
@@ -33,6 +32,7 @@ from .config import (
 from .embedding import CONVERTIBLE, EMBED_SITES, LIPID_NAMES, lipid_name
 from .orientation import NTERM_SIDES, ORIENTATION_MODES, OrientationRequest, parse_residue_ranges
 from .pipeline import Session, build
+from .prenyl import PRENYL_MODES
 from .runtools import find_gromacs
 from .validation import refuse_overwrite
 
@@ -333,7 +333,8 @@ def make_parser() -> argparse.ArgumentParser:
                             "restraints on) a phi/psi that moved more than 30 deg beyond the restraint width; report lists the same as "
                             "warnings; no skips it (default: %(default)s)")
     after.add_argument("--prenyl-configuration", choices=PRENYL_MODES, default=defaults.prenyl_configuration,
-                       help="E/Z configuration of the S-geranylgeranyl cysteines (CYSG, CYSM): a natural prenyl group is all-E and minimization cannot "
+                       help="E/Z configuration of the S-geranylgeranyl cysteines (CYSG, CYSM): a natural prenyl group is all-E and minimization "
+                            "cannot "
                             "turn a Z double bond into E. report warns about Z bonds in the input (default: %(default)s); yes stops the build on one "
                             "and fails the audit if one remains after EM; fix converts Z to E in the input by a rigid 180 deg rotation of the "
                             "distal group (bond lengths and angles unchanged); no skips the check")

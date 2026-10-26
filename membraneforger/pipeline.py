@@ -14,7 +14,6 @@ from .alignment import map_all_atom_to_cg
 from .audit import audit_run, check_ring_piercing, closest_contact_between
 from .backbone_check import backbone_residues, chain_labels, check_backbone, write_backbone_report
 from .backbone_restraints import require_backbone_check
-from .prenyl import apply_prenyl_configuration
 from .backmapping import assemble_membrane_pdb, backmap_membrane, read_mapping
 from .config import AMINO, DEFAULT_LIGANDS, INTERMEDIATES, RENAME_MOLECULE, Settings
 from .contacts import check_contacts, describe_contacts, record_contacts
@@ -23,6 +22,7 @@ from .martini import bilayer_midplane, classify_cg, make_membrane_whole
 from .membrane_report import MembraneValidation, protein_of_cg_frame, stage_from_gro, stage_from_membrane_pdb
 from .minimization import has_backbone_dihres, run_em, validate_em
 from .orientation import OrientationRequest, check_orientation_preserved, orient_complex
+from .prenyl import apply_prenyl_configuration
 from .reporting import write_run_manifest
 from .runtools import INT_DIR, LOG_NAME, gromacs_version, log, sha256
 from .slicing import offset_slack, slice_membrane_cg

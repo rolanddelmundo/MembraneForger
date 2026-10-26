@@ -8,9 +8,10 @@ from pathlib import Path
 
 import numpy as np
 
-from .common import AA_PDB, failure, mf
 from membraneforger.audit import check_prenyl_configuration
 from membraneforger.config import Settings
+
+from .common import AA_PDB, failure, mf
 
 
 def cysg(atoms):
