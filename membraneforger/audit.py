@@ -14,6 +14,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from .config import DISULFIDE_OK_A, Settings
+from .prenyl import PRENYL_DOUBLE_BONDS, PRENYL_RESIDUES, Z_BELOW_DEG, prenyl_dihedrals
 from .runtools import INT_DIR, run_path
 from .stereo import check_gm3_stereo, check_pi_stereo
 
@@ -530,6 +531,33 @@ def check_disulfide_geometry(run: Path, structure: str) -> tuple[dict, list]:
     return report, fails
 
 
+def check_prenyl_configuration(run: Path, structure: str, settings: Settings) -> tuple[dict, list]:
+    """Measure the three double-bond dihedrals of every CYSG / CYSM residue on the minimized structure: Z there never turns E."""
+    # Fails only when the build asked for the check (--prenyl-configuration yes or fix); with report the Z bonds are listed, not failed.
+    resn, names, xyz, _ = gro_table(run_path(run, structure))
+    groups, current, seen = [], None, set()
+    for i, (r, a) in enumerate(zip(resn, names)):
+        if r not in PRENYL_RESIDUES:
+            current = None
+            continue
+        if current is None or a in seen:                  # a repeated atom name starts the next residue
+            current, seen = {}, set()
+            groups.append((r, current))
+        current[a] = xyz[i]
+        seen.add(a)
+    records = []
+    for k, (r, coords) in enumerate(groups, 1):
+        dih = prenyl_dihedrals(coords)
+        z = [f"{b[1]}={b[2]}" for b, d in zip(PRENYL_DOUBLE_BONDS, dih) if d is not None and abs(d) < Z_BELOW_DEG]
+        records.append({"residue": f"{r} copy {k}", "dihedral_deg": [None if d is None else round(d, 1) for d in dih], "z_bonds": z})
+    bad = [r for r in records if r["z_bonds"]]
+    report = {"residues": len(records), "z_residues": len(bad), "enforced": settings.prenyl_configuration in ("yes", "fix"), "groups": records}
+    fails = []
+    if bad and report["enforced"]:
+        fails = [f"{len(bad)} geranylgeranyl group(s) with a Z double bond after EM, e.g. {bad[0]['residue']} {', '.join(bad[0]['z_bonds'])}"]
+    return report, fails
+
+
 DEFAULT_DATA = Path(__file__).resolve().parent / "backmap_data"  # map.dat: the GM3 and SAPI25 chirality definitions the stereo checks use
 
 
@@ -545,7 +573,8 @@ def audit_run(run: Path, gmx: str, structure: str = "em.gro", settings: Settings
                                ("dihedral_restraints", check_dihedral_restraints(run, structure)),
                                ("gm3_stereochemistry", check_gm3_stereo(run_path(run, structure), data)),
                                ("sapi25_stereochemistry", check_pi_stereo(run_path(run, structure), data)),
-                               ("disulfides", check_disulfide_geometry(run, structure))):
+                               ("disulfides", check_disulfide_geometry(run, structure)),
+                               ("prenyl_configuration", check_prenyl_configuration(run, structure, settings))):
         report[key] = part
         failures += fails
     report["checks"] = ["atom names and count match topol.top", "net charge is zero", "no stray toppar files",
@@ -557,7 +586,8 @@ def audit_run(run: Path, gmx: str, structure: str = "em.gro", settings: Settings
                         "lipid stereocentres and double bonds satisfy their CHARMM-GUI dihedral restraints",
                         "every GM3 has its 16 sugar stereocentres and 2 ceramide trans bonds in the configuration of map.dat",
                         "every SAPI25 has its 6 inositol stereocentres in the configuration of map.dat",
-                        "every disulfide of the topology measures 1.8-2.2 A after EM"]
+                        "every disulfide of the topology measures 1.8-2.2 A after EM",
+                        "every geranylgeranyl double bond is E after EM (enforced with --prenyl-configuration yes or fix)"]
     report["failures"] = failures
     report["result"] = "FAIL" if failures else "PASS"
     (run / "audit.json").write_text(json.dumps(report, indent=2) + "\n")

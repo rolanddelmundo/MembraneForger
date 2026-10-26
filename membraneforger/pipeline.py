@@ -22,6 +22,7 @@ from .martini import bilayer_midplane, classify_cg, make_membrane_whole
 from .membrane_report import MembraneValidation, protein_of_cg_frame, stage_from_gro, stage_from_membrane_pdb
 from .minimization import has_backbone_dihres, run_em, validate_em
 from .orientation import OrientationRequest, check_orientation_preserved, orient_complex
+from .prenyl import apply_prenyl_configuration
 from .reporting import write_run_manifest
 from .runtools import INT_DIR, LOG_NAME, gromacs_version, log, sha256
 from .slicing import offset_slack, slice_membrane_cg
@@ -140,6 +141,10 @@ def prepare_inputs(session: Session, all_atom: Path, coarse_grain: Path) -> dict
     aa_atoms, notes = run_stage(session, "inputs", read_all_atom, all_atom, session.forcefield)
     for note in notes:
         log(out, note)
+    aa_atoms, prenyl_notes, record["prenyl"] = run_stage(session, "inputs", apply_prenyl_configuration, aa_atoms,
+                                                           session.settings.prenyl_configuration, all_atom.name)
+    for level, text in prenyl_notes:
+        log(out, text, level)
     # Orientation first: it needs only the all-atom input, and it must fail before anything expensive runs.
     (work / "orientation").mkdir(exist_ok=True)
     oriented = run_stage(session, "orient", orient_complex, aa_atoms, all_atom, session.orientation, session.settings,

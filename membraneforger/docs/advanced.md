@@ -252,3 +252,12 @@ pdb2gmx from `merged.hdb`. `GLYP` is CHARMM's `GLYM` (N-myristoyl glycine, `topp
 extended from C14 to C16 using the palmitate atom types and charges of `CYSP`; no new parameters are involved. The
 lipidated lysines of the peptide agonists (`KTZ`, `KRT`, `KSM`) are different: their CGenFF side chains are taken from the
 ligand packages in `forcefield/toppar/` and the input must carry all their hydrogens.
+
+The geranylgeranyl group of `CYSG` must be all-E: at C2=C3, C7=C8 and C12=C13 the chain carbons on the two sides lie trans
+(dihedral near 180 degrees). The force field keeps a double bond planar but cannot turn Z into E, so a Z group in the input
+stays Z through minimization and every later simulation. The bundled GCGR-Gs input has all three bonds in Z (dihedral 0 to 5
+degrees). `--prenyl-configuration report` (the default) warns, `yes` stops the build on a Z bond and fails the audit if one
+remains after EM, and `fix` turns each Z bond into E by rotating everything beyond it 180 degrees about the bond axis as a rigid
+body, which keeps every bond length, bond angle and the planarity at the double bond and moves the hydrogens with their carbon.
+`fix` refuses when a moved prenyl atom would end within 2.0 A of another residue of the input; re-place the group then.
+The input stays as it was; the converted coordinates are the ones the build uses, and the run manifest lists the residues changed.
