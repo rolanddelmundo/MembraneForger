@@ -38,7 +38,9 @@
   parent, Gly, chain ends and breaks), inputs already outside the region, inputs inside the inset band (`flag_margin`) and windows
   narrower than 5 degrees (`flag_narrow`) keep +-30, and the flags are named in the log as residues to refine. Every window is in
   `backbone_restraints.tsv` in the output directory (not in `toppar/`, where the audit requires every file to be included). The
-  restraint is finite, so a window bounds where it starts to push, not where the angle ends: keep the backbone check on.
+  restraint is finite, so a window bounds where it starts to push, not where the angle ends: `clipped` is therefore accepted only with
+  `--backbone-check yes` (the command line refuses it otherwise, and a Session built without the CLI fails before any work), and a
+  backbone check that was skipped stops a clipped build.
   The audit's `grompp (posres)` rebuild now adds `-DPOSRES` to an existing `define` line of `em.mdp` instead of writing a second
   `define` key, which grompp rejects (every restrained build failed the audit before this).
 - **Backbone check after minimization (`--backbone-check yes|report|no`, default `report`).** The audit looked at C-alpha positions and

@@ -479,6 +479,8 @@ def main(argv: list | None = None) -> int:
         parser.error("--apl-tolerance must be positive")
     if args.backbone_drift_margin < 0:
         parser.error("--backbone-drift-margin must not be negative")
+    if args.backbone_restraints == "clipped" and args.backbone_check != "yes":
+        parser.error("--backbone-restraints clipped requires --backbone-check yes")
     if not 0 <= args.backbone_restraint_inset < BB_DIHRES_DPHI - BB_DIHRES_MIN_HALF_DEG:
         parser.error(f"--backbone-restraint-inset must be at least 0 and below {BB_DIHRES_DPHI - BB_DIHRES_MIN_HALF_DEG:g}")
     try:

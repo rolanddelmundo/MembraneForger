@@ -211,8 +211,59 @@ class CommandLine(unittest.TestCase):
             err = io.StringIO()
             with contextlib.redirect_stderr(err), self.assertRaises(SystemExit):
                 mf.main(["--aa", str(AA_PDB), "--gmx", sys.executable, "--orientation", "none", "--backbone-restraints", "clipped",
-                         "--backbone-restraint-inset", bad])
-            self.assertIn("--backbone-restraint-inset", err.getvalue())
+                         "--backbone-check", "yes", "--backbone-restraint-inset", bad])
+            self.assertIn("--backbone-restraint-inset must be", err.getvalue())
+
+
+class ClippedNeedsTheCheck(unittest.TestCase):
+    """clipped is accepted only together with --backbone-check yes, and a check that was skipped stops the build; off and fixed are unchanged."""
+    def test_the_helper_accepts_every_other_combination(self):
+        from membraneforger.backbone_restraints import require_backbone_check
+        for restraints in ("off", "fixed"):
+            for check in ("yes", "report", "no"):
+                require_backbone_check(restraints, check)
+        require_backbone_check("clipped", "yes")
+        for check in ("report", "no"):
+            with self.assertRaises(SystemExit) as caught:
+                require_backbone_check("clipped", check)
+            self.assertIn("--backbone-check yes", str(caught.exception))
+
+    def test_the_command_line_refuses_clipped_without_the_check(self):
+        for check in ("report", "no"):
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err), self.assertRaises(SystemExit):
+                mf.main(["--aa", str(AA_PDB), "--gmx", sys.executable, "--orientation", "none", "--backbone-restraints", "clipped",
+                         "--backbone-check", check])
+            self.assertIn("requires --backbone-check yes", err.getvalue())
+        err = io.StringIO()   # the default check is report, so clipped alone is refused as well
+        with contextlib.redirect_stderr(err), self.assertRaises(SystemExit):
+            mf.main(["--aa", str(AA_PDB), "--gmx", sys.executable, "--orientation", "none", "--backbone-restraints", "clipped"])
+        self.assertIn("requires --backbone-check yes", err.getvalue())
+
+    def test_a_skipped_check_stops_a_clipped_build_but_not_the_others(self):
+        from membraneforger import pipeline
+        skipped = {"status": "skipped", "reason": "no protein residues", "failures": [], "warnings": []}
+        for restraints, stops in (("clipped", True), ("fixed", False), ("off", False)):
+            settings = mf.Settings(backbone_restraints=restraints, backbone_check="yes")
+            session = mock.Mock(out=Path(tempfile.mkdtemp()), settings=settings, strict_segments=())
+            with mock.patch.object(pipeline, "check_backbone", return_value=skipped), \
+                    mock.patch.object(pipeline, "backbone_residues", return_value={}), mock.patch.object(pipeline, "chain_labels", return_value=[]), \
+                    mock.patch.object(pipeline, "has_backbone_dihres", return_value=restraints != "off"), \
+                    mock.patch.object(pipeline, "write_backbone_report"), mock.patch.object(pipeline, "log"):
+                if stops:
+                    with self.assertRaises(SystemExit) as caught:
+                        pipeline.review_backbone(session, {})
+                    self.assertIn("skipped", str(caught.exception))
+                else:
+                    self.assertEqual(pipeline.review_backbone(session, {})["status"], "skipped")
+
+    def test_a_clipped_session_with_the_check_off_is_refused_before_any_work(self):
+        from membraneforger import pipeline
+        settings = mf.Settings(backbone_restraints="clipped", backbone_check="report")
+        with self.assertRaises(SystemExit):
+            pipeline.build_topology_and_box(mock.Mock(settings=settings), Path("x.pdb"), set(), None, {})
+        with self.assertRaises(SystemExit):
+            pipeline.review_backbone(mock.Mock(settings=settings), {})
 
 
 if __name__ == "__main__":

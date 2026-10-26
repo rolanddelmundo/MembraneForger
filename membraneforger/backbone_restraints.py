@@ -41,14 +41,22 @@ from .backbone_check import PARENT_RESIDUE
 from .config import BB_DIHRES_DPHI, BB_DIHRES_MIN_HALF_DEG
 from .structio import read_itp, read_pdb
 
-__all__ = ['RESTRAINT_MODES', 'RECORD_NAME', 'rama_allowed', 'backbone_angles', 'restraint_windows', 'write_backbone_dihres',
-           'write_restraint_record', 'summarize_record']
+__all__ = ['RESTRAINT_MODES', 'RECORD_NAME', 'require_backbone_check', 'rama_allowed', 'backbone_angles', 'restraint_windows',
+           'write_backbone_dihres', 'write_restraint_record', 'summarize_record']
 
 RESTRAINT_MODES = ("off", "fixed", "clipped")
 RECORD_NAME = "backbone_restraints.tsv"
 RECORD_COLUMNS = ("molecule", "index", "resid", "resname", "angle", "input", "centre", "half_width", "low", "high", "status")
 PEPTIDE_BOND_A = 2.0    # C(i)-N(i+1) shorter than this (A) is a peptide bond, as in backbone_check (0.20 nm)
 STEP_DEG = 0.5          # grid of the box search, in degrees from the input angle
+
+
+def require_backbone_check(restraints: str, check: str) -> None:
+    """`clipped` only narrows the restraint windows; the backbone check after EM is what catches what it cannot (a flipped centre, a
+    boundary crossed inside a finite restraint), so the two are used together: clipped needs --backbone-check yes."""
+    if restraints == "clipped" and check != "yes":
+        raise SystemExit(f"--backbone-restraints clipped requires --backbone-check yes (got {check!r}): the check after EM is what stops a "
+                         f"build whose minimization inverted a centre or crossed a Ramachandran boundary")
 
 
 def rama_allowed(parent: str, phi, psi, inset: float = 0.0) -> np.ndarray:
