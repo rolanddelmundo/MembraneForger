@@ -40,7 +40,8 @@ Water, Na+, Cl- and K+ must not be in the input; the build adds its own (`SOL`, 
 4. **Extra parameters.** If CGenFF produced parameters that are not in CHARMM36 (the `.prm` part of its output, with
    penalty scores), they must be visible to `grompp`: append them, converted to GROMACS units, to
    `charmm36.ff/ffbonded.itp` in your `--toppar` copy (`[ angletypes ]`, `[ dihedraltypes ]`, ...). `toppar/JNJ.prm.itp`
-   shows that format; a `.prm.itp` next to the ligand is **not** read automatically.
+   shows that format; a `.prm.itp` next to the ligand is **not** read automatically (the bundled `JNJ` has not been
+   built with MembraneForger yet, and its angle parameter is not in `ffbonded.itp`, so it is exactly this case).
 5. **Check the pose.** Ligand heavy atoms are frozen in both minimizations
    ([Advanced options](advanced.md#ligands-during-minimization)), so a ligand that overlaps a lipid or a residue in the
    input stays there and the build fails the Fmax or contact check naming the pair. Fix the pose or the residue in

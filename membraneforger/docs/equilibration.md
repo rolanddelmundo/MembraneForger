@@ -14,7 +14,12 @@ bash membraneforger/mdp/run_equilibration.sh my_build gmx_mpi 16
 
 The script runs `grompp` and `mdrun` for `step6.1_equilibration` to `step6.6_equilibration` in `my_build/`, each
 restrained to the positions of `em.gro`, then writes `step7_production.tpr` and prints the `mdrun` command for it.
-On a cluster, put the same lines in a job script; each step is one `grompp` plus one `mdrun`.
+On a cluster, load your GROMACS module first (`module load Gromacs/2026.3-Container` on Gemini) or pass the command
+as the second argument, and put the same lines in a job script; each step is one `grompp` plus one `mdrun`.
+
+Tested on a 277,503-atom GCGR-Gs build (GROMACS 2026.3): every template passes `grompp -maxwarn 0` (the only notes are
+the usual COM-removal-with-restraints note and the fast bond note for the 2 fs steps), and the six steps run on with
+the temperature settling at 310 K from step 6.2 and the pressure approaching 1 bar through steps 6.3 to 6.6.
 
 ## What the steps do
 
