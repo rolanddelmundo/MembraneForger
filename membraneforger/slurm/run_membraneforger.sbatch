@@ -51,7 +51,7 @@ ORIENT="--orientation none"                    # already oriented (OPM, CHARMM-G
                                                # "--orient-chain R --nterm-side out" (GPCRs: out); uses PPM
 MEMBRANE=1                                     # 1 = a random bundled GPR139 frame, 2 = a random KOR frame, or
                                                # one frame by name for every model (python -m membraneforger --list-membranes)
-RUNS=1                                         # > 1 with MEMBRANE=2 (GPR139 has one frame): build each model many times, once
+RUNS=1                                         # > 1 with MEMBRANE=1 or 2 (nine frames each): build each model many times, once
                                                # in each of the first RUNS frames ($WORK/<name>/<frame>/em.gro);
                                                # the runs are sequential, about 15 to 30 minutes each: raise --time
 EXTRA=""                                       # other options, e.g. "--xy-buffer 2.0" for production systems
