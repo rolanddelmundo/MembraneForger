@@ -39,7 +39,7 @@ membraneforger \
 
 It takes about 15 to 30 minutes on 8 cores. Progress goes to the screen and to `example_out/membranebuilder.log`, one
 line per check, starting with `CHECK:`, `PASS:`, `WARN:`, `INFO:` or `ERROR:`. The stages run in the order of the
-[How it works](../../README.md#how-it-works) list in the README: orientation, the membrane-frame check, embedding,
+[How it works](index.md#how-it-works) list in the README: orientation, the membrane-frame check, embedding,
 slicing and its gate, backmapping, topology, solvation and ions, minimization, audit. The last line of the log is
 `PASS` or `FAIL`. If you interrupt a build, run it again with `--overwrite`; MembraneForger refuses to write into a
 folder that already holds a build.
@@ -94,4 +94,4 @@ Two choices affect reproducibility and fit:
   much smaller or larger one needs the options in [Preparing the input](preparing_inputs.md#size-and-the-bundled-membranes).
 
 If a build stops, the log names the stage and the file to look at, and [Troubleshooting](troubleshooting.md) lists the
-common causes. To report a problem, see [Contributing](../../CONTRIBUTING.md).
+common causes. To report a problem, see [Contributing](https://github.com/rolanddelmundo/MembraneForger/blob/main/CONTRIBUTING.md).
