@@ -1,6 +1,6 @@
 #!/bin/bash
 # MembraneForger on Gemini (City of Hope): membraneforger/slurm/run_membraneforger.sbatch with blocks 1 to 3 filled in for that
-# cluster. It builds the bundled example complex (GCGR) in the first five kappa opioid receptor membrane frames (KOR_Membrane1, KOR_Membrane2, KOR_Membrane3, KOR_Membrane5, KOR_Membrane6), as a check of the
+# cluster. It builds the bundled example complex (GCGR) in the first five kappa opioid receptor membrane frames (KOR_Membrane1, KOR_Membrane2, KOR_Membrane3, KOR_Membrane4, KOR_Membrane5), as a check of the
 # installation and a worked example of RUNS > 1.
 #
 #   bash ~/MembraneForger/membraneforger/slurm/setup.sh            # once, on a login node (Python, OpenMM, mstool; GROMACS is a module)
@@ -9,7 +9,7 @@
 #   sbatch gemini_GCGR.sbatch
 #
 # Expected: mforger_gemini_<job>_0.log ends with "[GCGR] 5 of 5 runs passed", one "KOR_Membrane<n>: ... PASS ..." line per
-# membrane and "exit 0"; the systems are ~/mforger_test/GCGR/KOR_Membrane1/em.gro, KOR_Membrane2, KOR_Membrane3, KOR_Membrane5 and KOR_Membrane6/em.gro.
+# membrane and "exit 0"; the systems are ~/mforger_test/GCGR/KOR_Membrane1/em.gro, KOR_Membrane2, KOR_Membrane3, KOR_Membrane4 and KOR_Membrane5/em.gro.
 # For your own structures, change NAMES and ORIENT in block 3 and RUNS back to 1 (or keep it, with a longer --time).
 #
 # ============================ 1. SCHEDULER: your cluster's queue ==============================================
@@ -50,7 +50,7 @@ ORIENT="--orientation none"                    # already oriented (OPM, CHARMM-G
                                                # "--orient-chain R --nterm-side out" (GPCRs: out); uses PPM
 MEMBRANE=2                                     # 1 = a random bundled GPR139 frame, 2 = a random KOR frame, or
                                                # one frame by name for every model (python -m membraneforger --list-membranes)
-RUNS=5                                         # build GCGR once in each of KOR_Membrane1, KOR_Membrane2, KOR_Membrane3, KOR_Membrane5, KOR_Membrane6
+RUNS=5                                         # build GCGR once in each of KOR_Membrane1, KOR_Membrane2, KOR_Membrane3, KOR_Membrane4, KOR_Membrane5
 EXTRA=""                                       # other options, e.g. "--xy-buffer 2.0" for production systems
 # ==============================================================================================================
 

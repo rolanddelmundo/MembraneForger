@@ -71,10 +71,10 @@ kept lipids moved and how much their shape changed, and the closest remaining be
 
 Why: the earlier rule removed every lipid with any bead within 0.40 nm. A G protein's lipid anchors (the Ggamma
 geranylgeranyl chain, the Galpha N-terminus) reach into the inner leaflet, and with the GCGR–Gs complex
-that rule deleted every one of the 78-96 lipids touching the complex on the 8 bundled frames, many of them only for touching those
+that rule deleted every one of the 78-100 lipids touching the complex on the 18 bundled frames, many of them only for touching those
 anchors. Each deleted lipid took its whole tail with it, leaving an empty column in the inner leaflet that solvation does not fill (water is
 removed between the phosphate planes) and that the area-per-lipid gate cannot see (the Voronoi cells of the anchor
-atoms absorb it). The current rule removes 20-31 lipids on the 8 bundled 50 us frames. Removing only lipids whose headgroup
+atoms absorb it). The current rule removes 15-32 lipids on the 18 bundled 50 us frames. Removing only lipids whose headgroup
 anchor the complex occupies was also tried and rejected: next to a thin anchor it still deletes lipids whose volume
 nothing replaces.
 
@@ -82,14 +82,14 @@ nothing replaces.
 its PO4 plane) is sampled on a 0.1 nm grid; a point farther than 0.60 nm from every lipid bead and every heavy atom
 of the complex is empty, and touching empty points form a pocket (`membrane_voids`, periodic in x and y). A pocket
 larger than 1.0 nm^3, less than the volume of one phospholipid, stops the build before slicing, naming the leaflet and
-the position. On the 8 bundled 50 us frames with the GCGR complex: uncut frames 0.007-0.066 nm^3, this embedding
-0.019-0.272 nm^3. If the gate stops a build, the frame's cavity cannot be adapted to the
+the position. On the 18 bundled 50 us frames with the GCGR complex: uncut frames 0.001-0.291 nm^3, this embedding
+0.019-0.271 nm^3. If the gate stops a build, the frame's cavity cannot be adapted to the
 complex by moving lipids; use a coarse-grained frame of the complex itself (`--cg FILE`) or another frame.
 
 **Embedding site (`--embed-site`).** A bundled frame was equilibrated around a receptor, and where the receptor was
 it has a hole of the receptor's shape (empty acyl volume once the receptor is taken out). The default site, `hole`, puts the complex there, which suits another receptor of similar size. A much smaller
-complex cannot fill it: a single-pass protein (one transmembrane helix) left a pocket of 1.7-2.9 nm^3 in the receptor's hole of every bundled 50 us frame (2.87 nm^3 in GPR139, 2.53 nm^3 in KOR,
-1.68 nm^3 in KOR_Membrane5) even after the push, and the empty-pocket gate stops the build with a message naming the other site.
+complex cannot fill it: a single-pass protein (one transmembrane helix) left a pocket of 1.7-3.2 nm^3 in the receptor's hole of every bundled 50 us frame (3.18 nm^3 in GPR139_Membrane3, 2.53 nm^3 in
+KOR_Membrane1, 1.68 nm^3 in KOR_Membrane5) even after the push, and the empty-pocket gate stops the build with a message naming the other site.
 With `--embed-site free` the complex goes on unbroken membrane instead, and the push makes room for it. The site is
 chosen for the membrane that will be cut around the complex, not for its helix alone: the slice window (the
 complex's x/y extent plus `--xy-buffer`, or `--box`, plus the 0.5 nm crop offset the slicer may take;
@@ -100,7 +100,7 @@ a receptor bead, so the hole reaches that far past the bead centres); if no poin
 push. The receptor's beads count as solid in the pocket search, and after slicing the build checks the actual window
 again (`frame_protein_in_slice`). A single helix with the default 1 nm buffer gives a cell of
 about 4 nm, where the cut edges alone can move the APL past the slice gate; give it a larger buffer (`--xy-buffer 3`;
-with it all 8 bundled frames pass the slice gate with the centred window; the +5.4 % KOR_Membrane7 deviation reported for the offset-search build is not reproduced).
+with it all 18 bundled frames pass the slice gate with the centred window, the construction deviation within 2.7 %).
 
 The membrane that exists after this step is the **embedded membrane**. It is the reference every later stage is
 compared with: it is the membrane the slice is actually cut from. The uncut frame is also measured ("CG frame"
@@ -112,7 +112,7 @@ give a lower-leaflet APL of 57.3 A^2 with the CG protein and 48.3 A^2 with the f
 ![KOR before and after embedding: the bundled 50 us frame, the embedded membrane with GCGR, and the slice](figures/KOR_Membrane1_before_after.png)
 
 *Figure 1. The coarse-grained membrane of the KOR build at its three coarse-grained stages: the bundled 50 us frame
-with its own receptor, the membrane after embedding the GCGR complex, and the slice cut around it (1302, 1279 and 469
+with its own receptor, the membrane after embedding the GCGR complex, and the slice cut around it (1302, 1279 and 513
 lipids). Top-down view of each leaflet and side view (x-z), coloured by the Voronoi area per lipid. "After" means after
 embedding and slicing: the build does not equilibrate the coarse-grained membrane, and the figure is drawn by
 `membraneforger/examples/make_tutorial_figures.py`.*
@@ -141,18 +141,20 @@ the cell is not cut. The cut is made lipid by lipid:
    that crosses the new cell edge stays where it is (mstool runs with `pbc=True`, GROMACS wraps);
 5. the window is centred on the complex. Opt in to `--slice-offset-search` and it may be shifted on a cropped axis by
    up to 0.5 nm (never past the 0.5 nm minimum margin) in steps of 0.1 nm, to the offset whose lipid counts best match the
-   reference leaflet density and composition. Centred is the default because on the 8 bundled 50 us frames (GCGR complex)
-   the construction deviation of section 4 is smaller with the centred window (median 0.71 %, 95th percentile 1.88 %,
-   largest 2.19 %) than with the search (1.55, 3.39, 4.87 %), and the search gains nothing in the spread of the
-   whole-cell deviation. The trade-off is in the report: the centred slices of KOR_Membrane5, KOR_Membrane6 and KOR_Membrane9 sit 11-12 % below the
-   whole embedded cell in the lower leaflet (percentile 0.99-1.0 of the equal-size windows, PASS WITH WARNINGS), where
-   the search gave one construction warning (KOR_Membrane5 lower, +4.87 %);
+   reference leaflet density and composition. Centred is the default because on the 18 bundled 50 us frames (GCGR complex)
+   the construction deviation of section 4 is smaller with the centred window (median 0.94 %, 95th percentile 2.71 %,
+   largest 3.58 %) than with the search (1.27, 3.71, 4.13 % on the 17 frames it completes; on GPR139_Membrane5 it
+   reaches +5.5 % in the lower leaflet and the build stops), and the search narrows the spread of the whole-cell
+   deviation only in the upper leaflet (standard deviation 1.5 against 2.5 %; 2.8 % in the lower leaflet either way). The
+   trade-off is in the report: the centred slices of eight frames sit 6-17 % below the whole embedded cell in the lower
+   leaflet (PASS WITH WARNINGS on representativeness), where the search gave construction warnings above 3 % on five
+   frames (GPR139_Membrane7, GPR139_Membrane9, KOR_Membrane3, KOR_Membrane4, KOR_Membrane7; 3.5-4.1 %);
 6. the new periodic seam is relaxed in place at the coarse-grained level: a short steepest descent pushes apart
    beads of different lipids that only the cut brought within 0.30 nm of each other, with the complex as a fixed
    repulsive wall, every bead held near its position and every lipid held in shape by intramolecular distance
    restraints. Pairs that were already that close in the source frame are data and are left alone. Only a lipid
-   still in a hard-core overlap (< 0.15 nm) afterwards is removed; on the 8 bundled 50 us frames none was (the seam removed 0 lipids on all of them). The
-   relaxation moves 42-56 % of the lipids by 0.016-0.030 nm on average and 0.39 nm at most; KOR_Membrane1, KOR_Membrane7 and KOR_Membrane9 reach the 400-step cap, the converged frames take 154-260 steps.
+   still in a hard-core overlap (< 0.15 nm) afterwards is removed; on the 18 bundled 50 us frames none was (the seam removed 0 lipids on all of them). The
+   relaxation moves 42-56 % of the lipids by 0.016-0.028 nm on average and 0.39 nm at most; 13 frames reach the 400-step cap, the five that converge (GPR139_Membrane4, GPR139_Membrane9, KOR_Membrane3, KOR_Membrane5, KOR_Membrane7) take 122-396 steps.
 
 ### Why whole-lipid anchoring
 
@@ -260,53 +262,76 @@ count the all-beads-inside rule keeps in the same window, with the APL that coun
 |---|---:|---:|---:|---:|---:|---:|---|
 | CG frame (frame's own receptor) | 671 | 631 | 48.0 | 51.0 | | | |
 | Embedded CG membrane (reference) | 666 | 613 | 47.7 | 48.9 | reference | reference | |
-| Old all-beads-inside slice | 214 | 186 | 55.3 | 54.0 | +15.9 % | +10.4 % | FAIL |
-| New anchor slice, centred + relaxed seam | 249 | 220 | 47.5 | 45.6 | -0.4 % | -6.6 % | PASS |
-| same lipids in the uncut membrane | 249 | 220 | 47.6 | 45.5 | construction: -0.15 % | +0.16 % | PASS |
+| Old all-beads-inside slice | 225 | 200 | 56.8 | 54.9 | +19.1 % | +12.4 % | FAIL |
+| New anchor slice, centred + relaxed seam | 272 | 241 | 47.0 | 45.6 | -1.5 % | -6.7 % | PASS |
+| same lipids in the uncut membrane | 272 | 241 | 47.6 | 45.7 | construction: -1.24 % | -0.31 % | PASS |
 
-The old rule deleted 69 lipids whose anchor was inside the window because one tail bead
-crossed the edge. The new slice keeps them; the seam relaxation moved 219 lipids by 0.021 nm on average (0.39 nm at
-most) and removed none. The lower leaflet is 6.6 % denser than the whole embedded cell (percentile 0.75 of 144
+The old rule deleted 88 lipids whose anchor was inside the window because one tail bead
+crossed the edge. The new slice keeps them; the seam relaxation moved 238 lipids by 0.023 nm on average (0.33 nm at
+most) and removed none. The lower leaflet is 6.7 % denser than the whole embedded cell (percentile 0.75 of 144
 equal-size windows): the construction check passes, the difference is where the window sits. With the offset search
-(`--slice-offset-search`) the same frame gives 249 / 217 lipids, -0.4 % / -5.3 % against the whole cell and
-+1.2 % / +1.7 % construction deviation.
+(`--slice-offset-search`) the same frame gives 267 / 240 lipids, +0.4 % / -6.3 % against the whole cell and
++0.8 % / +0.5 % construction deviation.
 
-Over all 8 bundled 50 us frames (16 leaflets, GCGR complex, centred window) the construction deviation of the
-new slice has a median of 0.71 %, a 95th percentile of 1.88 % and a largest value of 2.19 % (1.55, 3.39 and 4.87 % with
-`--slice-offset-search`), so the 3 % warning level is not crossed on any frame; the old all-beads-inside rule would have failed on every frame
-(+14.0 to +19.2 % upper, +6.5 to +12.2 % lower, 68-91 fewer lipids). The whole-cell
-deviation of a correct crop scatters more (standard deviation 1.5 % upper and 2.4 % lower leaflet, worst case 14.3 %, lower leaflet of KOR_Membrane7), which is why it is reported as representativeness
-and not used to stop the build; three frames (KOR_Membrane5, KOR_Membrane6, KOR_Membrane9) end PASS WITH WARNINGS on it.
+Over all 18 bundled 50 us frames (36 leaflets, GCGR complex, centred window) the construction deviation of the
+new slice has a median of 0.94 %, a 95th percentile of 2.71 % and a largest value of 3.58 % (1.27, 3.71 and 4.13 % with
+`--slice-offset-search` on the 17 frames it completes; on GPR139_Membrane5 the search's lower leaflet reaches +5.5 % and the
+build stops), so the 3 % warning level is crossed on two leaflets (GPR139_Membrane6 upper, KOR_Membrane5 lower) and the 5 % limit
+on none; the old all-beads-inside rule would have failed on every frame
+(+11.1 to +22.9 % upper, +4.2 to +12.6 % lower, 69-97 fewer lipids). The whole-cell
+deviation of a correct crop scatters more (standard deviation 2.5 % upper and 2.8 % lower leaflet, worst case 16.7 %, lower leaflet of GPR139_Membrane3), which is why it is reported as representativeness
+and not used to stop the build; eight frames (GPR139_Membrane1, 2, 3, 6 and 8, KOR_Membrane5, 6 and 8) end PASS WITH WARNINGS on it.
 
 The repaired slice therefore preserves the embedded membrane's packing to within 2-3 % per leaflet on the
-representative cases and within 5 % on every bundled frame tested; it does not preserve it "perfectly", and the
+representative cases and within 4 % on every bundled frame tested; it does not preserve it "perfectly", and the
 report says by how much.
 
-Area per lipid (A^2, Voronoi, protein footprint excluded) at each stage for the 8 bundled frames with the GCGR complex
+Area per lipid (A^2, Voronoi, protein footprint excluded) at each stage for the 18 bundled frames with the GCGR complex
 (centred window; the last column is the construction deviation with `--slice-offset-search`). "Uncut" is the same lipids as the slice, in the embedded membrane; the construction
 deviation is the slice against them. Head-plane is the area per phosphate/amide anchor (section 5.2).
 
 | Frame | Leaflet | CG frame | Embedded | Slice | Uncut | Construction | Head-plane embedded | Head-plane slice | Construction, offset search |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| KOR_Membrane1 | upper | 47.99 | 47.72 | 47.54 | 47.61 | -0.15 % | 65.72 | 63.80 | +1.17 % |
-| KOR_Membrane1 | lower | 51.04 | 48.87 | 45.62 | 45.55 | +0.16 % | 63.47 | 59.00 | +1.73 % |
-| KOR_Membrane2 | upper | 47.87 | 47.64 | 45.95 | 45.64 | +0.69 % | 65.84 | 62.48 | +2.90 % |
-| KOR_Membrane2 | lower | 51.66 | 49.29 | 44.14 | 43.82 | +0.73 % | 63.47 | 55.90 | -0.58 % |
-| KOR_Membrane3 | upper | 47.36 | 47.24 | 45.82 | 45.65 | +0.38 % | 66.06 | 63.00 | +1.65 % |
-| KOR_Membrane3 | lower | 52.11 | 50.06 | 45.90 | 45.67 | +0.50 % | 63.71 | 58.39 | +1.46 % |
-| KOR_Membrane5 | upper | 46.76 | 46.79 | 45.38 | 45.05 | +0.73 % | 65.37 | 63.28 | -0.39 % |
-| KOR_Membrane5 | lower | 51.63 | 49.19 | 43.11 | 43.21 | -0.23 % | 62.38 | 55.82 | +4.87 % |
-| KOR_Membrane6 | upper | 47.12 | 46.90 | 47.19 | 46.37 | +1.77 % | 65.51 | 66.66 | +0.12 % |
-| KOR_Membrane6 | lower | 51.92 | 49.76 | 44.03 | 45.02 | -2.19 % | 63.29 | 56.55 | +1.95 % |
-| KOR_Membrane7 | upper | 46.90 | 46.68 | 45.29 | 45.81 | -1.14 % | 66.05 | 63.73 | +0.37 % |
-| KOR_Membrane7 | lower | 52.72 | 50.38 | 43.26 | 42.71 | +1.30 % | 63.24 | 55.72 | +2.26 % |
-| KOR_Membrane9 | upper | 47.75 | 47.64 | 46.52 | 46.63 | -0.25 % | 66.35 | 63.94 | +1.70 % |
-| KOR_Membrane9 | lower | 51.89 | 50.33 | 44.89 | 45.07 | -0.41 % | 64.16 | 57.91 | -0.65 % |
-| GPR139_Membrane5 | upper | 46.86 | 46.95 | 47.03 | 46.25 | +1.69 % | 65.80 | 65.07 | +2.09 % |
-| GPR139_Membrane5 | lower | 51.39 | 49.70 | 46.02 | 46.52 | -1.08 % | 63.66 | 59.51 | +0.52 % |
+| KOR_Membrane1 | upper | 47.99 | 47.72 | 47.01 | 47.6 | -1.24 % | 65.72 | 63.12 | +0.76 % |
+| KOR_Membrane1 | lower | 51.04 | 48.87 | 45.58 | 45.72 | -0.31 % | 63.47 | 59.67 | +0.49 % |
+| KOR_Membrane2 | upper | 47.87 | 47.64 | 46.39 | 46.04 | +0.77 % | 65.84 | 63.48 | +2.02 % |
+| KOR_Membrane2 | lower | 51.66 | 49.29 | 44.97 | 44.53 | +0.98 % | 63.47 | 57.38 | -0.26 % |
+| KOR_Membrane3 | upper | 47.36 | 47.24 | 45.77 | 45.65 | +0.27 % | 66.06 | 63.33 | +0.58 % |
+| KOR_Membrane3 | lower | 52.11 | 49.99 | 47.06 | 46.27 | +1.70 % | 63.59 | 59.82 | +3.67 % |
+| KOR_Membrane4 | upper | 48.1 | 47.97 | 46.99 | 46.9 | +0.19 % | 65.96 | 63.44 | +1.06 % |
+| KOR_Membrane4 | lower | 50.8 | 48.53 | 45.04 | 43.91 | +2.58 % | 63.18 | 58.19 | +3.52 % |
+| KOR_Membrane5 | upper | 46.76 | 46.79 | 44.89 | 45.57 | -1.50 % | 65.37 | 62.35 | +0.66 % |
+| KOR_Membrane5 | lower | 51.63 | 49.19 | 44.55 | 43.21 | +3.10 % | 62.38 | 58.05 | +1.83 % |
+| KOR_Membrane6 | upper | 47.12 | 46.9 | 46.5 | 46.87 | -0.79 % | 65.51 | 65.01 | +1.65 % |
+| KOR_Membrane6 | lower | 51.92 | 49.76 | 44.65 | 45.34 | -1.52 % | 63.29 | 57.41 | +0.21 % |
+| KOR_Membrane7 | upper | 46.9 | 46.68 | 45.76 | 46.18 | -0.90 % | 66.05 | 64.34 | +0.63 % |
+| KOR_Membrane7 | lower | 52.72 | 50.38 | 43.98 | 43.31 | +1.55 % | 63.24 | 56.13 | +3.66 % |
+| KOR_Membrane8 | upper | 48.05 | 48.2 | 46.88 | 45.95 | +2.02 % | 66.6 | 65.93 | -0.04 % |
+| KOR_Membrane8 | lower | 51.2 | 49.11 | 43.99 | 44.09 | -0.24 % | 63.8 | 58.29 | -0.69 % |
+| KOR_Membrane9 | upper | 47.75 | 47.64 | 46.58 | 46.57 | +0.02 % | 66.35 | 64.21 | +2.54 % |
+| KOR_Membrane9 | lower | 51.89 | 50.33 | 46.05 | 45.85 | +0.43 % | 64.16 | 58.99 | +0.91 % |
+| GPR139_Membrane1 | upper | 46.87 | 46.98 | 44.04 | 44.68 | -1.42 % | 64.75 | 62.28 | +2.34 % |
+| GPR139_Membrane1 | lower | 50.12 | 48.45 | 45.27 | 45.49 | -0.49 % | 62.91 | 58.94 | +0.71 % |
+| GPR139_Membrane2 | upper | 47.39 | 47.39 | 48.21 | 47.35 | +1.81 % | 65.13 | 65.16 | +2.09 % |
+| GPR139_Membrane2 | lower | 50.06 | 48.43 | 44.12 | 44.32 | -0.44 % | 63.27 | 58.45 | +2.30 % |
+| GPR139_Membrane3 | upper | 46.57 | 46.55 | 47.01 | 46.9 | +0.24 % | 64.99 | 65.66 | +1.49 % |
+| GPR139_Membrane3 | lower | 50.85 | 48.38 | 40.31 | 40.7 | -0.97 % | 61.37 | 52.64 | +1.33 % |
+| GPR139_Membrane4 | upper | 46.49 | 46.46 | 45.36 | 45.85 | -1.08 % | 65.0 | 62.41 | +1.20 % |
+| GPR139_Membrane4 | lower | 51.24 | 49.19 | 46.73 | 46.44 | +0.63 % | 62.91 | 58.55 | +2.08 % |
+| GPR139_Membrane5 | upper | 46.86 | 46.95 | 46.38 | 45.86 | +1.13 % | 65.8 | 64.27 | stopped |
+| GPR139_Membrane5 | lower | 51.39 | 49.7 | 46.73 | 46.88 | -0.32 % | 63.66 | 60.49 | +5.5 % (stopped) |
+| GPR139_Membrane6 | upper | 46.76 | 46.83 | 49.09 | 47.39 | +3.58 % | 65.48 | 66.37 | -0.28 % |
+| GPR139_Membrane6 | lower | 51.51 | 49.6 | 46.53 | 46.58 | -0.10 % | 62.83 | 58.04 | +0.81 % |
+| GPR139_Membrane7 | upper | 46.93 | 47.05 | 46.18 | 46.49 | -0.67 % | 65.15 | 63.04 | +1.11 % |
+| GPR139_Membrane7 | lower | 51.29 | 49.54 | 46.77 | 46.46 | +0.66 % | 63.7 | 59.23 | +3.78 % |
+| GPR139_Membrane8 | upper | 47.65 | 47.57 | 45.49 | 45.9 | -0.90 % | 65.59 | 63.92 | +1.71 % |
+| GPR139_Membrane8 | lower | 50.99 | 49.12 | 43.95 | 44.93 | -2.18 % | 63.69 | 56.58 | +1.58 % |
+| GPR139_Membrane9 | upper | 47.52 | 47.3 | 48.29 | 47.72 | +1.20 % | 65.17 | 63.65 | +0.28 % |
+| GPR139_Membrane9 | lower | 50.61 | 48.62 | 44.44 | 43.33 | +2.56 % | 63.02 | 58.88 | +4.13 % |
 
-The KOR rows are the stage table above. With the centred window no leaflet crosses the 3 % construction warning level; with
-the search `KOR_Membrane5` lower (+4.87 %) is the one that does (PASS WITH WARNINGS).
+The KOR_Membrane1 rows are the stage table above. With the centred window two leaflets cross the 3 % construction warning level
+(`GPR139_Membrane6` upper, +3.58 %; `KOR_Membrane5` lower, +3.10 %; PASS WITH WARNINGS); with the search five do (3.5-4.1 %) and
+`GPR139_Membrane5` lower (+5.5 %) crosses the 5 % limit, which stops the build.
 
 ### 5.4 Composition and leaflet asymmetry
 
@@ -361,7 +386,7 @@ tilted helix shifts laterally by up to 2 nm across a leaflet: against all protei
 total lipid density read 1.3-1.4 at the protein for a single-pass protein tilted 53 degrees (0.9-1.1 at headgroup
 depth). The CG frame stage is left out: its protein is the frame's own receptor, not the complex.
 
-![All-lipid density around the protein, slice stage, 8 bundled frames](figures/protein_density_by_frame.png)
+![All-lipid density around the protein, slice stage, 18 bundled frames](figures/protein_density_by_frame.png)
 
 *Figure 2. Cumulative density of all lipids within R of the protein over the leaflet mean, slice stage, GCGR complex,
 for each bundled frame and leaflet; 1 = as common as anywhere. The first shell (R = 10 A) is marked.*
@@ -370,18 +395,27 @@ Ratio at 10 A, with the lipids in the shell and in the leaflet in brackets:
 
 | Frame | Upper, embedded | Upper, slice | Lower, embedded | Lower, slice |
 |---|---|---|---|---|
-| KOR_Membrane1 | 1.12 (28/666) | 1.14 (28/249) | 1.37 (70/613) | 1.28 (70/220) |
-| KOR_Membrane2 | 1.15 (29/671) | 1.14 (29/258) | 1.44 (73/611) | 1.34 (73/225) |
-| KOR_Membrane3 | 1.35 (34/677) | 1.32 (34/260) | 1.33 (67/600) | 1.29 (68/217) |
-| KOR_Membrane5 | 1.30 (33/676) | 1.27 (33/262) | 1.55 (79/606) | 1.36 (79/236) |
-| KOR_Membrane6 | 1.14 (29/676) | 1.16 (29/252) | 1.46 (74/603) | 1.32 (74/228) |
-| KOR_Membrane7 | 0.98 (25/684) | 0.97 (25/261) | 1.51 (75/597) | 1.24 (74/234) |
-| KOR_Membrane9 | 1.24 (31/672) | 1.22 (31/255) | 1.35 (67/599) | 1.24 (67/224) |
-| GPR139_Membrane5 | 0.83 (21/672) | 0.85 (21/251) | 1.31 (66/597) | 1.30 (66/215) |
+| KOR_Membrane1 | 1.12 (28/666) | 1.12 (28/272) | 1.37 (70/613) | 1.25 (69/241) |
+| KOR_Membrane2 | 1.15 (29/671) | 1.11 (28/276) | 1.44 (73/611) | 1.34 (72/242) |
+| KOR_Membrane3 | 1.35 (34/677) | 1.31 (34/281) | 1.35 (68/601) | 1.33 (68/232) |
+| KOR_Membrane4 | 1.08 (27/662) | 1.08 (27/272) | 1.45 (75/618) | 1.40 (74/244) |
+| KOR_Membrane5 | 1.30 (33/676) | 1.26 (33/286) | 1.55 (79/606) | 1.43 (80/249) |
+| KOR_Membrane6 | 1.14 (29/676) | 1.14 (29/276) | 1.46 (74/603) | 1.34 (74/246) |
+| KOR_Membrane7 | 0.98 (25/684) | 0.98 (25/279) | 1.51 (75/597) | 1.26 (74/251) |
+| KOR_Membrane8 | 1.01 (25/662) | 0.95 (24/273) | 1.34 (68/608) | 1.24 (68/244) |
+| KOR_Membrane9 | 1.24 (31/672) | 1.22 (31/275) | 1.35 (67/599) | 1.26 (67/239) |
+| GPR139_Membrane1 | 0.87 (22/663) | 0.83 (22/290) | 1.31 (68/605) | 1.26 (66/241) |
+| GPR139_Membrane2 | 0.95 (24/660) | 1.03 (25/265) | 1.38 (71/607) | 1.31 (70/246) |
+| GPR139_Membrane3 | 0.67 (17/671) | 0.69 (17/269) | 1.74 (89/612) | 1.42 (91/274) |
+| GPR139_Membrane4 | 0.86 (22/675) | 0.86 (22/280) | 1.42 (72/599) | 1.39 (72/231) |
+| GPR139_Membrane5 | 0.83 (21/672) | 0.83 (21/275) | 1.31 (66/597) | 1.33 (67/232) |
+| GPR139_Membrane6 | 0.91 (23/672) | 0.96 (23/259) | 1.43 (72/598) | 1.38 (73/235) |
+| GPR139_Membrane7 | 1.03 (26/671) | 1.02 (26/278) | 1.23 (62/599) | 1.23 (62/233) |
+| GPR139_Membrane8 | 1.12 (28/666) | 1.09 (28/281) | 1.39 (71/610) | 1.27 (72/252) |
+| GPR139_Membrane9 | 0.95 (24/667) | 0.99 (24/265) | 1.53 (79/611) | 1.41 (79/249) |
 
-The lower leaflet is enriched next to the protein in every frame (1.24-1.55) and the upper leaflet ranges from depleted
-(GPR139, 0.83) to enriched (KOR_Membrane3, 1.35). Figure 2 was drawn from slices made with the offset search; the slice values in this table, from the default
-centred window, differ from it by at most 0.1.
+The lower leaflet is enriched next to the protein in every frame (1.23-1.74) and the upper leaflet ranges from depleted
+(GPR139_Membrane3, 0.67) to enriched (KOR_Membrane3, 1.35). Figure 2 is drawn from the same centred slices as the table.
 
 **Reading the minimized and trajectory .gro files.** The .gro format keeps 5 characters of a residue name (SAPI25 is
 written SAPI2) and the GM3 topology splits each molecule into four residues (CER160 BGLC BGAL ANE5AC, written CER16
@@ -544,10 +578,10 @@ carry the structure (POPC-POPC first peak 7.5 A, DOPC-DOPC 9.5 A, CHOL-CHOL 11.5
 deviation from the whole-cell curve is in addition graded
 against the empirical distribution of the same deviation over equal-size windows cut everywhere in the embedded
 membrane (below its 95th percentile PASS, below the 99th WARNING, above FAIL; a slice that deviates less than the
-parent's windows is never graded down): the slice must look like one of the parent's own windows. In the KOR build (50 us) the RMS difference against the same lipids uncut is 1.4
-(upper) and 1.5 (lower) noise units, and the POPC-POPC and DOPC-DOPC first peaks of
+parent's windows is never graded down): the slice must look like one of the parent's own windows. In the KOR build (50 us) the RMS difference against the same lipids uncut is 1.6
+(upper) and 1.7 (lower) noise units, and the POPC-POPC and DOPC-DOPC first peaks of
 the slice lay within one 1 A bin of the reference's. The slice therefore keeps the lateral organization of the
-membrane it was cut from. Against the whole embedded cell the KOR slice sits at the 0th (upper) and 31st (lower) percentile of
+membrane it was cut from. Against the whole embedded cell the KOR slice sits at the 0th (upper) and 18th (lower) percentile of
 the 144 equal-size windows (PASS); a window around the protein is not a typical window, which is representativeness,
 not a construction error.
 
@@ -627,7 +661,7 @@ turns every one into a PASS / WARNING / FAIL / INSUFFICIENT SAMPLING / REFERENCE
 
 The coarse-grained frame the build starts from is graded on its own before anything is embedded (gate 0,
 `MembraneValidation.validate_cg_frame`; there is no reference yet, so the limits are absolute and sit in
-`membrane_report.CG_FRAME_GATE`, set just outside what the eight bundled 50 us frames show). PASS /
+`membrane_report.CG_FRAME_GATE`, set just outside what the original eight bundled 50 us frames show). PASS /
 WARNING / FAIL: both leaflets populated (empty = FAIL); leaflet APL 42-60 A^2 (WARNING 30-100); headgroup-to-headgroup
 thickness 38-47 A (WARNING 28-56); PO4-normal tilt from z <= 5 deg (WARNING <= 10); non-sterol lipids whose headgroup and
 beads lie on opposite sides of the midplane <= 0.5 %; longest bead-to-bead link inside a lipid <= 0.8 nm (WARNING <= 1.0;
