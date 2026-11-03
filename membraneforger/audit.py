@@ -7,6 +7,7 @@ import json
 import re
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import networkx as nx
@@ -136,20 +137,28 @@ def audit_scratch(run: Path) -> Path:
 
 
 def check_grompp(run: Path, gmx: str, structure: str) -> tuple[dict, list]:
-    """Rebuild the run input with -maxwarn 0, as built and with position restraints defined."""
+    """Rebuild the run input with -maxwarn 0, as built and with position restraints defined (the two grompp runs share
+    no input or output file, so they run side by side)."""
     fails, report = [], {}
     scratch = audit_scratch(run)
-    for label, mdp_extra, extra in (("as_built", "", []), ("posres", "define = -DPOSRES\n", ["-r", str(run_path(run, structure))])):
-        mdp = scratch / f"{label}.mdp"
-        text = run_path(run, "em.mdp").read_text()
+    em_text = run_path(run, "em.mdp").read_text()
+
+    def rebuild(label: str, mdp_extra: str, extra: list) -> tuple[int, str]:
+        text = em_text
         if mdp_extra and re.search(r"(?m)^define\s*=", text):   # em.mdp already defines (BBDIHRES): add to it, never repeat the key
             added = mdp_extra.split("=", 1)[1].strip()
-            text = re.sub(r"(?m)^(define\s*=.*)$", lambda m, added=added: f"{m.group(1)} {added}", text, count=1)
+            text = re.sub(r"(?m)^(define\s*=.*)$", lambda m: f"{m.group(1)} {added}", text, count=1)
             mdp_extra = ""
+        mdp = scratch / f"{label}.mdp"
         mdp.write_text(mdp_extra + text)
-        code, output = gromacs(gmx, ["grompp", "-f", str(mdp), "-c", str(run_path(run, structure)), "-p", str(run / "topol.top"),
-                                     "-n", str(run / "index_ini.ndx"), "-o", str(scratch / f"{label}.tpr"),
-                                     "-po", str(scratch / f"{label}_out.mdp"), "-maxwarn", "0"] + extra, run)
+        return gromacs(gmx, ["grompp", "-f", str(mdp), "-c", str(run_path(run, structure)), "-p", str(run / "topol.top"),
+                             "-n", str(run / "index_ini.ndx"), "-o", str(scratch / f"{label}.tpr"),
+                             "-po", str(scratch / f"{label}_out.mdp"), "-maxwarn", "0"] + extra, run)
+
+    jobs = (("as_built", "", []), ("posres", "define = -DPOSRES\n", ["-r", str(run_path(run, structure))]))
+    with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+        results = list(pool.map(lambda job: rebuild(*job), jobs))
+    for (label, _, _), (code, output) in zip(jobs, results):
         warnings, notes = len(re.findall(r"(?m)^WARNING \d+", output)), len(re.findall(r"(?m)^NOTE \d+", output))
         report[label] = {"exit": code, "warnings": warnings, "notes": notes}
         if code or warnings or not (scratch / f"{label}.tpr").is_file():

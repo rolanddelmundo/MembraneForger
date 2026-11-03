@@ -199,7 +199,7 @@ def check_backbone(before: dict, after: dict, labels: list | None = None, restra
             pro = PARENT_RESIDUE.get(ra[i + 1]["name"]) == "PRO"
             k0, k1 = _omega_class(o0, pro), _omega_class(o1, pro)
             bond = f"{label(i)}-{label(i + 1)} omega {o0:+.0f} -> {o1:+.0f}"
-            if k0 != k1 and k0 != "twisted":      # EM made a trans or cis bond twisted, or changed its isomer; a bond that was
+            if k0 not in (k1, "twisted"):      # EM made a trans or cis bond twisted, or changed its isomer; a bond that was
                 made_twisted.append(f"{bond} ({k0} -> {k1})")       # already twisted may relax, which is no failure
             elif k0 == k1 == "twisted":
                 inherited += 1

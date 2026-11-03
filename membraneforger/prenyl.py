@@ -42,10 +42,8 @@ def dihedral_deg(p0, p1, p2, p3) -> float:
 
 def prenyl_dihedrals(coords: dict) -> list:
     """The three double-bond dihedrals (degrees) of one residue given {atom name: xyz}; None where an atom is missing."""
-    out = []
-    for names in PRENYL_DOUBLE_BONDS:
-        out.append(dihedral_deg(*[np.asarray(coords[n], float) for n in names]) if all(n in coords for n in names) else None)
-    return out
+    return [dihedral_deg(*[np.asarray(coords[n], float) for n in names]) if all(n in coords for n in names) else None
+            for names in PRENYL_DOUBLE_BONDS]
 
 
 def prenyl_groups(atoms: list) -> list:
@@ -123,9 +121,8 @@ def apply_prenyl_configuration(atoms: list, mode: str, source: str) -> tuple:
     records = review_prenyl(atoms)
     bad = [r for r in records if r["z_bonds"]]
     notes = []
-    for r in records:
-        if r["missing"]:
-            notes.append(("WARN", f"{source}: {r['residue']} lacks prenyl atom(s) {', '.join(r['missing'])}; its double bonds were not all reviewed"))
+    notes.extend(("WARN", f"{source}: {r['residue']} lacks prenyl atom(s) {', '.join(r['missing'])}; its double bonds were not all reviewed")
+                 for r in records if r["missing"])
     record = {"mode": mode, "residues": len(records), "z_residues": [r["residue"] for r in bad], "reviewed": records}
     if not bad:
         if records:

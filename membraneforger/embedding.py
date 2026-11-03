@@ -19,7 +19,7 @@ __all__ = ['LIPID_NAMES', 'LIPID_ALIASES', 'CONVERTIBLE', 'BELT_NM', 'OVERLAP_NM
            'periodic_mean', 'phosphate_planes', 'membrane_voids', 'EMBED_SITES', 'FRAME_PROTEIN_CLEARANCE_NM',
            'image_onto_slab', 'frame_protein_beads', 'free_site', 'rectangle_distance', 'slice_window',
            'frame_protein_in_slice',
-           'embed_complex', 'trim_membrane', 'edit_lipids', 'check_box_z']
+           'embed_complex', 'edit_lipids', 'check_box_z']
 
 # User-facing Martini 3 lipid names (INSANE spelling) and how they are spelled inside the classifier.
 LIPID_NAMES = ("CHOL", "POPC", "DOPC", "POPE", "DOPE", "POPS", "DOPS", "PSM", "DPG3", "SAP6")
@@ -423,40 +423,6 @@ def embed_complex(aa_atoms: list[dict], cg_protein: list[list[dict]], membrane: 
                          + "use a coarse-grained frame of this complex (--cg FILE) or another frame")
     return {"R": np.eye(3), "t": t, "placed": placed, "membrane": kept, "removed": removed, "removed_indices": removed_indices,
             "notes": notes, "metrics": metrics}
-
-
-def trim_membrane(membrane: list[dict], placed: list[dict], box: list[float], xy_nm: tuple[float, float]) -> dict:
-    """Cut the membrane patch down to xy_nm around the placed complex and move everything into the new cell."""
-    # Molecules whose centre falls outside the new cell are dropped; the complex ends up centred in x and y.
-    (x, y), cell = xy_nm, np.array(box)
-    if x > cell[0] + 1e-6 or y > cell[1] + 1e-6:
-        raise SystemExit(f"requested box {x * 10:.0f} x {y * 10:.0f} A exceeds the membrane patch "
-                         f"{cell[0] * 10:.0f} x {cell[1] * 10:.0f} A; the box can only be trimmed, not enlarged")
-    if x <= 0 or y <= 0:
-        raise SystemExit("box edges must be positive")
-    heavy = [a for a in placed if element(a["atom"]) != "H"]
-    centre = xyz_nm(heavy).mean(axis=0)[:2] / 10.0
-    shift = np.array([0.5 * x - centre[0], 0.5 * y - centre[1], 0.0])
-    kept, removed = [], Counter()
-    for mol in membrane:
-        xyz = np.array([[b["x"], b["y"], b["z"]] for b in mol["beads"]]) + shift
-        middle = xyz.mean(axis=0)
-        image = np.array([-cell[0] * math.floor(middle[0] / cell[0]), -cell[1] * math.floor(middle[1] / cell[1]), 0.0])
-        xyz, middle = xyz + image, middle + image
-        if middle[0] < x and middle[1] < y:
-            for bead, (bx, by, bz) in zip(mol["beads"], xyz):
-                bead["x"], bead["y"], bead["z"] = float(bx), float(by), float(bz)
-            kept.append(mol)
-        else:
-            removed[mol["cg"]] += 1
-    if not kept:
-        raise SystemExit("no membrane molecule is left inside the requested box")
-    moved = [dict(a, x=a["x"] + shift[0] * 10.0, y=a["y"] + shift[1] * 10.0) for a in placed]
-    note = (f"membrane trimmed to {x:.2f} x {y:.2f} nm around the complex: {sum(removed.values())} molecule(s) outside "
-            f"removed ({', '.join(f'{n} {k}' for n, k in sorted(removed.items())) or 'none'}); lipids across the new "
-            "periodic seam were not equilibrated together, so equilibrate the system before production")
-    return {"membrane": kept, "placed": moved, "box": [x, y, float(cell[2])], "removed": removed, "note": note,
-            "shift_A": [round(float(v) * 10.0, 3) for v in shift]}
 
 
 def edit_lipids(membrane: list[dict], delete: list[str], add: str | None, mapping: dict) -> tuple[list[dict], dict]:
