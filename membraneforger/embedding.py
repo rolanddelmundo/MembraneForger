@@ -162,7 +162,7 @@ def membrane_voids(membrane: list[dict], obstacles_nm: np.ndarray, box: list[flo
         if largest:
             k = int(np.argmax(sizes)) + 1
             centre = points[(pockets == k).ravel()]
-            where = [round(periodic_mean(centre[:, 0], cell[0]), 2), round(periodic_mean(centre[:, 1], cell[1]), 2),
+            where = [round(float(periodic_mean(centre[:, 0], cell[0])), 2), round(float(periodic_mean(centre[:, 1], cell[1])), 2),
                      round(float(centre[:, 2].mean()), 2)]
         out[leaflet] = {"acyl_z_nm": [round(z0, 3), round(z1, 3)], "empty_points": int(empty.sum()),
                         "pockets": len(sizes), "largest_pocket_nm3": round(largest * voxel, 4), "largest_pocket_centre_nm": where}
