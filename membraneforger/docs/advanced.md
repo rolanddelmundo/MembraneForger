@@ -56,7 +56,7 @@ PPM 3.0 is not bundled. Compile its Fortran source (distributed by the OPM team,
 | A Martini 3 frame of your own complex | `--cg FILE`: the all-atom structure is fitted onto the frame's coarse-grained protein and no lipid is removed |
 | A Martini 3 membrane you want to use with a different protein | `--cg FILE --embed` |
 | A specific bundled frame, for a repeatable build | `--cg GPR139_Membrane5` (or `KOR_Membrane1`, …; `--list-membranes` lists the names that exist) |
-| The same complex in five distinct membranes | `--runs 5` with `--cg 2`: one build per frame, KOR_Membrane1, KOR_Membrane2, KOR_Membrane3, KOR_Membrane5, KOR_Membrane6 (the GPR139 series holds one frame), see [several membranes for one complex](#several-membranes-for-one-complex) |
+| The same complex in five distinct membranes | `--runs 5` with `--cg 2` (or `--cg 1`): one build per frame, KOR_Membrane1, KOR_Membrane2, KOR_Membrane3, KOR_Membrane4, KOR_Membrane5 (GPR139: GPR139_Membrane1 to GPR139_Membrane5), see [several membranes for one complex](#several-membranes-for-one-complex) |
 
 A bundled membrane is a patch equilibrated around a GPCR. Orientation makes the all-atom side general, but a membrane
 frame of your own complex is a patch around that protein and fits only that protein.
@@ -75,10 +75,10 @@ how `--embed-site free` chooses its spot.
 
 ### Bundled membranes
 
-Thirteen frames (50 µs, Martini 3) of a GPCR in an asymmetric ten-species cell-membrane model, in
-`membraneforger/examples/preeq_cg_cellmem/`: `KOR_Membrane1` to `KOR_Membrane9` (kappa opioid receptor, nine frames) and `GPR139_Membrane2` to `GPR139_Membrane5`
-(GPR139, four frames), about 18.3 × 18.3 × 19.2 nm each (the number is the simulation run the frame comes from). Leaflet
-composition in mole percent, averaged over the 13 frames
+Eighteen frames (50 µs, Martini 3) of a GPCR in an asymmetric ten-species cell-membrane model, in
+`membraneforger/examples/preeq_cg_cellmem/`: `KOR_Membrane1` to `KOR_Membrane9` (kappa opioid receptor, nine frames) and `GPR139_Membrane1` to `GPR139_Membrane9`
+(GPR139, nine frames), about 18.3 × 18.3 × 19.2 nm each (the number is the simulation run the frame comes from). Leaflet
+composition in mole percent, averaged over the 18 frames
 (`membraneforger/examples/leaflet_composition.py`):
 
 | Leaflet | CHOL | POPC | DOPC | POPE | DOPE | PSM | DPG3 | POPS | DOPS | SAP6 |
@@ -99,12 +99,12 @@ Lipid contacts around the receptor over the 50 µs of the simulations behind `KO
 The bundled frames are independent 50 µs replicates of one cell-membrane model, so building the same complex in
 several of them gives replicate systems that differ in their lipid arrangement, not in composition (each frame is
 within 1–2 mole percent of the averages above). `--runs N` does that in one command: the complex is built N times,
-each time in the next frame of the chosen series (`--cg 2`: KOR_Membrane1, KOR_Membrane2, KOR_Membrane3, KOR_Membrane5, … ; the GPR139 series holds one frame, so `--runs` above 1 needs `--cg 2`), one
+each time in the next frame of the chosen series (`--cg 2`: KOR_Membrane1, KOR_Membrane2, KOR_Membrane3, …; `--cg 1`: GPR139_Membrane1, GPR139_Membrane2, …; at most nine), one
 complete, validated system per run in `<out>/<frame>/`, and the command's last line counts the runs that passed.
 
 ```bash
 python -m membraneforger --aa complex.pdb --orient-chain R --nterm-side out --cg 2 --runs 5 --out complex_runs
-# complex_runs/KOR_Membrane1/em.gro ... complex_runs/KOR_Membrane6/em.gro (KOR_Membrane1, KOR_Membrane2, KOR_Membrane3, KOR_Membrane5, KOR_Membrane6)
+# complex_runs/KOR_Membrane1/em.gro ... complex_runs/KOR_Membrane5/em.gro (KOR_Membrane1, KOR_Membrane2, KOR_Membrane3, KOR_Membrane4, KOR_Membrane5)
 ```
 
 The runs are sequential, so five runs take about five times as long as one (`RUNS=5` in

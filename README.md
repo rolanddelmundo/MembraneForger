@@ -77,7 +77,7 @@ python -m membraneforger --aa complex.pdb --orient-chain R --nterm-side out --ou
 usually needs `in`. The [tutorial](membraneforger/docs/membraneforger_tutorial.md) walks through a full build.
 
 To build the same protein in five different membranes, add `--runs 5` with `--cg 2`: one system per bundled kappa opioid receptor frame, in
-`my_build/KOR_Membrane1/`, `my_build/KOR_Membrane2/`, `my_build/KOR_Membrane3/`, `my_build/KOR_Membrane5/` and `my_build/KOR_Membrane6/` (see [Advanced options](membraneforger/docs/advanced.md#several-membranes-for-one-complex)).
+`my_build/KOR_Membrane1/`, `my_build/KOR_Membrane2/`, `my_build/KOR_Membrane3/`, `my_build/KOR_Membrane4/` and `my_build/KOR_Membrane5/` (see [Advanced options](membraneforger/docs/advanced.md#several-membranes-for-one-complex)).
 
 ## Inputs and outputs
 
