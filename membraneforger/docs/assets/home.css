@@ -1,0 +1,43 @@
+/* Landing page (overrides/home.html). Everything else uses the Material defaults. */
+.mf-home { --mf-accent: var(--md-primary-fg-color); --mf-muted: var(--md-default-fg-color--light);
+           --mf-card-bg: var(--md-default-bg-color); --mf-card-border: var(--md-default-fg-color--lightest); }
+.mf-home h1 { font-size: 2.6rem; font-weight: 700; margin: 0 0 .4rem; line-height: 1.1; }
+.mf-home h2 { font-size: 1.6rem; font-weight: 600; margin: 0 0 .8rem; }
+.mf-home h3 { font-size: 1.05rem; font-weight: 600; margin: 0 0 .4rem; }
+.mf-home section { margin: 0 0 3.5rem; }
+.mf-tagline { font-size: 1.25rem; color: var(--mf-accent); font-weight: 500; margin: 0 0 .9rem; }
+.mf-lead, .mf-section-lead { font-size: .9rem; color: var(--md-default-fg-color); max-width: 42rem; }
+.mf-buttons .md-button { margin: 0 .5rem .5rem 0; }
+.mf-install { font-size: .7rem; border-left: .2rem solid var(--mf-accent); margin: 1rem 0 0; }
+.mf-hero { display: grid; grid-template-columns: 1.05fr 1fr; gap: 2rem; align-items: center; }
+.mf-hero-figure { margin: 0; }
+.mf-hero-figure img { width: 100%; border-radius: .3rem; }
+.mf-hero-figure figcaption { font-size: .7rem; color: var(--mf-muted); margin-top: .5rem; }
+.mf-grid { display: grid; gap: 1.2rem; }
+.mf-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.mf-grid-2 { grid-template-columns: repeat(2, 1fr); }
+.mf-questions { border-top: 1px solid var(--mf-card-border); border-bottom: 1px solid var(--mf-card-border); padding: 2rem 0; }
+.mf-questions p { font-size: .8rem; margin: 0; }
+.mf-card { display: grid; grid-template-columns: 3.2rem 1fr; gap: 1rem; padding: 1.1rem 1.2rem; border: 1px solid var(--mf-card-border);
+           border-radius: .4rem; background: var(--mf-card-bg); color: var(--md-default-fg-color) !important; transition: border-color .15s, box-shadow .15s; }
+.mf-card:hover { border-color: var(--mf-accent); box-shadow: 0 .2rem .8rem rgba(0,0,0,.08); }
+.mf-card p, .mf-card li { font-size: .75rem; margin: 0; }
+.mf-card ul { margin: .4rem 0 .6rem 1rem; padding: 0; color: var(--mf-muted); }
+.mf-card > div > code { display: block; font-size: .62rem; white-space: pre-wrap; word-break: break-word; }
+.mf-card-icon svg { width: 3.2rem; height: 3.2rem; }
+.mf-card-icon .i-fill { fill: var(--mf-accent); opacity: .25; stroke: none; }
+.mf-card-icon .i-stroke { fill: none; stroke: var(--mf-accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.mf-workflow { width: 100%; max-width: 60rem; display: block; margin: 0 auto 1.5rem; }
+.mf-how-text li, .mf-built p { font-size: .8rem; }
+.mf-how-text ul { margin-left: 1rem; }
+.mf-footer-links { color: var(--mf-muted); }
+@media screen and (max-width: 76em) {
+  .mf-hero { grid-template-columns: 1fr; }
+  .mf-grid-3 { grid-template-columns: 1fr 1fr; }
+}
+@media screen and (max-width: 44em) {
+  .mf-grid-3, .mf-grid-2 { grid-template-columns: 1fr; }
+  .mf-home h1 { font-size: 2rem; }
+}
+.mf-workflow, .mf-hero-figure img { background: #fff; padding: .4rem; border-radius: .3rem; box-sizing: border-box; }
+[data-md-color-scheme="slate"] .mf-workflow, [data-md-color-scheme="slate"] .mf-hero-figure img { box-shadow: 0 0 0 1px var(--mf-card-border); }

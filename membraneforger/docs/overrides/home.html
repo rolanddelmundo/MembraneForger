@@ -1,0 +1,176 @@
+{% extends "main.html" %}
+
+{% block tabs %}{{ super() }}{% endblock %}
+
+{% block content %}
+<div class="mf-home">
+
+  <section class="mf-hero">
+    <div class="mf-hero-text">
+      <h1>MembraneForger</h1>
+      <p class="mf-tagline">One structure file in, a validated all-atom membrane system out.</p>
+      <p class="mf-lead">
+        MembraneForger places your protein or protein–ligand complex in a pre-equilibrated Martini 3 cell membrane,
+        backmaps the membrane to all atoms around it, and returns a solvated, minimized CHARMM36 system for GROMACS
+        that has passed every one of its checks. Built for GPCR complexes; works for any membrane protein that fits.
+      </p>
+      <p class="mf-buttons">
+        <a class="md-button md-button--primary" href="first_build/">Get started</a>
+        <a class="md-button" href="https://github.com/rolanddelmundo/MembraneForger">Source on GitHub</a>
+      </p>
+      <pre class="mf-install"><code>pip install git+https://github.com/rolanddelmundo/MembraneForger.git
+membraneforger --aa complex.pdb --orient-chain R --nterm-side out --out my_build</code></pre>
+    </div>
+    <figure class="mf-hero-figure">
+      <img src="assets/hero_before_after.png" alt="Upper leaflet of a bundled 50 microsecond membrane, the same membrane with a GCGR complex embedded, and the slice cut around the complex, coloured by area per lipid">
+      <figcaption>A bundled 50 µs membrane, the same membrane with a GCGR–Gs complex embedded, and the slice cut around it. Colour is the area per lipid; the lipid packing is unchanged.</figcaption>
+    </figure>
+  </section>
+
+  <section class="mf-questions">
+    <h2>Building a membrane system should not be the hard part</h2>
+    <div class="mf-grid mf-grid-3">
+      <div>
+        <h3>You have a structure</h3>
+        <p>A cryo-EM complex, an AlphaFold model, a docked ligand. It needs a bilayer whose composition and packing
+           are realistic, oriented correctly, with nothing clashing.</p>
+      </div>
+      <div>
+        <h3>You need replicates</h3>
+        <p>Eighteen independent 50 µs Martini 3 cell membranes are bundled, nine around the kappa opioid receptor and
+           nine around GPR139. One flag builds the same complex in each.</p>
+      </div>
+      <div>
+        <h3>You need to trust it</h3>
+        <p>Every stage grades its own result: area per lipid, composition, thickness, lateral RDF, bond crossings,
+           ring threading, forces. <code>em.gro</code> is written only when every check passes, and the report says why.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="mf-recipes">
+    <h2>Recipes</h2>
+    <p class="mf-section-lead">Each recipe is one command, and links to the page that explains its options.</p>
+    <div class="mf-grid mf-grid-2">
+
+      <a class="mf-card" href="first_build/">
+        <div class="mf-card-icon">
+          <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="22" width="56" height="20" rx="3" class="i-fill"/><rect x="24" y="8" width="16" height="48" rx="5" class="i-stroke"/></svg>
+        </div>
+        <div>
+          <h3>A GPCR complex in a bundled cell membrane</h3>
+          <p>Receptor, G protein, peptide and small-molecule ligands, placed where the frame's own receptor was.</p>
+          <ul><li>Any oriented complex, or one with an OPM entry</li><li>Ten lipid species, asymmetric leaflets, 0.15 M NaCl</li></ul>
+          <code>membraneforger --aa complex.pdb --orient-chain R --nterm-side out --out build</code>
+        </div>
+      </a>
+
+      <a class="mf-card" href="advanced/#several-membranes-for-one-complex">
+        <div class="mf-card-icon">
+          <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="10" width="26" height="18" rx="3" class="i-fill"/><rect x="34" y="10" width="26" height="18" rx="3" class="i-fill"/><rect x="4" y="36" width="26" height="18" rx="3" class="i-fill"/><rect x="34" y="36" width="26" height="18" rx="3" class="i-stroke"/></svg>
+        </div>
+        <div>
+          <h3>The same complex in several membranes</h3>
+          <p>Replicate systems that differ in their lipid arrangement, one directory per frame.</p>
+          <ul><li>Up to nine frames per receptor series</li><li>Repeatable: name a frame instead of drawing one</li></ul>
+          <code>membraneforger --aa complex.pdb --cg 2 --runs 5 --orient-chain R --out build</code>
+        </div>
+      </a>
+
+      <a class="mf-card" href="advanced/#choosing-the-membrane">
+        <div class="mf-card-icon">
+          <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M6 32c8-10 16-10 26 0s18 10 26 0" class="i-stroke"/><path d="M6 44c8-10 16-10 26 0s18 10 26 0" class="i-stroke"/><circle cx="32" cy="18" r="7" class="i-fill"/></svg>
+        </div>
+        <div>
+          <h3>Your own Martini 3 membrane</h3>
+          <p>A coarse-grained frame of your complex, or any Martini 3 bilayer you want to reuse with a new protein.</p>
+          <ul><li>Custom lipid compositions, larger patches, non-GPCR shapes</li><li>Rotated frames are detected and put back in their box</li></ul>
+          <code>membraneforger --aa complex.pdb --cg my_frame.gro --embed --out build</code>
+        </div>
+      </a>
+
+      <a class="mf-card" href="advanced/#choosing-the-membrane">
+        <div class="mf-card-icon">
+          <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="4" y="22" width="56" height="20" rx="3" class="i-fill"/><rect x="28" y="6" width="8" height="52" rx="4" class="i-stroke"/></svg>
+        </div>
+        <div>
+          <h3>A single-pass or small membrane protein</h3>
+          <p>Proteins much smaller than a GPCR go on the unbroken bilayer, away from the receptor hole, with a wider margin.</p>
+          <ul><li>Oriented on the transmembrane helix you name</li><li>Empty-pocket gate keeps the leaflets intact</li></ul>
+          <code>membraneforger --aa sp.pdb --orient-residues 152-177 --embed-site free --xy-buffer 3 --out build</code>
+        </div>
+      </a>
+
+      <a class="mf-card" href="ligands/">
+        <div class="mf-card-icon">
+          <svg viewBox="0 0 64 64" aria-hidden="true"><polygon points="32,8 52,20 52,44 32,56 12,44 12,20" class="i-stroke"/><circle cx="32" cy="32" r="6" class="i-fill"/></svg>
+        </div>
+        <div>
+          <h3>Ligands, cofactors and lipidated residues</h3>
+          <p>Small molecules, nucleotides, ions and acylated or prenylated residues keep the pose you give them.</p>
+          <ul><li>CGenFF topologies dropped into one folder</li><li>Ligand heavy atoms frozen in minimization; E/Z prenyl check</li></ul>
+          <code>membraneforger --check --aa complex.pdb ...   # reports every residue and its topology</code>
+        </div>
+      </a>
+
+      <a class="mf-card" href="equilibration/">
+        <div class="mf-card-icon">
+          <svg viewBox="0 0 64 64" aria-hidden="true"><polyline points="6,48 18,30 30,38 42,16 58,24" class="i-stroke"/><circle cx="42" cy="16" r="4" class="i-fill"/></svg>
+        </div>
+        <div>
+          <h3>Equilibrate and grade the trajectory</h3>
+          <p>Six restrained steps with the define switches the topology expects, then a production template and a second set of gates.</p>
+          <ul><li>CHARMM-GUI schedule, 310 K, 1.875 ns</li><li>Box convergence, APL, thickness, core hydration, diffusion</li></ul>
+          <code>bash membraneforger/mdp/run_equilibration.sh build</code>
+        </div>
+      </a>
+
+    </div>
+  </section>
+
+  <section class="mf-how">
+    <h2>How a build works</h2>
+    <img src="assets/workflow.png" alt="The nine stages of a build with the four gates that can stop it" class="mf-workflow">
+    <div class="mf-grid mf-grid-2 mf-how-text">
+      <div>
+        <h3>What goes in</h3>
+        <ul>
+          <li>An all-atom PDB of everything you want simulated, with unique chain IDs and no water or bulk ions.</li>
+          <li>Optionally a membrane: a bundled frame by number or name, or your own Martini 3 frame.</li>
+          <li>GROMACS on your <code>PATH</code>. PPM 3.0 only if the structure is not oriented and has no OPM entry.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>What comes out</h3>
+        <ul>
+          <li><code>em.gro</code>, <code>topol.top</code>, <code>toppar/</code>, <code>index_ini.ndx</code>: the minimized system, ready to equilibrate.</li>
+          <li><code>membrane_validation.md</code> with figures, <code>audit.json</code>, <code>run_manifest.json</code>: what was checked and against which thresholds.</li>
+          <li><code>int/</code>: every intermediate file, for inspection and restarts.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="mf-built">
+    <h2>Built on</h2>
+    <p>
+      <a href="https://cgmartini.nl/">Martini 3</a> for the coarse-grained membranes ·
+      <a href="https://github.com/ksy141/mstool">mstool</a> for backmapping ·
+      <a href="https://www.charmm-gui.org/">CHARMM36 and CHARMM-GUI</a> for the all-atom force field and the equilibration schedule ·
+      <a href="https://cgenff.com/">CGenFF</a> for ligand parameters ·
+      <a href="https://www.gromacs.org/">GROMACS</a> for minimization and simulation ·
+      <a href="https://opm.phar.umich.edu/">OPM and PPM 3.0</a> for orientation.
+    </p>
+    <h2>Citing</h2>
+    <p>If MembraneForger contributes to a publication, cite the repository
+      (<a href="https://github.com/rolanddelmundo/MembraneForger/blob/main/CITATION.cff">CITATION.cff</a>) together with the
+      tools above. MembraneForger is MIT licensed; the force-field files and mapping data remain under their own terms.</p>
+    <p class="mf-footer-links">
+      <a href="https://github.com/rolanddelmundo/MembraneForger/issues">Report a problem</a> ·
+      <a href="https://github.com/rolanddelmundo/MembraneForger/blob/main/membraneforger/CHANGELOG.md">Changelog</a> ·
+      <a href="https://github.com/rolanddelmundo/MembraneForger/blob/main/CONTRIBUTING.md">Contributing</a>
+    </p>
+  </section>
+
+</div>
+{% endblock %}

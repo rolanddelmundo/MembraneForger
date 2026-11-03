@@ -8,11 +8,13 @@ docs_dir: membraneforger/docs   # the same Markdown files the README links to; n
 
 theme:
   name: material
+  custom_dir: membraneforger/docs/overrides
   features:
     - navigation.sections
     - navigation.top
     - content.code.copy
     - search.highlight
+    - navigation.tabs
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -37,6 +39,9 @@ nav:
       - Troubleshooting: troubleshooting.md
   - Development:
       - Module map: modules.md
+
+extra_css:
+  - assets/home.css
 
 markdown_extensions:
   - admonition
