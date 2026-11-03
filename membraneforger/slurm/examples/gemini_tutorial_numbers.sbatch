@@ -4,7 +4,7 @@
 # gate; nothing is backmapped), so it needs no GROMACS, but embedding runs through mstool. Tasks 0-17 each measure one bundled
 # frame into the shared OUT folder; task 18 reads every finished case back (nothing is re-run) and writes OUT/summary.md and summary.json.
 #
-#   checkcpu                                       # pick the shortest CPU queue, never overflow; set -q below to it
+#   checkcpu                                       # pick the shortest CPU queue, never overflow; adjust -p/--time below to it
 #   git clone -b feat/bundle-18-cg-frames https://github.com/rolanddelmundo/MembraneForger.git /scratch/rdelmundo/mforger_tutorial18/MembraneForger
 #   cd /scratch/rdelmundo/mforger_tutorial18
 #   cp MembraneForger/membraneforger/slurm/examples/gemini_tutorial_numbers.sbatch .
@@ -20,10 +20,10 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=8G
-#SBATCH --time=04:00:00               # four coarse-grained cases on one frame take minutes; 4 h leaves a wide margin
+#SBATCH --mem=4G                      # peak RSS of one frame was 0.7 GB (test job 39062991)
+#SBATCH --time=00:30:00               # one frame took 1 min 38 s (test job 39062991, GPR139_Membrane1)
 #SBATCH -p compute
-#SBATCH -q compute-short              # from checkcpu on 2026-11-03 (8 h limit, nothing competing); not overflow
+                                      # Gemini picks the QOS from --time (8 h or less: cshort); never -p overflow
 #SBATCH --mail-type=NONE
 
 set -uo pipefail
