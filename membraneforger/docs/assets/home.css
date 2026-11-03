@@ -13,7 +13,8 @@
 .mf-hero-figure { margin: 0; }
 .mf-hero-figure img { width: 100%; border-radius: .3rem; }
 .mf-hero-figure figcaption { font-size: .7rem; color: var(--mf-muted); margin-top: .5rem; }
-.mf-grid { display: grid; gap: 1.2rem; }
+.mf-grid { display: grid; gap: 1.2rem; margin-bottom: 2rem; }
+.mf-group { font-size: 1.15rem; color: var(--mf-muted); text-transform: uppercase; letter-spacing: .04em; margin: 1.5rem 0 .8rem; }
 .mf-grid-3 { grid-template-columns: repeat(3, 1fr); }
 .mf-grid-2 { grid-template-columns: repeat(2, 1fr); }
 .mf-questions { border-top: 1px solid var(--mf-card-border); border-bottom: 1px solid var(--mf-card-border); padding: 2rem 0; }
