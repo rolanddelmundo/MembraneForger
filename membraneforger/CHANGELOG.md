@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- **The package installs with pip.** `pyproject.toml` declares the Python requirements once (the README, `slurm/setup.sh` and the CI
+  install from it), ships the force field, the backmapping data, the bundled membranes and the new mdp templates as package data, and
+  adds the `membraneforger` command, the same as `python -m membraneforger`, usable from any directory. Running from the clone still
+  works. A missing requirement now prints the `pip install` line instead of a traceback (`__main__.missing_dependencies`).
+- **`--check` runs the pre-flight of a build in seconds** (`preflight.py`): GROMACS, the Python requirements, mstool in the backmapping
+  interpreter, the all-atom input with what pdb2gmx will do to it (chains, termini, `HIS` renamed to `HSD`, disulfides, ligands), the
+  orientation options against the chains, the coarse-grained frame, PPM 3.0 and the OPM reference, the backmapping data and the output
+  directory, each as an OK, WARN, FAIL or INFO line; exit 1 when anything failed, and nothing is written. The Slurm template did part
+  of this in shell; the command line now does it for every way of running.
+- **Equilibration templates.** `membraneforger/mdp/` holds `step6.1` to `step6.6_equilibration.mdp` and `step7_production.mdp` (the
+  CHARMM-GUI membrane schedule, 1.875 ns, 310 K, v-rescale/C-rescale, Nose-Hoover/Parrinello-Rahman in production) with the
+  `define` lines the topology expects (`POSRES_FC_BB/SC/LIPID`, `DIHRES`; never `BBDIHRES`) and the `Protein_LIG MEMB SOL_ION`
+  coupling groups of `index_ini.ndx`, and `run_equilibration.sh BUILD_DIR [GMX] [NTOMP]` runs the six steps restrained to `em.gro`
+  and writes the production tpr. `docs/equilibration.md` explains the schedule and every restraint macro.
+- **New documentation for first-time users:** `docs/preparing_inputs.md` (what the all-atom PDB must contain: termini with `OXT` or a
+  cap, histidine naming, disulfides, hydrogens and missing atoms, orientation inputs, size against the bundled membranes) and
+  `docs/ligands.md` (how to add a topology for a ligand, ion or cofactor; how the ligand is matched to it by bond graph; restraints).
+  The README gains the network and runtime requirements, the install command and the equilibration step; troubleshooting gains rows
+  for a missing requirement, a residue without topology, a ligand that does not match its `.itp`, an unrecognized C terminus and a
+  failed OPM download.
+
 - **The E/Z configuration of the S-geranylgeranyl cysteine is checked and can be corrected.** A natural geranylgeranyl group is all-E, but the
   bundled GCGR-Gs input (and the models derived from it) carry the three CH=C(CH3) bonds of `CYSG` in Z (dihedral 0 to 5 degrees), which
   minimization and the force field keep. `--prenyl-configuration report` (default, as in earlier releases) warns, `yes` stops the build on a

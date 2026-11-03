@@ -33,8 +33,8 @@ if [ ! -x "$ENV_DIR/bin/python" ]; then
     "$TOOLS/micromamba" create -y -p "$ENV_DIR" -c conda-forge --override-channels \
         "python=3.11" numpy scipy networkx "pandas<3" openmm "gromacs=*=nompi_*" gfortran make pip
 fi
-say "installing mstool"
-"$ENV_DIR/bin/python" -m pip install --disable-pip-version-check -q "mstool==0.3.9" "pandas<3" matplotlib
+say "installing MembraneForger (editable, with mstool and matplotlib) from pyproject.toml"
+"$ENV_DIR/bin/python" -m pip install --disable-pip-version-check -q -e "$REPO[figures]"
 
 # 3. check what the build needs
 "$ENV_DIR/bin/python" -c "import numpy, scipy, networkx, pandas, openmm, mstool" \

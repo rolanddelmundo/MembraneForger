@@ -32,6 +32,7 @@ from .config import (
 from .embedding import CONVERTIBLE, EMBED_SITES, LIPID_NAMES, lipid_name
 from .orientation import NTERM_SIDES, ORIENTATION_MODES, OrientationRequest, parse_residue_ranges
 from .pipeline import Session, build
+from .preflight import run_check
 from .prenyl import PRENYL_MODES
 from .runtools import find_gromacs
 from .validation import refuse_overwrite
@@ -225,6 +226,9 @@ def make_parser() -> argparse.ArgumentParser:
                         help="build the complex N times, each in a different bundled membrane of the --cg 1 or 2 series (its "
                              "first N frames, at most the number the series holds), one system per run in <out>/<frame>/ (default: %(default)s)")
     parser.add_argument("--list-membranes", action="store_true", help="list the bundled membranes by name and exit")
+    parser.add_argument("--check", action="store_true",
+                        help="check the inputs, programs (GROMACS, mstool, PPM) and output directory of this build in seconds and exit "
+                             "without building anything: every line is OK, WARN, FAIL or INFO, and the exit code is 1 when something failed")
     parser.add_argument("--embed", action="store_true",
                         help="embed the protein into the membrane of a --cg FILE instead of fitting it onto the frame's "
                              "protein (always the case for the bundled membranes)")
@@ -448,12 +452,18 @@ def main(argv: list | None = None) -> int:
         parser.error(str(exc))
     try:
         forcefield = locate_forcefield(args.toppar)
-        gmx = find_gromacs(args.gmx)
     except SystemExit as exc:
         parser.error(str(exc))
+    gmx_problem = None
+    try:
+        gmx = find_gromacs(args.gmx)
+    except SystemExit as exc:
+        if not args.check:
+            parser.error(str(exc))
+        gmx, gmx_problem = None, str(exc)  # --check reports it with everything else instead of stopping here
     data = locate_data(args.data)
     python = args.mstool_python or sys.executable
-    if not args.membrane:
+    if not args.membrane and not args.check:
         if not (data / "map.dat").is_file():
             parser.error(f"--data {data} has no map.dat")
         if not shutil.which(python):
@@ -513,6 +523,12 @@ def main(argv: list | None = None) -> int:
                       overwrite=args.overwrite, overwrite_restart=args.overwrite_restart,
                       archive_previous=args.archive_previous, strict_segments=strict_segments)
     resolved = [p.resolve() if p else None for p in (args.all_atom, args.coarse_grain, args.membrane)]
+    if args.check:
+        checked = out / frames[0].name[:-len(BUNDLED_FRAME_SUFFIX)] if args.runs > 1 else out
+        return run_check(session.name, all_atom=resolved[0], coarse_grain=resolved[1], membrane=resolved[2], out=checked,
+                         forcefield=forcefield, data=data, gmx=gmx, gmx_problem=gmx_problem, python=python, orientation=orientation,
+                         ntomp=args.ntomp, overwrite=args.overwrite, overwrite_restart=args.overwrite_restart,
+                         exclude_disulfides=exclude_disulfides)
     if args.runs > 1:
         return run_sessions(session, resolved[0], frames, [sys.executable] + sys.argv)
     return build(session, resolved[0], resolved[1], resolved[2], [sys.executable] + sys.argv)

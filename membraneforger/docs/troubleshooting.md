@@ -14,11 +14,19 @@ the stage is recorded in `run_manifest.json` (`error.stage`).
 | `ERROR:` | a check failed; the build stopped |
 | `INFO:` | a measurement or a count |
 
+Before a build, `python -m membraneforger --check` with the same options reports the inputs, programs and output
+directory in seconds (every line OK, WARN, FAIL or INFO) and catches most of the rows below without a job.
+
 ## Common failures
 
 | Symptom | Likely cause | What to do |
 |---|---|---|
-| `ERROR` in stage `inputs` | water, bulk ions, an insertion code, duplicate atoms, or a residue with no topology | Remove the offending records. A ligand needs its `.itp` in `membraneforger/forcefield/toppar/`. |
+| `cannot import numpy` (or scipy, networkx, pandas, openmm) before anything runs | the Python requirements are not installed in this interpreter | `pip install .` from the repository, or the `pip install` line the message prints. |
+| `ERROR` in stage `inputs` | water, bulk ions, an insertion code, duplicate atoms, or a residue with no topology | Remove the offending records ([Preparing the input](preparing_inputs.md)). |
+| `no topology in ... for residue(s) ['XYZ']` (stage `inputs`) | a ligand, ion or modified residue without an `.itp` | Add `toppar/XYZ.itp` to the force-field directory, see [Ligands](ligands.md). |
+| `heavy-atom graph is not isomorphic to its ITP` or `source hydrogens have no topology counterpart` (stage `topology`) | the ligand in the input and its `.itp` differ in connectivity or protonation | Make the input and the topology describe the same molecule ([Ligands](ligands.md)). |
+| `unrecognized C terminus` (stage `topology`) | the last residue of a chain has no `OXT`/`OT1`/`OT2` and no `CT2`/`CT3` cap | Add the terminal oxygen or cap the chain ([Preparing the input](preparing_inputs.md#chains-and-termini)). |
+| OPM download fails (stage `orient`) | no network on the node | Pass `--opm-file` with the downloaded entry, or `--orientation ppm` or `none`. |
 | `Multiple protein chains were detected` (stage `orient`) | several protein chains and no anchor chain named | Add `--orient-chain` with the chain the error suggests. |
 | The build asks for `--nterm-side` | PPM is orienting the protein and no OPM entry gives the side | Add `--nterm-side in` or `out` for residue 1 of that chain as it is in your file. |
 | Protein upside down in `int/oriented.pdb` | `--nterm-side` wrong for this file, often because a signal peptide is still attached | Rerun with the other side. The extracellular domain must end up at +z. |
@@ -57,3 +65,4 @@ gmx grompp -f int/em.mdp -c em.gro -p topol.top -n index_ini.ndx -o test.tpr -ma
 
 The [tutorial](membraneforger_tutorial.md) explains every check and threshold, and its
 [limitations section](membraneforger_tutorial.md#7-limitations-and-assumptions) lists what the build does not do.
+The next step is the restrained equilibration in [Equilibration](equilibration.md).

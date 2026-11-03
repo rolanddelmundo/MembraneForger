@@ -4,6 +4,10 @@ __pycache__/
 .DS_Store
 \#*\#
 *.bak*
+# pip install . / build
+/build/
+*.egg-info/
+/dist/
 # build outputs and Slurm logs
 example_out/
 renders/
