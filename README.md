@@ -89,7 +89,7 @@ python -m membraneforger --aa complex.pdb --orient-chain R --nterm-side out --ou
 ```
 
 `--nterm-side` refers to residue 1 as it appears in your file. A receptor that still carries its signal peptide
-usually needs `in`. The [tutorial](membraneforger/docs/membraneforger_tutorial.md) walks through a full build.
+usually needs `in`. [Your first build](membraneforger/docs/first_build.md) walks through this example from install to equilibration and shows how to read the result.
 
 To build the same protein in five different membranes, add `--runs 5` with `--cg 2`: one system per bundled kappa opioid receptor frame, in
 `my_build/KOR_Membrane1/`, `my_build/KOR_Membrane2/`, `my_build/KOR_Membrane3/`, `my_build/KOR_Membrane4/` and `my_build/KOR_Membrane5/` (see [Advanced options](membraneforger/docs/advanced.md#several-membranes-for-one-complex)).
@@ -99,9 +99,9 @@ To build the same protein in five different membranes, add `--runs 5` with `--cg
 You provide an all-atom structure (`--aa complex.pdb`: every chain you want simulated, each with a unique chain ID;
 no water, ions, crystallization additives or insertion codes; ligands need a topology in `membraneforger/forcefield/toppar/`;
 see [Preparing the input](membraneforger/docs/preparing_inputs.md) and [Ligands](membraneforger/docs/ligands.md)) and,
-optionally, a membrane: `--cg 1` (default, a bundled GPR139 membrane), `--cg 2` (kappa opioid receptor), `--cg NAME`
+optionally, a membrane: `--cg 1` (default, a random one of nine bundled GPR139 membranes, so two runs differ; name a frame for a repeatable build), `--cg 2` (a random kappa opioid receptor membrane), `--cg NAME`
 such as `KOR_Membrane5` (`--list-membranes` lists them), or `--cg FILE` for a Martini 3 frame of your own complex. The
-orientation options (`--orient-chain`, `--nterm-side`, `--orientation`) say which chain sits in the membrane. Every
+orientation options (`--orient-chain`, `--nterm-side`, `--orientation`) say which chain sits in the membrane. The bundled membranes are 18.3 x 18.3 nm patches around a GPCR and suit GPCR-sized proteins ([size limits](membraneforger/docs/preparing_inputs.md#size-and-the-bundled-membranes)). Every
 option is in the [command-line reference](membraneforger/docs/cli_reference.md).
 
 The main files in the `--out` directory:
@@ -134,18 +134,19 @@ bash membraneforger/mdp/run_equilibration.sh my_build        # 1.875 ns in six s
 
 ## Documentation
 
+- [Your first build](membraneforger/docs/first_build.md): install, check, build, read the result, equilibrate.
 - [Preparing the input](membraneforger/docs/preparing_inputs.md): what the all-atom PDB must contain, termini,
   histidines, disulfides, orientation inputs, `--check`.
 - [Ligands](membraneforger/docs/ligands.md): adding a topology for your own ligand, ions and cofactors.
 - [Equilibration](membraneforger/docs/equilibration.md): the bundled mdp templates and restraint switches.
-- [Tutorial](membraneforger/docs/membraneforger_tutorial.md): build stages, validation and thresholds, limitations.
+- [Tutorial and validation reference](membraneforger/docs/membraneforger_tutorial.md): build stages, what every check measures, thresholds, limitations.
 - [Command-line reference](membraneforger/docs/cli_reference.md): every option and its default.
 - [Advanced options](membraneforger/docs/advanced.md): orientation modes, single-pass proteins, your own membrane, box size,
   lipid composition, restarts.
 - [Troubleshooting](membraneforger/docs/troubleshooting.md): common failures and what to check.
 - [Running on Slurm](membraneforger/slurm/README.md) and [the bundled membranes](membraneforger/examples/preeq_cg_cellmem/README.md).
 - [Module map](membraneforger/docs/modules.md) and [Python example](membraneforger/examples/build_from_python.py), for developers.
-- [Changelog](membraneforger/CHANGELOG.md).
+- [Changelog](membraneforger/CHANGELOG.md) and [reporting a problem](CONTRIBUTING.md).
 
 ## Tests
 

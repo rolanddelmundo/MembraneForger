@@ -1,5 +1,7 @@
 # MembraneForger tutorial: building and validating an all-atom membrane system
 
+New to MembraneForger? Start with [Your first build](first_build.md); this page is the reference for what each stage and check does.
+
 MembraneForger takes an all-atom protein (or protein-ligand) structure and a pre-equilibrated Martini 3 membrane
 and returns a validated, energy-minimized CHARMM36/GROMACS system. This document explains what each stage does,
 how the build is validated, and how to read the validation report (`membrane_validation.md`, `.json`, the figures)

@@ -1,6 +1,6 @@
 #//=============================================================
 #// MembraneForger - (c) 2026 Roland Del Mundo
-#// Command line: python membraneforger.py --all-atom AA.pdb --coarse-grain CG.gro --out DIR
+#// Command line: membraneforger --aa AA.pdb --cg CG.gro --out DIR   (or python -m membraneforger ...)
 #//=============================================================
 """Parse the command line, locate installation resources, and run one build."""
 import argparse
@@ -212,7 +212,7 @@ def make_parser() -> argparse.ArgumentParser:
     """Build the argument parser; only --all-atom and --coarse-grain are per-system inputs."""
     defaults = Settings()
     parser = argparse.ArgumentParser(
-        prog="membraneforger.py",
+        prog="membraneforger",
         description="Build a validated, energy-minimized all-atom CHARMM36 membrane system (em.gro) from an all-atom "
                     "protein/ligand PDB and a Martini 3 coarse-grained simulation frame.")
     parser.add_argument("--aa", "--all-atom", dest="all_atom", type=Path, metavar="PDB",
@@ -225,6 +225,7 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--runs", type=int, default=1, metavar="N",
                         help="build the complex N times, each in a different bundled membrane of the --cg 1 or 2 series (its "
                              "first N frames, at most the number the series holds), one system per run in <out>/<frame>/ (default: %(default)s)")
+    parser.add_argument("--version", action="version", version="%(prog)s " + __import__("membraneforger").__version__)
     parser.add_argument("--list-membranes", action="store_true", help="list the bundled membranes by name and exit")
     parser.add_argument("--check", action="store_true",
                         help="check the inputs, programs (GROMACS, mstool, PPM) and output directory of this build in seconds and exit "
