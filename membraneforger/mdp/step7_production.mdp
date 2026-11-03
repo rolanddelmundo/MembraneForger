@@ -1,0 +1,49 @@
+; MembraneForger production template (step 7): unrestrained NPT after step6.6_equilibration.gro.
+; No define line: every restraint macro stays at its default of 0 and no restraint or freeze is active.
+; nsteps is 100 ns at dt = 0.002; set it to the length you need. See membraneforger/docs/equilibration.md.
+integrator              = md
+dt                      = 0.002
+nsteps                  = 50000000
+nstxout                 = 0
+nstvout                 = 0
+nstfout                 = 0
+nstxout-compressed      = 50000
+compressed-x-grps       = System
+nstcalcenergy           = 100
+nstenergy               = 5000
+nstlog                  = 5000
+continuation            = yes
+;
+; Non-bonded settings of CHARMM36 in GROMACS (the ones the build's minimization used, config.EM_MDP)
+cutoff-scheme           = Verlet
+nstlist                 = 20
+rlist                   = 1.2
+vdwtype                 = Cut-off
+vdw-modifier            = Force-switch
+rvdw_switch             = 1.0
+rvdw                    = 1.2
+coulombtype             = PME
+rcoulomb                = 1.2
+pme-order               = 4
+fourierspacing          = 0.12
+;
+constraints             = h-bonds
+constraint_algorithm    = LINCS
+;
+; Temperature: three groups of index_ini.ndx (the protein with its ligands, the membrane, water and ions)
+tcoupl                  = Nose-Hoover
+tc_grps                 = Protein_LIG MEMB SOL_ION
+tau_t                   = 1.0 1.0 1.0
+ref_t                   = 310 310 310
+;
+nstcomm                 = 100
+comm_mode               = linear
+comm_grps               = Protein_LIG MEMB SOL_ION
+;
+refcoord_scaling        = com
+; Pressure: semi-isotropic, 1 bar
+pcoupl                  = Parrinello-Rahman
+pcoupltype              = semiisotropic
+tau_p                   = 5.0
+compressibility         = 4.5e-5 4.5e-5
+ref_p                   = 1.0 1.0

@@ -19,7 +19,11 @@ jobs:
       - name: Install GROMACS
         run: sudo apt-get update -qq && sudo apt-get install -y -qq gromacs
       - name: Install Python requirements
-        run: pip install numpy scipy networkx "pandas<3" openmm mstool==0.3.9 matplotlib ruff
+        run: pip install -e ".[figures,dev]"
+      - name: Check the installed command and the pre-flight check
+        run: |
+          membraneforger --list-membranes
+          cd /tmp && membraneforger --check --aa "$GITHUB_WORKSPACE/membraneforger/examples/preeq_cg_cellmem/GCGR_MTZP_prot-lig.pdb" --orientation none --out /tmp/check_out
       - name: Lint
         run: ruff check membraneforger
       - name: Check the Slurm scripts parse

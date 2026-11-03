@@ -23,11 +23,14 @@ replaced: the build only minimizes them where they are.
 
 ## Requirements
 
-- Python 3.10 or later with numpy, scipy, networkx, pandas < 3, openmm and mstool 0.3.9 or 0.3.10.
-  matplotlib is optional and draws the validation figures.
+- Linux or macOS with Python 3.10 or later. The Python packages (numpy, scipy, networkx, pandas < 3, openmm and
+  mstool 0.3.9 or 0.3.10) are installed by `pip install .` below; matplotlib is optional and draws the validation figures.
 - GROMACS (tested with 2023.3 and 2025.3). If it is not on your `PATH` as `gmx`, pass it with `--gmx`.
 - PPM 3.0, only if your structure is not already oriented and has no matching OPM entry
-  (see [Advanced options](membraneforger/docs/advanced.md#ppm-30)).
+  (see [Advanced options](membraneforger/docs/advanced.md#ppm-30)). The default orientation mode downloads the OPM
+  entry of a deposited structure, so it needs network access or `--opm-file`.
+- A build of a GPCR complex takes about 15 to 30 minutes on 8 cores and about 1.5 GB of memory. `--ntomp` sets the
+  threads (default: every core of the machine).
 
 Python can only run a real `gmx` executable. A shell alias or function is invisible to it, so put the executable
 itself on `PATH` (or pass `--gmx /path/to/gmx`). To point at PPM, set one variable, with `res.lib` in the same folder:
@@ -41,14 +44,26 @@ Tests that need `gmx`, PPM or `res.lib` skip with the reason printed when they a
 
 ## Installation
 
-Clone the repository and install the Python packages. MembraneForger runs from the clone; there is nothing else to
-install.
+Clone the repository and install it with pip, which installs the Python requirements with it. The force field, the
+bundled membranes and the equilibration templates are part of the package.
 
 ```bash
 git clone https://github.com/rolanddelmundo/MembraneForger.git
 cd MembraneForger
-pip install numpy scipy networkx "pandas<3" openmm "mstool>=0.3.9,<=0.3.10" matplotlib
+pip install ".[figures]"          # or pip install -e ".[figures]" to keep running from the clone
 ```
+
+After this `membraneforger` and `python -m membraneforger` are the same command and work from any directory. Check the
+installation and the inputs of a build before starting one:
+
+```bash
+membraneforger --check --aa membraneforger/examples/preeq_cg_cellmem/GCGR_MTZP_prot-lig.pdb --orientation none --out example_out
+```
+
+It reports GROMACS, mstool and PPM, what the build will do with each chain of the structure, and the output directory,
+in seconds, and ends with `CHECK PASS` or `CHECK FAIL`. Running from the clone without installing also works
+(`python -m membraneforger` from the repository folder, once the requirements are installed with
+`pip install numpy scipy networkx "pandas<3" openmm "mstool>=0.3.9,<=0.3.10"`).
 
 On a Slurm cluster, `bash membraneforger/slurm/setup.sh` builds a self-contained environment with GROMACS instead, and
 `membraneforger/slurm/run_membraneforger.sbatch` runs one structure per array task; its three marked blocks (scheduler, software,
@@ -82,7 +97,8 @@ To build the same protein in five different membranes, add `--runs 5` with `--cg
 ## Inputs and outputs
 
 You provide an all-atom structure (`--aa complex.pdb`: every chain you want simulated, each with a unique chain ID;
-no water, ions, crystallization additives or insertion codes; ligands need a topology in `membraneforger/forcefield/toppar/`) and,
+no water, ions, crystallization additives or insertion codes; ligands need a topology in `membraneforger/forcefield/toppar/`;
+see [Preparing the input](membraneforger/docs/preparing_inputs.md) and [Ligands](membraneforger/docs/ligands.md)) and,
 optionally, a membrane: `--cg 1` (default, a bundled GPR139 membrane), `--cg 2` (kappa opioid receptor), `--cg NAME`
 such as `KOR_Membrane5` (`--list-membranes` lists them), or `--cg FILE` for a Martini 3 frame of your own complex. The
 orientation options (`--orient-chain`, `--nterm-side`, `--orientation`) say which chain sits in the membrane. Every
@@ -102,11 +118,26 @@ The main files in the `--out` directory:
 
 Each stage checks its own result, and a failed check stops the build and names the stage. The checks before and after
 backmapping and minimization, and the thresholds, are described in the
-[tutorial](membraneforger/docs/membraneforger_tutorial.md#5-validation). After you equilibrate,
+[tutorial](membraneforger/docs/membraneforger_tutorial.md#5-validation).
+
+## After the build: equilibration
+
+`em.gro` is minimized, not equilibrated. `membraneforger/mdp/` holds the six restrained equilibration steps and a
+production template that set every restraint switch the topology expects, and a script that runs them:
+
+```bash
+bash membraneforger/mdp/run_equilibration.sh my_build        # 1.875 ns in six steps, then step7_production.tpr
+```
+
+[Equilibration](membraneforger/docs/equilibration.md) explains the schedule and the restraint macros. Afterwards,
 `python -m membraneforger.equilibration` grades convergence and membrane properties on the trajectory.
 
 ## Documentation
 
+- [Preparing the input](membraneforger/docs/preparing_inputs.md): what the all-atom PDB must contain, termini,
+  histidines, disulfides, orientation inputs, `--check`.
+- [Ligands](membraneforger/docs/ligands.md): adding a topology for your own ligand, ions and cofactors.
+- [Equilibration](membraneforger/docs/equilibration.md): the bundled mdp templates and restraint switches.
 - [Tutorial](membraneforger/docs/membraneforger_tutorial.md): build stages, validation and thresholds, limitations.
 - [Command-line reference](membraneforger/docs/cli_reference.md): every option and its default.
 - [Advanced options](membraneforger/docs/advanced.md): orientation modes, single-pass proteins, your own membrane, box size,

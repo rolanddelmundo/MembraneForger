@@ -56,8 +56,8 @@ Typical setups:
 - GROMACS is a module (Gemini: `Gromacs/2026.3-Container`): `MODULES="Gromacs/2026.3-Container"` and `GMX="gmx"`;
   the Python environment from `setup.sh` is still used for everything else.
 - Your own Python environment: load or activate it in `MODULES` (a module) or right after the block (a
-  `source .../activate` line), and set `PY="python3"`. It needs numpy, scipy, networkx, pandas < 3, OpenMM, mstool
-  0.3.9 and matplotlib, as in the top-level README.
+  `source .../activate` line), and set `PY="python3"`. Install the package into it with `pip install -e ~/MembraneForger`,
+  which brings numpy, scipy, networkx, pandas < 3, OpenMM and mstool, as in the top-level README.
 
 `setup.sh` itself takes two optional variables: `MFORGER_ENV=/path` builds the environment elsewhere than
 `<repo>/env`, and `PPM_SRC=/path/to/ppm3_code` compiles PPM from a source folder elsewhere than `<repo>/ppm3_code`.

@@ -10,7 +10,9 @@ python -m membraneforger --aa prot-lig.pdb --cg system.gro --orient-chain R --ou
 
 | File | Role |
 |---|---|
+| `__main__.py` | `python -m membraneforger` and the `membraneforger` command: checks the requirements import, then `cli.main` |
 | `cli.py` | command line, resource discovery |
+| `preflight.py` | `--check`: inputs, programs and output directory reported in seconds, nothing built |
 | `pipeline.py` | stage order, timing, fail-closed publication of `em.gro` |
 | `config.py` | CHARMM/GROMACS constants and the tunable `Settings` |
 | `martini.py` | the Martini 3 classification layer and residue-name aliases |
@@ -39,7 +41,9 @@ python -m membraneforger --aa prot-lig.pdb --cg system.gro --orient-chain R --ou
 | `runtools.py`, `structio.py` | logging/subprocess wrapper, file readers and writers |
 | `../examples/build_from_python.py`, `../slurm/examples/array_cases.sbatch` | use from Python, and a Slurm array template |
 | `../examples/measure_tutorial_numbers.py`, `../examples/make_tutorial_figures.py` | re-measure the tutorial numbers on the bundled frames, and redraw the tutorial figures and tables from that output |
+| `../mdp/` | equilibration and production mdp templates and `run_equilibration.sh` ([equilibration.md](equilibration.md)) |
 | `tests/` | `python -m unittest discover -s membraneforger/tests -t .` from the repository root |
 
-Requirements: Python >= 3.10 with numpy, scipy, networkx (matplotlib optional, for the validation figures); GROMACS;
-an interpreter with mstool 0.3.9 or 0.3.10 (`--mstool-python`). Installation, example and outputs are described in the top-level `README.md`.
+Requirements are in `pyproject.toml` (`pip install .`): Python >= 3.10 with numpy, scipy, networkx, pandas < 3, openmm and
+mstool 0.3.9 or 0.3.10 (matplotlib optional, for the validation figures); GROMACS. Installation, example and outputs are
+described in the top-level `README.md`.

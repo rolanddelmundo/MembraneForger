@@ -1,9 +1,9 @@
 # Command-line reference
 
-Run MembraneForger from the repository folder:
+After `pip install .`, `membraneforger` and `python -m membraneforger` are the same command:
 
 ```bash
-python -m membraneforger --aa complex.pdb --orient-chain R --nterm-side out --out my_build
+membraneforger --aa complex.pdb --orient-chain R --nterm-side out --out my_build
 ```
 
 `python -m membraneforger --help` prints the same options with their current defaults. Lengths on the command line
@@ -17,6 +17,7 @@ are in nm; the options that took Å before (`--box`, `--bilayer-z`, `--fit-max-c
 | `--cg 1\|2\|NAME\|FILE` (`--coarse-grain`) | The membrane. `1` picks a bundled GPR139 frame, `2` a bundled kappa opioid receptor frame. A name (any case; `--list-membranes` shows which exist, for example `KOR_Membrane1` or `GPR139_Membrane5`) picks that bundled frame, so the build is repeatable. A file (or `custom=FILE`) is a Martini 3 frame of your own complex. | `1` |
 | `--runs N` | Build the complex N times, each time in a different bundled membrane of the `--cg 1` or `--cg 2` series (its first N frames, so `--runs 5` with `--cg 2` is KOR_Membrane1, KOR_Membrane2, KOR_Membrane3, KOR_Membrane4, KOR_Membrane5), one system per run in `<out>/<frame>/`. Needs `--cg 1` or `2`; at most the number of frames in the series (9 for KOR, 9 for GPR139). | `1` |
 | `--list-membranes` | Print the bundled frames by name and exit. | — |
+| `--check` | With the options of a build: check GROMACS, the Python requirements, mstool, the all-atom input (chains, termini, histidines, disulfides, ligands, orientation options), the coarse-grained frame, PPM/OPM, the backmapping data and the output directory, print one OK/WARN/FAIL/INFO line each and exit (1 when anything failed). Nothing is written. See [Preparing the input](preparing_inputs.md). | off |
 | `--embed` | With `--cg FILE`, embed the protein into that frame's membrane instead of fitting it onto the frame's own protein. Always on for the bundled frames (`1`, `2` or a name). | off |
 | `--embed-site hole\|free` | Where an embedded complex goes. `hole` is where the frame's receptor was. `free` is unbroken membrane at least 1 nm from that receptor, for a much smaller protein such as one transmembrane helix. | `hole` |
 | `-o`, `--out DIR` | Output directory (with `--runs`, the parent of one directory per run). | `./<all-atom structure stem>_membraneforger` (the `--membrane` stem with `--membrane`), the same for a single build and `--runs` |
@@ -97,8 +98,9 @@ The slice gate compares the cut membrane with the membrane it was cut from, befo
 | `MEMBRANEFORGER_TOPPAR` | default for `--toppar` |
 | `MEMBRANEFORGER_DATA` | default for `--data` |
 
-## Equilibration analysis
+## Equilibration
 
-After you have equilibrated the system, `python -m membraneforger.equilibration --help` lists the options of the
+`membraneforger/mdp/` holds the mdp templates of the six restrained equilibration steps and of production, and
+`run_equilibration.sh BUILD_DIR [GMX] [NTOMP]` runs them; see [Equilibration](equilibration.md). After you have equilibrated the system, `python -m membraneforger.equilibration --help` lists the options of the
 trajectory gates (convergence and equilibrium properties). The [tutorial](membraneforger_tutorial.md#59-gates-3-and-4-equilibration-and-equilibrium-properties)
 describes what they measure.

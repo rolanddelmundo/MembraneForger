@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "membraneforger"
+dynamic = ["version"]
+description = "Build a validated, energy-minimized all-atom CHARMM36 membrane-protein system for GROMACS from one structure file"
+readme = "README.md"
+license = {file = "LICENSE.txt"}
+authors = [{name = "Roland Del Mundo", email = "rdelmundo@coh.org"}]
+requires-python = ">=3.10"
+# The one list of Python requirements: the README, membraneforger/slurm/setup.sh and the CI install from here.
+dependencies = [
+    "numpy",
+    "scipy",
+    "networkx",
+    "pandas<3",
+    "openmm",
+    "mstool>=0.3.9,<=0.3.10",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Topic :: Scientific/Engineering :: Chemistry",
+]
+
+[project.optional-dependencies]
+figures = ["matplotlib"]        # the validation figures (membrane_validation.md)
+trajectory = ["MDAnalysis"]     # reading xtc/trr directly in python -m membraneforger.equilibration
+dev = ["ruff"]
+
+[project.urls]
+Repository = "https://github.com/rolanddelmundo/MembraneForger"
+Changelog = "https://github.com/rolanddelmundo/MembraneForger/blob/main/membraneforger/CHANGELOG.md"
+
+[project.scripts]
+membraneforger = "membraneforger.__main__:run"
+
+[tool.setuptools.dynamic]
+version = {attr = "membraneforger.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["membraneforger*"]
+
+[tool.setuptools.package-data]
+# Everything the build reads at run time ships with the package: the force field, the backmapping data, the bundled
+# membranes and the example input pair, the equilibration mdp templates, and the data the tests use.
+membraneforger = [
+    "forcefield/**/*",
+    "backmap_data/**/*",
+    "examples/preeq_cg_cellmem/*.gro",
+    "examples/preeq_cg_cellmem/*.pdb",
+    "examples/preeq_cg_cellmem/README.md",
+    "mdp/*",
+    "tests/data/*",
+    "ruff.toml",
+]
