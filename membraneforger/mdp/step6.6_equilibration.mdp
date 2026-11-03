@@ -1,0 +1,55 @@
+; MembraneForger equilibration step 6.6 of 6.1-6.6 (0.5 ns): restrained MD after em.gro, CHARMM-GUI membrane schedule.
+; Restraints (the macros topol.top and toppar/*.itp expect, in kJ mol^-1 nm^-2 and kJ mol^-1 rad^-2):
+;   POSRES_FC_BB     protein backbone heavy atoms and every ligand heavy atom (posre_*.itp)
+;   POSRES_FC_SC     protein side-chain heavy atoms
+;   POSRES_FC_LIPID  lipid heavy atoms (lipids that came without their own restraint block)
+;   DIHRES_FC        the lipid dihedral restraints (ring chairs, double bonds, amides) under -DDIHRES
+; BBDIHRES (the EM-only backbone phi/psi restraints) is never defined here. Nothing is frozen: the ligands that were
+; frozen in minimization are position-restrained with the backbone instead. See membraneforger/docs/equilibration.md.
+define                  = -DPOSRES -DPOSRES_FC_BB=50.0 -DPOSRES_FC_SC=0.0 -DPOSRES_FC_LIPID=0.0 -DDIHRES -DDIHRES_FC=0.0
+;
+integrator              = md
+dt                      = 0.002
+nsteps                  = 250000
+nstxout                 = 0
+nstvout                 = 0
+nstfout                 = 0
+nstxout-compressed      = 5000
+nstcalcenergy           = 100
+nstenergy               = 1000
+nstlog                  = 1000
+continuation            = yes
+;
+; Non-bonded settings of CHARMM36 in GROMACS (the ones the build's minimization used, config.EM_MDP)
+cutoff-scheme           = Verlet
+nstlist                 = 20
+rlist                   = 1.2
+vdwtype                 = Cut-off
+vdw-modifier            = Force-switch
+rvdw_switch             = 1.0
+rvdw                    = 1.2
+coulombtype             = PME
+rcoulomb                = 1.2
+pme-order               = 4
+fourierspacing          = 0.12
+;
+constraints             = h-bonds
+constraint_algorithm    = LINCS
+;
+; Temperature: three groups of index_ini.ndx (the protein with its ligands, the membrane, water and ions)
+tcoupl                  = v-rescale
+tc_grps                 = Protein_LIG MEMB SOL_ION
+tau_t                   = 1.0 1.0 1.0
+ref_t                   = 310 310 310
+;
+nstcomm                 = 100
+comm_mode               = linear
+comm_grps               = Protein_LIG MEMB SOL_ION
+;
+refcoord_scaling        = com
+; Pressure: semi-isotropic, 1 bar, as for every bilayer
+pcoupl                  = C-rescale
+pcoupltype              = semiisotropic
+tau_p                   = 5.0
+compressibility         = 4.5e-5 4.5e-5
+ref_p                   = 1.0 1.0
