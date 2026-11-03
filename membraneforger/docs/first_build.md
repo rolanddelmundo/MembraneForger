@@ -73,12 +73,13 @@ bash membraneforger/mdp/run_equilibration.sh example_out
 
 This runs the six restrained steps (1.875 ns) and writes `step7_production.tpr`; see [Equilibration](equilibration.md).
 Afterwards `python -m membraneforger.equilibration` grades box convergence, area per lipid, thickness and the other
-membrane properties on the trajectory.
+membrane properties; it needs `--out`, the box series and some frames from the production run, so use the full command in
+[Equilibration](equilibration.md#checking-the-result).
 
 ## 5. Your own protein
 
-Prepare the PDB following [Preparing the input](preparing_inputs.md) (one model, no water or bulk ions, hydrogens, termini,
-unique chain IDs), add a topology for any ligand ([Ligands](ligands.md)), and run `--check` on it:
+Prepare the PDB following [Preparing the input](preparing_inputs.md) (one model, no water or bulk ions, complete heavy atoms,
+termini, unique chain IDs; hydrogens are optional), add a topology for any ligand ([Ligands](ligands.md)), and run `--check` on it:
 
 ```bash
 membraneforger --check --aa complex.pdb --cg KOR_Membrane1 --orient-chain R --nterm-side out --out my_build
