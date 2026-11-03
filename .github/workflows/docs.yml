@@ -37,8 +37,8 @@ jobs:
           path: site
 
   deploy:
-    # Pages is published only from main, never from a pull request
-    if: github.event_name != 'pull_request'
+    # Pages is published only from the main branch (not pull requests, not manual runs of other refs)
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     permissions:
