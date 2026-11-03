@@ -82,10 +82,11 @@ CG_GATE = {"thickness_percent": (3.0, 5.0), "tilt_deg": (1.0, 3.0), "depth_A": (
 AA_GATE = {"thickness_percent": (10.0, 15.0), "tilt_deg": (2.0, 5.0), "depth_A": (1.0, 2.5)}
 # Absolute guardrails of the coarse-grained frame the build starts from (validate_cg_frame). The windows are (PASS low, PASS
 # high, WARNING low, WARNING high), FAIL beyond; the ceilings are (PASS, WARNING), FAIL beyond. They were set just outside what
-# the eight bundled 50 us frames show: leaflet APL 46.8-52.7 A^2, D_HH 42.4-42.8 A, PO4 normal tilt <= 1.5 deg, at most one
-# non-sterol lipid on the wrong side, longest bead-to-bead link inside a lipid 0.59-0.63 nm, closest lipid bead to the protein
-# 0.32 nm. They are not literature values: another membrane model (the 11.2 nm GCGR example has APL 54-59 A^2 and D_HH 37 A)
-# may sit outside the PASS windows, which is a WARNING; only a frame that is not a fluid bilayer at all fails.
+# the original eight bundled 50 us frames show (D_HH 42.4-42.8 A, closest lipid bead to the protein 0.32 nm); the 18 frames
+# bundled now show leaflet APL 46.5-52.7 A^2, PO4 normal tilt <= 2.3 deg, at most one non-sterol lipid on the wrong side and a
+# longest bead-to-bead link inside a lipid of 0.58-0.63 nm, and all pass. They are not literature values: another membrane
+# model (the 11.2 nm GCGR example has APL 54-59 A^2 and D_HH 37 A) may sit outside the PASS windows, which is a WARNING; only
+# a frame that is not a fluid bilayer at all fails.
 CG_FRAME_GATE = {"apl_A2": (42.0, 60.0, 30.0, 100.0), "thickness_A": (38.0, 47.0, 28.0, 56.0), "tilt_deg": (5.0, 10.0),
                  "wrong_leaflet_percent": (0.5, 100.0), "molecule_gap_nm": (0.8, 1.0), "protein_overlap_nm": 0.30}
 # Slicing cuts lipids only: the complex is not moved, so its tilt, insertion depth and side of the membrane are the embedded

@@ -69,7 +69,7 @@ Typical setups:
 | `NAMES` | the PDB files in the submit folder, without `.pdb`: `(receptor_A receptor_B)`. Keep `--array` in block 1 in step |
 | `ORIENT` | `"--orientation none"` for a structure already placed in a membrane (OPM, CHARMM-GUI). Otherwise the chain that crosses the membrane and the side of its N terminus, `"--orient-chain R --nterm-side out"` (GPCRs: out); this uses PPM |
 | `MEMBRANE` | `1` for a random GPR139 frame, `2` for a random KOR frame, or one frame by name (`python -m membraneforger --list-membranes` lists them) |
-| `RUNS` | build each structure this many times, once in each of the first `RUNS` frames of the series (`MEMBRANE=2`: `<name>/KOR_Membrane1/em.gro`, `KOR_Membrane2`, `KOR_Membrane3`, `KOR_Membrane5`, `KOR_Membrane6`; the GPR139 series has one frame, so `RUNS` above 1 needs `MEMBRANE=2`). Sequential, about 15 to 30 minutes each |
+| `RUNS` | build each structure this many times, once in each of the first `RUNS` frames of the series (`MEMBRANE=2`: `<name>/KOR_Membrane1/em.gro`, `KOR_Membrane2`, `KOR_Membrane3`, `KOR_Membrane4`, `KOR_Membrane5`; `MEMBRANE=1` takes GPR139_Membrane1, GPR139_Membrane2, ... the same way; at most nine). Sequential, about 15 to 30 minutes each |
 | `EXTRA` | any other option from the [command-line reference](../docs/cli_reference.md), for example `"--xy-buffer 2.0"` for production box sizes; to rebuild into an existing work folder add `--overwrite` (checkpoints and trajectories also need `--overwrite-restart`), otherwise the build refuses |
 
 `RUNS=5` gives five replicate systems that differ in their lipid arrangement. To build them in parallel instead,

@@ -23,6 +23,16 @@
   for a missing requirement, a residue without topology, a ligand that does not match its `.itp`, an unrecognized C terminus and a
   failed OPM download.
 
+- **All nine GPR139 runs are bundled.** `GPR139_Membrane1`, `GPR139_Membrane6`, `GPR139_Membrane7`, `GPR139_Membrane8` and
+  `GPR139_Membrane9` reached 50 µs and join `GPR139_Membrane2` to `GPR139_Membrane5`, for 18 frames (9 KOR, 9 GPR139). Each is
+  the unmodified `run50.gro` of its run (md5 checked against the simulation directory). `--cg 1` now draws from nine frames,
+  `--runs N --cg 1` accepts N up to 9 and starts at `GPR139_Membrane1`, and `--runs 5 --cg 2` is KOR_Membrane1-5 (the docs and
+  `gemini_GCGR.sbatch` still listed 1, 2, 3, 5, 6). All 18 frames pass the coarse-grained frame gate, no frame is rotated, and
+  the leaflet composition averaged over the 18 frames is unchanged to the whole percent. The frame-dependent numbers of the tutorial
+  (embedding, slicing, seam, construction and whole-cell deviation, the per-frame APL and first-shell tables, figures 1 and 2)
+  were re-measured on the 18 frames with `measure_tutorial_numbers.py` (`slurm/examples/gemini_tutorial_numbers.sbatch`, new).
+  With the centred window every frame passes the slice gate (construction deviation median 0.94 %, largest 3.58 %); with
+  `--slice-offset-search` GPR139_Membrane5 reaches +5.5 % in the lower leaflet and stops.
 - **The E/Z configuration of the S-geranylgeranyl cysteine is checked and can be corrected.** A natural geranylgeranyl group is all-E, but the
   bundled GCGR-Gs input (and the models derived from it) carry the three CH=C(CH3) bonds of `CYSG` in Z (dihedral 0 to 5 degrees), which
   minimization and the force field keep. `--prenyl-configuration report` (default, as in earlier releases) warns, `yes` stops the build on a
