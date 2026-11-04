@@ -146,8 +146,8 @@ a validation reference, a command-line reference and troubleshooting.
 # Research impact statement
 
 MembraneForger has been used in the author's laboratory at City of Hope since November 2025. It was used to build the
-GPR139 membrane systems for molecular dynamics simulations, which started in November 2025, in a study of GPR139
-structure and ligand recognition now in revision at Nature Communications [@Li2026GPR139]. It was released publicly
+GPR139–JNJ-63533054–G11 membrane system for molecular dynamics simulations, started in November 2025, in a study of
+GPR139 structure and ligand recognition now in revision at Nature Communications [@Li2026GPR139]. It was released publicly
 in July 2026.
 
 It was developed for simulations of class A and class B GPCRs. These include the glucagon receptor with tirzepatide
