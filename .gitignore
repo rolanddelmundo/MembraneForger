@@ -18,3 +18,4 @@ mforger_*.log
 /env
 /.micromamba/
 /ppm3_code/
+/site/
