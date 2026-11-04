@@ -30,15 +30,16 @@ nav:
   - Home: index.md
   - Getting started:
       - Your first build: first_build.md
+      - Equilibration: equilibration.md
+  - Preparing a PDB:
       - Preparing the input: preparing_inputs.md
       - Ligands: ligands.md
-      - Equilibration: equilibration.md
-  - Reference:
-      - Command-line options: cli_reference.md
+  - Examples: examples.md
+  - Troubleshooting: troubleshooting.md
+  - CLI reference: cli_reference.md
+  - Advanced:
       - Advanced options: advanced.md
       - Tutorial and validation: membraneforger_tutorial.md
-      - Troubleshooting: troubleshooting.md
-  - Development:
       - Module map: modules.md
 
 extra_css:

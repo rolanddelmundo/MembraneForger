@@ -4,6 +4,23 @@ This page collects the details behind the top-level README. For the full option 
 [command-line reference](cli_reference.md). For the science behind each stage and every threshold see the
 [tutorial](membraneforger_tutorial.md).
 
+## How a build works
+
+![The nine steps of a build; gold steps are checks that stop the build if they fail](assets/workflow.png)
+
+A build runs nine steps. Four of them are checks (gold) that stop the build with a message naming the step:
+
+| Check | What it grades | Report |
+|---|---|---|
+| Frame check (gate 0) | the coarse-grained membrane on its own: periodicity, area per lipid, composition, thickness, packing | `membrane_validation.md` |
+| Embedding | that the protein's pocket in the membrane is empty after lipids are pushed aside | `membranebuilder.log` |
+| Slice check (gate 1) | the cut membrane against the uncut one: area per lipid, composition, lateral RDF, thickness, protein tilt | `membrane_validation.md` |
+| All-atom check (gate 2) | the backmapped membrane and then the minimized system: contacts, ring threading, bond crossings, lipid stereochemistry | `membranebuilder.log`, `audit.json` |
+
+`em.gro` is written only when every check passes. After equilibration, `python -m membraneforger.equilibration` grades
+the trajectory (gates 3 and 4, see [Equilibration](equilibration.md#checking-the-result)). The
+[tutorial](membraneforger_tutorial.md#5-validation) gives every threshold.
+
 ## Membrane orientation
 
 Name the chain that spans or associates with the membrane. MembraneForger determines its membrane orientation and

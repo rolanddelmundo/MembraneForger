@@ -17,45 +17,136 @@
 {% block content %}
 <div class="mf-home">
 
-  <div class="mf-band">
-    <div>
+  <section class="mf-hero">
+    <div class="mf-hero-text">
       <h1>MembraneForger</h1>
-      <p class="mf-tagline">Build all-atom membrane-protein systems for GROMACS from one PDB file</p>
+      <p class="mf-tagline">Turn a protein structure into an energy-minimized, all-atom membrane system that is ready to equilibrate in GROMACS.</p>
+      <p class="mf-hero-sub">Give it a PDB file. It places the protein in a realistic plasma membrane, adds water and salt, minimizes the energy and checks every step.</p>
+      <div class="mf-buttons">
+        <a class="md-button md-button--primary" href="#quick-start">Get started</a>
+        <a class="md-button" href="#input-requirements">Input requirements</a>
+      </div>
     </div>
     <img src="assets/renders/004_backmapped_membrane.jpg" alt="A receptor and G protein complex in an all-atom plasma membrane built by MembraneForger">
+  </section>
+
+  <div class="mf-note">
+    <strong>What you get, and what comes next.</strong> MembraneForger stops after <em>energy minimization</em>: atoms are
+    moved to remove clashes, but nothing has moved at temperature yet. Before collecting data you still run a short
+    <em>restrained equilibration</em> (templates included) and then <em>production MD</em>, both in GROMACS.
   </div>
 
-  <p>
-    MembraneForger places your protein in an equilibrated Martini 3 plasma membrane, converts the membrane to
-    CHARMM36 all-atom, adds water and ions, and minimizes. Each step is checked; the build stops if a check fails.
-  </p>
-  <div class="mf-install">
-<pre><code>pip install git+https://github.com/rolanddelmundo/MembraneForger.git
-membraneforger --aa complex.pdb --orient-chain R --nterm-side out --out my_build</code></pre>
-  </div>
-  <p>New here? Start with <a href="first_build/">Your first build</a>.</p>
+  <h2 id="quick-start">Quick start</h2>
+  <ol class="mf-steps">
+    <li>
+      <h3>Check the prerequisites</h3>
+      <p>Linux or macOS, Python 3.10 or later, and <a href="https://www.gromacs.org/">GROMACS</a> on your <code>PATH</code>
+         (on a cluster, load its module). A GPCR-sized build takes about 15 to 30 minutes on 8 cores.</p>
+    </li>
+    <li>
+      <h3>Install</h3>
+<pre><code>git clone https://github.com/rolanddelmundo/MembraneForger.git
+cd MembraneForger
+pip install ".[figures]"</code></pre>
+    </li>
+    <li>
+      <h3>Prepare your PDB</h3>
+      <p>One model, every chain with its own ID, no water or bulk ions. See the <a href="#input-requirements">checklist below</a>
+         or <a href="preparing_inputs/">Preparing a PDB</a>.</p>
+    </li>
+    <li>
+      <h3>Run the pre-flight check</h3>
+      <p>It reads your inputs as the build will, checks GROMACS and the other programs, and writes nothing. Fix every <code>FAIL</code> line.</p>
+<pre><code>membraneforger --check --aa complex.pdb --orient-chain R --nterm-side out --out my_build</code></pre>
+    </li>
+    <li>
+      <h3>Build the bundled example</h3>
+      <p>A glucagon receptor complex that is already oriented, so it needs nothing else:</p>
+<pre><code>membraneforger \
+    --aa membraneforger/examples/preeq_cg_cellmem/GCGR_MTZP_prot-lig.pdb \
+    --cg membraneforger/examples/preeq_cg_cellmem/GCGR_MTZP_cg_cellmem.gro \
+    --orientation none --out example_out</code></pre>
+    </li>
+    <li>
+      <h3>Look at the result</h3>
+      <p>The last line of <code>example_out/membranebuilder.log</code> says <code>PASS</code> or <code>FAIL</code>.
+         <a href="#outputs">What each file is</a> is explained below, and <a href="first_build/">Your first build</a> walks through it.</p>
+    </li>
+  </ol>
+
+  <h2 id="input-requirements">Is my structure compatible?</h2>
+  <ul class="mf-check">
+    <li><b>An all-atom protein structure</b> (PDB) from crystallography, cryo-EM or a model such as AlphaFold, with complete side chains. Missing heavy atoms are not rebuilt, and missing loops are not modelled. <a href="preparing_inputs/#hydrogens-and-missing-atoms">Details</a></li>
+    <li><b>One model and a unique chain ID for every chain.</b> Remove water, bulk ions, detergents and crystal lipids. Keep structural ions such as Mg<sup>2+</sup>. <a href="preparing_inputs/#checklist">Details</a></li>
+    <li><b>A known membrane orientation.</b> Either the file is already oriented (membrane normal along z, extracellular side up, as in OPM files), or MembraneForger orients it from its OPM entry or with PPM 3.0. You name the membrane-spanning chain and the side its N terminus is on. <a href="preparing_inputs/#orientation-inputs">Details</a></li>
+    <li><b>A topology for every ligand.</b> Small molecules need CHARMM/CGenFF parameters as a GROMACS <code>.itp</code> file. MembraneForger does not generate them. GDP and Mg<sup>2+</sup> are bundled. <a href="ligands/">Details</a></li>
+    <li><b>A protein that fits the membrane patch.</b> The bundled membranes are 18 x 18 nm, sized for a GPCR. Smaller proteins and your own membranes are supported. <a href="preparing_inputs/#size-and-the-bundled-membranes">Details</a></li>
+    <li><b>GROMACS</b> on your <code>PATH</code>. PPM 3.0 is only needed when the structure is not oriented and has no OPM entry.</li>
+  </ul>
+
+  <h2 id="outputs">What comes out</h2>
+  <p>A successful build writes these files to the <code>--out</code> folder (example from the bundled GCGR build):</p>
+  <table class="mf-files">
+    <tr><td><code>em.gro</code></td><td>The finished system: protein, membrane, water and ions, energy-minimized. It is written only if every check passed. Start equilibration from this file.</td></tr>
+    <tr><td><code>topol.top</code>, <code>toppar/</code></td><td>The force-field description of every molecule (CHARMM36). GROMACS needs these together with <code>em.gro</code>.</td></tr>
+    <tr><td><code>index_ini.ndx</code></td><td>Atom groups (protein and ligands, membrane, water and ions) used by the equilibration files.</td></tr>
+    <tr><td><code>membrane_validation.md</code></td><td>A readable report on the membrane: packing, composition and thickness, with figures and an overall verdict (PASS, PASS WITH WARNINGS or FAIL).</td></tr>
+    <tr><td><code>audit.json</code></td><td>Independent checks on the final system: topology, net charge, energy, ring threading and lipid geometry.</td></tr>
+    <tr><td><code>run_manifest.json</code>, <code>membranebuilder.log</code></td><td>The exact settings and software versions, and a line-by-line log. Attach both when you report a problem.</td></tr>
+    <tr><td><code>int/</code></td><td>Intermediate files from every stage, for inspection or restarts.</td></tr>
+  </table>
 
   <h2>From structure to simulation</h2>
   <div class="mf-stages">
-    <figure><img src="assets/renders/001_input_aa.jpg" alt="The input all-atom complex" loading="lazy"><figcaption><b>1</b> Your structure</figcaption></figure>
-    <figure><img src="assets/renders/002_input_cg.jpg" alt="The complex in a coarse-grained Martini 3 membrane" loading="lazy"><figcaption><b>2</b> Placed in a Martini 3 membrane</figcaption></figure>
-    <figure><img src="assets/renders/008_solvated.jpg" alt="The all-atom membrane and complex in a water box" loading="lazy"><figcaption><b>3</b> Backmapped to all atoms and solvated</figcaption></figure>
-    <figure><img src="assets/renders/014_final_validated.jpg" alt="The final system with ions after minimization and checks" loading="lazy"><figcaption><b>4</b> Ions added, minimized and checked</figcaption></figure>
+    <figure><img src="assets/renders/001_input_aa.jpg" alt="The input all-atom receptor and G protein complex" loading="lazy">
+      <figcaption><b>1. Your structure.</b> The protein complex as given in the PDB file, with its ligands.</figcaption></figure>
+    <figure><img src="assets/renders/002_input_cg.jpg" alt="The complex inside a coarse-grained Martini 3 membrane" loading="lazy">
+      <figcaption><b>2. Placed in a membrane.</b> The protein goes into a pre-equilibrated coarse-grained (Martini 3) plasma membrane of ten lipid types.</figcaption></figure>
+    <figure><img src="assets/renders/004_backmapped_membrane.jpg" alt="The membrane converted to all atoms around the complex" loading="lazy">
+      <figcaption><b>3. Converted to all atoms.</b> Every lipid is rebuilt atom by atom (backmapped) around the unchanged protein.</figcaption></figure>
+    <figure><img src="assets/renders/014_final_validated.jpg" alt="The final system in its simulation box with ions" loading="lazy">
+      <figcaption><b>4. Ready to equilibrate.</b> Water (not drawn) and 0.15 M NaCl are added, the energy is minimized, and the system is checked.</figcaption></figure>
   </div>
 
-  <h2>Every lipid, bead to atom</h2>
-  <div class="mf-lipids">
-    <figure><img src="assets/renders/species_GM3.jpg" alt="GM3 ganglioside" loading="lazy"><figcaption>GM3</figcaption></figure>
-    <figure><img src="assets/renders/species_PIP2.jpg" alt="PIP2" loading="lazy"><figcaption>PIP2</figcaption></figure>
-    <figure><img src="assets/renders/species_POPC.jpg" alt="POPC" loading="lazy"><figcaption>POPC</figcaption></figure>
-    <figure><img src="assets/renders/species_cholesterol.jpg" alt="Cholesterol" loading="lazy"><figcaption>Cholesterol</figcaption></figure>
+  <h2 id="how-it-works">How it works</h2>
+  <ol class="mf-pipe" aria-label="Build pipeline">
+    <li><b>Orient</b><span>align the protein to the membrane</span></li>
+    <li><b>Embed</b><span>place it in a coarse-grained membrane</span></li>
+    <li><b>Backmap</b><span>rebuild the lipids with all atoms</span></li>
+    <li><b>Solvate</b><span>add water and salt</span></li>
+    <li><b>Minimize</b><span>remove clashes</span></li>
+  </ol>
+  <p class="mf-pipe-note">The system is checked after each step. A failed check stops the build and names the step and the file to look at.
+     The individual checks and their thresholds are in <a href="advanced/#how-a-build-works">Advanced options</a>.</p>
+
+  <h2>What you can do</h2>
+  <div class="mf-caps">
+    <div>
+      <h3>Put a membrane protein in a realistic cell membrane</h3>
+      <p>Receptors, G proteins, peptides and ligands keep the pose you give them. The membrane is an asymmetric plasma membrane with cholesterol, sphingomyelin, GM3 and PIP2, equilibrated for 50 µs.</p>
+      <code>membraneforger --aa complex.pdb --orient-chain R --nterm-side out --out build</code>
+    </div>
+    <div>
+      <h3>Build several independent starting membranes</h3>
+      <p>The same protein in N different bundled membrane snapshots, so each system starts with a different lipid arrangement. These are independent <em>starting configurations</em>. They are not MD replicates of one system, which come from re-running equilibration with new velocities.</p>
+      <code>membraneforger --aa complex.pdb --cg 2 --runs 5 --orient-chain R --nterm-side out --out build</code>
+    </div>
+    <div>
+      <h3>Use your own membrane, protein size or lipid mix</h3>
+      <p>Embed into any Martini 3 membrane, place small single-pass proteins on intact bilayer, or remove and swap lipid types.</p>
+      <code>membraneforger --aa complex.pdb --cg my_frame.gro --embed --out build</code>
+    </div>
+    <div>
+      <h3>Run one stage on its own</h3>
+      <p>Stop after slicing or backmapping, or start from a protein and membrane you assembled yourself, with the same checks.</p>
+      <code>membraneforger solvate --membrane system.pdb --out build</code>
+    </div>
   </div>
-  <p class="mf-caption">Martini 3 beads (spheres) over the all-atom lipid MembraneForger rebuilds from them.</p>
 
-  <h2>What it does</h2>
-
-  <p class="mf-group">Full builds</p>
-  <div class="mf-list">
+  <details class="mf-more">
+    <summary>All commands and options by task</summary>
+    <p class="mf-group">Full builds</p>
+    <div class="mf-list">
     {{ use("first_build/", "Build a membrane-protein system",
            "PDB in; solvated, minimized GROMACS system out.",
            [],
@@ -86,10 +177,9 @@ membraneforger --aa complex.pdb --orient-chain R --nterm-side out --out my_build
            [],
            "bash \"$(python -c 'import membraneforger, os; print(os.path.dirname(membraneforger.__file__))')/mdp/run_equilibration.sh\" build",
            '<polyline points="6,48 18,30 30,38 42,16 58,24" class="i-stroke"/><circle cx="42" cy="16" r="4" class="i-fill"/>') }}
-  </div>
-
-  <p class="mf-group">Single steps</p>
-  <div class="mf-list">
+    </div>
+    <p class="mf-group">Single steps</p>
+    <div class="mf-list">
     {{ use("advanced/#bundled-membranes", "List bundled membranes",
            "18 equilibrated Martini 3 plasma-membrane frames.",
            [],
@@ -130,28 +220,28 @@ membraneforger --aa complex.pdb --orient-chain R --nterm-side out --out my_build
            [],
            "membraneforger equilibration --out build --energy box.xvg --frames frame*.gro",
            '<path d="M10 34l12 12 32-32" class="i-stroke"/><rect x="6" y="6" width="52" height="52" rx="6" class="i-fill"/>') }}
+    </div>
+    <p>Every option is in the <a href="cli_reference/">command-line reference</a>.</p>
+  </details>
+
+  <h2>Backmapping: from beads to atoms</h2>
+  <p>The membrane is first simulated <em>coarse-grained</em>: each bead stands for about four heavy atoms, which makes
+     microseconds of lipid mixing affordable. <em>Backmapping</em> rebuilds every lipid with all its atoms on those beads, so the
+     membrane keeps its equilibrated arrangement and gains the detail an all-atom simulation needs. Ring threading, bond crossings
+     and stereochemistry are then checked.</p>
+  <div class="mf-lipids">
+    <figure><div class="mf-pair"><div><img src="assets/renders/lipid_GM3_cg.jpg" alt="GM3 (ganglioside), coarse-grained beads" ><span>beads</span></div><div><img src="assets/renders/lipid_GM3_aa.jpg" alt="GM3 (ganglioside), all atoms" ><span>atoms</span></div></div><figcaption><b>GM3 (ganglioside)</b></figcaption></figure>
+    <figure><div class="mf-pair"><div><img src="assets/renders/lipid_PIP2_cg.jpg" alt="PIP2, coarse-grained beads" ><span>beads</span></div><div><img src="assets/renders/lipid_PIP2_aa.jpg" alt="PIP2, all atoms" ><span>atoms</span></div></div><figcaption><b>PIP2</b></figcaption></figure>
+    <figure><div class="mf-pair"><div><img src="assets/renders/lipid_POPC_cg.jpg" alt="POPC, coarse-grained beads" ><span>beads</span></div><div><img src="assets/renders/lipid_POPC_aa.jpg" alt="POPC, all atoms" ><span>atoms</span></div></div><figcaption><b>POPC</b></figcaption></figure>
+    <figure><div class="mf-pair"><div><img src="assets/renders/lipid_cholesterol_cg.jpg" alt="Cholesterol, coarse-grained beads" ><span>beads</span></div><div><img src="assets/renders/lipid_cholesterol_aa.jpg" alt="Cholesterol, all atoms" ><span>atoms</span></div></div><figcaption><b>Cholesterol</b></figcaption></figure>
   </div>
 
-  <h2 id="how-it-works">How it works</h2>
-  <img src="assets/workflow.png" alt="The nine steps of a build; gold steps are checks that stop the build if they fail" class="mf-workflow">
-  <div class="mf-two">
-    <div>
-      <h3>What goes in</h3>
-      <ul>
-        <li>A PDB with unique chain IDs, no water or bulk ions (keep structural ions).</li>
-        <li>Optional: a membrane frame (bundled or your own).</li>
-        <li>GROMACS on your <code>PATH</code>.</li>
-      </ul>
-    </div>
-    <div>
-      <h3>What comes out</h3>
-      <ul>
-        <li><code>em.gro</code>, <code>topol.top</code>, <code>toppar/</code>: the minimized system.</li>
-        <li><code>membrane_validation.md</code>, <code>audit.json</code>: check results.</li>
-        <li><code>int/</code>: intermediate files.</li>
-      </ul>
-    </div>
-  </div>
+  <h2>Good to know</h2>
+  <ul class="mf-check mf-limits">
+    <li><b>Minimized is not equilibrated.</b> Run the <a href="equilibration/">restrained equilibration</a> (six steps, 1.875 ns) before production MD.</li>
+    <li><b>Ligand parameters are your responsibility.</b> MembraneForger uses the topology you provide. Check CGenFF penalty scores before trusting a ligand.</li>
+    <li><b>Passing checks is not proof of biology.</b> The checks catch clashes, broken lipids and badly packed membranes. They cannot tell whether the protein model, its protonation states or the ligand pose are right.</li>
+  </ul>
 
   <h2>Built on</h2>
   <p>
