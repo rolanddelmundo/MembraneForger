@@ -111,11 +111,12 @@ preparation guide, a validation reference, a command-line reference and troubles
 
 # Research impact statement
 
-MembraneForger was developed for simulations of class A and class B GPCRs, including the glucagon receptor with
+MembraneForger has been used within the author's laboratory at City of Hope since November 2025 to build the
+all-atom systems for its membrane-protein simulations, and was released publicly in July 2026. It was developed for simulations of class A and class B GPCRs, including the glucagon receptor with
 tirzepatide and Gs (the bundled example), GPR139 with a small-molecule agonist, and lipidated receptor constructs
 (S-geranylgeranyl and S-palmitoyl cysteine, N-palmitoyl glycine). The 18 bundled membranes come from 18 independent
 50 µs Martini 3 simulations, so a user can build the same complex in several independently equilibrated membranes and
-treat them as replicates. Since its first release (v0.1.0, July 2026) the project has gone through more than 60 pull
+treat them as replicates. Since its first public release (v0.1.0, July 2026) the project has gone through more than 60 pull
 requests and three releases, adding the validation gates described above, pip installation, stage commands,
 restrained equilibration templates and the documentation site.
 
