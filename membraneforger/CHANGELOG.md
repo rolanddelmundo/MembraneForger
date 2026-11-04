@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Stage commands.** `membraneforger build|check|slice|backmap|solvate|equilibration`: one pipeline, entered or left at a stage, with
+  the same options for every command (`cli.split_command`, `Session.stop_after`). `slice` stops after the slice gate and writes
+  `slice_cg.gro` (the cut Martini 3 membrane) and `placed_complex.pdb`; `backmap` stops once a backmapped membrane has passed gate 2 and
+  keeps `membrane.pdb` at the top level; `solvate` is the `--membrane` entry by name; `check` is `--check`; `equilibration` runs
+  `membraneforger.equilibration`. A command line without a command word is a `build`, so earlier command lines still work. `--help`
+  names the program `membraneforger` (it said `membraneforger.py`) and `--version` prints the version.
 - **The package installs with pip.** `pyproject.toml` declares the Python requirements once (the README, `slurm/setup.sh` and the CI
   install from it), ships the force field, the backmapping data, the bundled membranes and the new mdp templates as package data, and
   adds the `membraneforger` command, the same as `python -m membraneforger`, usable from any directory. Running from the clone still

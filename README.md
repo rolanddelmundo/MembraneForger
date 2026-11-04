@@ -116,6 +116,12 @@ The main files in the `--out` directory:
 | `audit.json`, `run_manifest.json` | audit result, settings, versions and checksums |
 | `int/` | every intermediate file, kept for inspection and restarts |
 
+Each stage can also be the end of a run: `membraneforger slice ...` stops after the slice gate with the cut Martini 3
+membrane (`slice_cg.gro`) and the placed complex, `membraneforger backmap ...` stops after the backmapped membrane has
+passed its checks (`membrane.pdb`), and `membraneforger solvate --membrane system.pdb` takes any assembled protein +
+membrane PDB through topology, water, ions and minimization. The options are the same for every command
+([commands](membraneforger/docs/cli_reference.md#commands)).
+
 Each stage checks its own result, and a failed check stops the build and names the stage. The checks before and after
 backmapping and minimization, and the thresholds, are described in the
 [tutorial](membraneforger/docs/membraneforger_tutorial.md#5-validation).

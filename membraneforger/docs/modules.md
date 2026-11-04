@@ -6,14 +6,16 @@ energy-minimized all-atom CHARMM36/GROMACS system.
 ```bash
 python -m membraneforger --aa complex.pdb --orient-chain R --out output_directory     # bundled membrane
 python -m membraneforger --aa prot-lig.pdb --cg system.gro --orient-chain R --out output_directory   # own frame
+python -m membraneforger slice|backmap ...                 # the same run, stopped after that stage
+python -m membraneforger solvate --membrane aa.pdb ...     # from an assembled protein + membrane PDB
 ```
 
 | File | Role |
 |---|---|
 | `__main__.py` | `python -m membraneforger` and the `membraneforger` command: checks the requirements import, then `cli.main` |
-| `cli.py` | command line, resource discovery |
+| `cli.py` | command line (`build`, `check`, `slice`, `backmap`, `solvate`, `equilibration`; `split_command`), resource discovery |
 | `preflight.py` | `--check`: inputs, programs and output directory reported in seconds, nothing built |
-| `pipeline.py` | stage order, timing, fail-closed publication of `em.gro` |
+| `pipeline.py` | stage order, timing, fail-closed publication of `em.gro`; `Session.stop_after` ends the run after the slice gate (`write_slice_outputs`) or after gate 2 |
 | `config.py` | CHARMM/GROMACS constants and the tunable `Settings` |
 | `martini.py` | the Martini 3 classification layer and residue-name aliases |
 | `validation.py` | input validation, input/stale-output protection |
