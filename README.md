@@ -6,6 +6,19 @@ The user-provided all-atom protein (or protein–ligand) PDB is placed in a pre-
 coarse-grained cell membrane, converts the membrane to all atoms with [mstool](https://github.com/ksy141/mstool), and
 returns a solvated, energy-minimized CHARMM36 system (`em.gro`) that has passed a set of automated checks.
 
+Documentation: <https://membraneforger.github.io>
+
+## Why MembraneForger
+
+All-atom membrane builders such as CHARMM-GUI Membrane Builder pack lipids around the protein at random, so the lipid
+environment a protein recruits over microseconds (cholesterol, anionic lipids, PIP2, gangliosides) has to form during a
+short all-atom trajectory. MembraneForger starts instead from Martini 3 membranes simulated for 50 µs around a GPCR and
+backmaps them with [mstool](https://github.com/ksy141/mstool). mstool does the coarse-grained to all-atom conversion;
+MembraneForger adds everything around it: orientation and embedding, a periodic, packing-checked cut, the GROMACS
+topology, water and ions, minimization with restraints that keep lipid configurations (ceramide amides, sugar and
+inositol stereocentres) intact, and checks for defects that only show up in `mdrun` otherwise (threaded lipids, atoms
+on top of each other, frames rotated out of their box). Every build records what it did and why it passed.
+
 ## How it works
 
 1. **Orient** the protein in the membrane (from an OPM entry, PPM 3.0, or your own coordinates).

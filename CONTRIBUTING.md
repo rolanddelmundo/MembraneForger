@@ -1,5 +1,7 @@
 # Reporting a problem or contributing
 
+Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
+
 ## A build failed or looks wrong
 
 Open an issue at https://github.com/rolanddelmundo/MembraneForger/issues and attach, from the `--out` directory:
