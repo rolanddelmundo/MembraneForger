@@ -43,7 +43,7 @@ from .validation import (
 
 __all__ = ['Session', 'StageFailure', 'run_stage', 'prepare_inputs', 'backmap_and_assemble', 'heavy_atom_piercings', 'membrane_piercings',
            'backmap_verdict', 'refuse_frame_protein_in_slice', 'review_contacts', 'review_backbone', 'refuse_overlaps',
-           'build_topology_and_box', 'finish_system', 'build_from_two_inputs', 'build', 'STOP_POINTS', 'SLICE_OUTPUTS',
+           'refuse_membrane_input', 'build_topology_and_box', 'finish_system', 'build_from_two_inputs', 'build', 'STOP_POINTS', 'SLICE_OUTPUTS',
            'write_slice_outputs']
 
 # What to look at when a stage fails; {out}, {work} and {int} (the folder of intermediates) are filled in at run time.
@@ -595,6 +595,11 @@ def refuse_backmap(problem: str, attempts: int) -> None:
     raise SystemExit(f"after {attempts} backmapping attempt(s): {problem}")
 
 
+def refuse_membrane_input(problem: str, name: str) -> None:
+    """Stop a --membrane (solvate) run whose input has a defect minimization cannot repair."""
+    raise SystemExit(f"in {name}: {problem}")
+
+
 def refuse_threaded_rings(heavy: list, attempts: int) -> None:
     """Stop the build when a heavy-atom bond still threads a ring and nothing more can be tried."""
     if heavy:
@@ -702,12 +707,12 @@ def build(session: Session, all_atom: Path | None, coarse_grain: Path | None, me
             staged = build_from_two_inputs(session, all_atom, coarse_grain, hashes)
         else:
             staged = build_topology_and_box(session, membrane, set(DEFAULT_LIGANDS), None, hashes)
-            run_stage(session, "rings", refuse_threaded_rings, heavy_atom_piercings(staged["rings"]), 0)
-            run_stage(session, "contacts", refuse_overlaps, staged["overlaps"], ("membrane",), f"in {membrane.name}")
-            if staged["contact"]["distance_nm"] < session.settings.min_start_contact_nm:
-                contact = staged["contact"]
-                run_stage(session, "rings", refuse_backmap, f"{contact['atoms'][0]} starts {10 * contact['distance_nm']:.2f} A "
-                                                            f"from {contact['atoms'][1]}", 0)
+            # The same verdict as a backmapped membrane gets on its last seed: a heavy-atom ring threading or a too-close
+            # contact stops here; membrane contacts go into minimization unless membrane_overlap_before_em is "stop".
+            verdict = backmap_verdict(staged, {}, session.settings, last=True)
+            session.record["backmap_attempts"] = [{"seed": 0, "source": membrane.name, **verdict["counts"]}]
+            if not verdict["accept"]:
+                run_stage(session, verdict["stage"], refuse_membrane_input, verdict["problem"], membrane.name)
         if staged.get("stopped"):  # the slice or backmap command: the stage's outputs are the result
             summary = staged["summary"]
         else:
