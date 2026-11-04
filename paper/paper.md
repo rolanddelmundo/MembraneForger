@@ -39,8 +39,8 @@ stage.\label{fig:workflow}](workflow.png)
 
 # Statement of need
 
-Cholesterol, anionic lipids, PIP2 and gangliosides bind specific sites on GPCRs. This local composition takes
-microseconds to form. All-atom simulations usually start from lipids packed at random around the protein, so this
+Cholesterol, anionic lipids, PIP2 and gangliosides bind specific sites on GPCRs [@Corradi2018; @Yen2018; @Song2019].
+This local composition takes microseconds to form [@Ingolfsson2014; @Marrink2019]. All-atom simulations usually start from lipids packed at random around the protein, so this
 environment must form during a trajectory that is too short. Martini 3 simulations reach the needed timescale, but
 converting such a membrane to all atoms around a protein is a long manual task, and any step can give a structure
 that GROMACS accepts but that is physically wrong. MembraneForger does this conversion in one checked command. It is
@@ -48,10 +48,11 @@ for computational biophysicists and structural biologists who simulate membrane 
 
 # State of the field
 
-CHARMM-GUI Membrane Builder [@Jo2009; @Wu2014] is the most used tool for all-atom membrane–protein systems. It packs
+CHARMM-GUI Membrane Builder [@Jo2008; @Jo2009; @Wu2014; @Lee2019] is the most used tool for all-atom membrane–protein systems. It packs
 lipids from a conformer library and writes equilibration inputs for several MD engines. Its starting lipid arrangement
 has no memory of protein–lipid interactions, and it is used mainly through a web interface. CHARMM-GUI Martini Maker
-[@Qi2015] and insane [@Wassenaar2015] build coarse-grained membranes. backward [@Wassenaar2014] converts
+[@Qi2015] and insane [@Wassenaar2015] build coarse-grained membranes, and martinize2 [@Kroon2025] builds
+coarse-grained proteins. backward [@Wassenaar2014] converts
 coarse-grained structures to all atoms with per-molecule mapping files.
 
 mstool [@Kim2023] is the closest tool. It is an open-source Python library that converts
