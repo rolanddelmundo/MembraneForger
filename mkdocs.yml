@@ -22,27 +22,46 @@ theme:
     text: Open Sans
     code: Roboto Mono
   palette:
-    scheme: default
-    primary: white
-    accent: teal
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: white
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Follow system setting
 
 nav:
   - Home: index.md
   - Getting started:
       - Your first build: first_build.md
+      - Equilibration: equilibration.md
+  - Preparing a PDB:
       - Preparing the input: preparing_inputs.md
       - Ligands: ligands.md
-      - Equilibration: equilibration.md
-  - Reference:
-      - Command-line options: cli_reference.md
+  - Examples: examples.md
+  - Troubleshooting: troubleshooting.md
+  - CLI reference: cli_reference.md
+  - Advanced:
       - Advanced options: advanced.md
       - Tutorial and validation: membraneforger_tutorial.md
-      - Troubleshooting: troubleshooting.md
-  - Development:
       - Module map: modules.md
 
 extra_css:
   - assets/home.css
+
+extra_javascript:
+  - assets/home.js
 
 markdown_extensions:
   - admonition
