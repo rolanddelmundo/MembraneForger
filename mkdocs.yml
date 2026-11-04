@@ -22,9 +22,24 @@ theme:
     text: Open Sans
     code: Roboto Mono
   palette:
-    scheme: default
-    primary: white
-    accent: teal
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: white
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Follow system setting
 
 nav:
   - Home: index.md
