@@ -19,7 +19,7 @@
 /* Hero */
 .mf-hero { display: grid; grid-template-columns: 1.2fr 1fr; gap: 2rem; align-items: center; padding: 1rem 0 1.6rem;
            border-bottom: 1px solid var(--mf-rule); margin-bottom: 1.6rem; }
-.mf-hero img { width: 100%; max-height: 24rem; object-fit: contain; display: block; }
+.mf-hero img { width: 100%; max-height: 22rem; object-fit: contain; display: block; }
 .mf-tagline { font-size: 1.2rem; line-height: 1.45; color: #1a1a1a; margin: .6rem 0 .6rem !important; }
 .mf-hero-sub { color: var(--mf-muted); font-size: .85rem; }
 .mf-buttons { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.2rem; }
