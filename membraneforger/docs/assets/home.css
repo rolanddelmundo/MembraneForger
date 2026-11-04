@@ -21,7 +21,7 @@
 .mf-band .mf-tagline { font-size: 1.1rem; color: var(--mf-muted); margin: .3rem 0 0; }
 .mf-band { background: #fff; border: 1px solid var(--mf-rule); }
 .mf-band img { height: 17rem; display: block; }
-@media (max-width: 44em) { .mf-band { grid-template-columns: 1fr; padding: 1.2rem 1rem; } .mf-home h1 { font-size: 1.8rem; } .mf-band img { height: 13rem; margin: 0 auto; } }
+
 
 /* Render strips */
 .mf-stages, .mf-lipids { display: grid; grid-template-columns: repeat(4, 1fr); gap: .8rem; margin: 0 0 .6rem; }
@@ -63,9 +63,9 @@
 
 @media screen and (max-width: 60em) {
   .mf-band { grid-template-columns: 1fr; padding: 1.2rem 1.4rem; }
-  .mf-band img { height: auto; width: 100%; }
+  .mf-band img { height: 14rem; width: auto; margin: 0 auto; }
   .mf-list, .mf-two { grid-template-columns: 1fr; }
-  .mf-home h1 { font-size: 1.9rem; }
+  .mf-home h1 { font-size: 1.6rem; }
 }
 
 /* Material's footer (previous/next links, "made with") on white as well */
