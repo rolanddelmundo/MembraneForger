@@ -3,29 +3,8 @@
 
 :root { --mf-accent: #0b6e8f; --mf-band: #f2f4f6; --mf-rule: #e1e4e8; --mf-muted: #5c6670;
         --mf-ink: #1a1a1a; --mf-text2: #333; --mf-tint: #f3f8fa; --mf-surface: #fff; --mf-on-accent: #fff; }
-/* Dark mode: Material's "slate" scheme, chosen from the visitor's system setting or the header toggle. */
-[data-md-color-scheme="slate"] {
-  --mf-accent: #5cc0dd; --mf-band: #1f242b; --mf-rule: #353c46; --mf-muted: #b4bcc5;
-  --mf-ink: #eceff2; --mf-text2: #d9dee3; --mf-tint: #18262d; --mf-surface: var(--md-default-bg-color); --mf-on-accent: #0b1a20;
-  --md-typeset-a-color: var(--mf-accent);
-  /* Material's slate text is translucent grey; make body text, secondary text and code near-opaque for legibility. */
-  --md-default-fg-color: #eceff2; --md-default-fg-color--light: rgba(236, 239, 242, .82);
-  --md-default-fg-color--lighter: rgba(236, 239, 242, .6); --md-typeset-color: #e4e7eb;
-  --md-code-fg-color: #e8eaf0; --md-code-bg-color: #262a35;
-  --md-code-hl-keyword-color: #8fb4f5; --md-code-hl-name-color: #e8eaf0; --md-code-hl-string-color: #7fd6a4;
-  --md-code-hl-number-color: #f5a3a3; --md-code-hl-special-color: #f59cc0; --md-code-hl-function-color: #c4b5fd;
-  --md-code-hl-constant-color: #b8a9f5; --md-code-hl-variable-color: #e2c08d; --md-code-hl-operator-color: #c9ced6;
-  --md-code-hl-punctuation-color: #c9ced6; --md-code-hl-comment-color: #a2abb6; --md-code-hl-generic-color: #c9ced6;
-}
 .md-typeset a { color: var(--mf-accent); }
-/* Headings in dark mode: full-strength colour and a heavier weight (Material draws h1 light and dimmed). */
-[data-md-color-scheme="slate"] .md-typeset h1, [data-md-color-scheme="slate"] .md-typeset h2,
-[data-md-color-scheme="slate"] .md-typeset h3, [data-md-color-scheme="slate"] .md-typeset h4 { color: var(--mf-ink); }
-[data-md-color-scheme="slate"] .md-typeset h1 { font-weight: 600; }
-[data-md-color-scheme="slate"] .md-typeset h2 { font-weight: 600; }
-[data-md-color-scheme="slate"] .md-nav__title, [data-md-color-scheme="slate"] .md-nav__link { color: rgba(236, 239, 242, .85); }
-[data-md-color-scheme="slate"] .md-nav__link--active, [data-md-color-scheme="slate"] .md-nav__link:hover { color: var(--mf-accent); }
-[data-md-color-scheme="default"] .md-header, [data-md-color-scheme="default"] .md-tabs { color: var(--mf-ink); }
+.md-header, .md-tabs { color: var(--mf-ink); }
 .md-header { box-shadow: 0 0 0 1px var(--mf-rule); }
 .md-tabs { border-bottom: 1px solid var(--mf-rule); }
 .md-header__button.md-logo { display: none; }
@@ -216,8 +195,3 @@
 }
 .mf-movie-credit { color: var(--mf-muted); font-size: .7rem; }
 
-/* Dark mode swaps each render for its _dark copy (white background replaced, examples/make_dark_renders.py). */
-.mf-home img.mf-dark { display: none; }
-[data-md-color-scheme="slate"] .mf-home img.mf-light { display: none; }
-[data-md-color-scheme="slate"] .mf-home img.mf-dark { display: block; }
-[data-md-color-scheme="slate"] .mf-movie-frame { background: transparent; }
