@@ -72,7 +72,7 @@ topology, solvent and ions, or judge whether the final system is fit to simulate
 ## Backmapping of GM3, PIP2 and PSM
 
 Cell-membrane models need GM3, PIP2 and sphingomyelin. Their sugars, inositol ring and amide are hard to backmap correctly.
-MembraneForger makes them backmap correctly from Martini 3 to CHARMM36.
+To build these lipids reliably, we corrected and extended their Martini 3 to CHARMM36 backmapping.
 
 - **GM3.** In Martini 3, GM3 is one molecule (`DPG3`). In CHARMM36 it is four residues: ceramide, glucose, galactose
   and sialic acid. MembraneForger supplies the mapping and the OpenMM template that join them. The starting mapping
@@ -85,9 +85,9 @@ MembraneForger makes them backmap correctly from Martini 3 to CHARMM36.
 - **PSM and the GM3 ceramide.** The CHARMM36 amide torsion of both lipids has a zero force constant, so nothing holds
   the amide trans. In one build, restrained minimization twisted a GM3 amide that mstool had placed trans to about
   −71°. In 349 archived builds, about 3 % of PSM amides ended below 150°. MembraneForger adds a trans restraint for
-  this amide during restrained minimization only. In tests, every GM3 amide then stayed trans.
+  this amide during restrained minimization only. With the restraint, all 27 GM3 amides of a test build stayed trans (172.6–179.2°), compared with four below 150° without it.
 
-A wrong configuration never corrects itself in MD. A build with one inverted centre or cis amide is refused, and
+These checks matter because a wrong configuration never corrects itself in MD. A build with one inverted centre or cis amide is refused, and
 backmapping is retried with a new seed.
 
 ## Improvements over mstool alone
