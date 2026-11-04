@@ -160,12 +160,19 @@ installation, stage commands, equilibration templates and the documentation site
 
 # AI usage disclosure
 
-Claude Code (Anthropic) was used for code optimization and packaging. The author designed the method, reviewed all
-changes, ran the validation builds, and takes full responsibility for the software and this paper.
+Claude Code (Anthropic; Claude Opus and Sonnet models, versions 4 to 5.5, 2025–2026) was used for code optimization,
+refactoring, packaging, test scaffolding, documentation and drafting of this paper. The author made the core design
+decisions, and reviewed, edited and validated all AI-assisted code, documentation and text. Validation builds were
+run and checked by the author.
 
 # Acknowledgements
 
 The author thanks the developers of Martini, mstool, CHARMM-GUI, GROMACS, OpenMM [@Eastman2017] and OPM/PPM.
-Simulations were run on City of Hope high-performance computing resources.
+Simulations were run on City of Hope high-performance computing resources. Funding: [to be added by the author; state
+whether the sponsor had any role].
+
+# Conflicts of interest
+
+The author declares no conflicts of interest.
 
 # References
