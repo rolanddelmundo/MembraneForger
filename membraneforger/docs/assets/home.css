@@ -61,3 +61,4 @@
 .md-footer { border-top: 1px solid var(--mf-rule); }
 .md-footer__link, .md-footer-meta__inner, .md-copyright, .md-copyright__highlight { color: var(--mf-muted); }
 .md-footer__title, .md-footer__direction { color: #1a1a1a; }
+.md-copyright a, .md-footer-meta a { color: var(--mf-accent); }
