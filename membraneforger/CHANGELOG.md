@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Restrained minimization stops at Fmax < 1000** (`EMRES_FMAX_TARGET`); the unrestrained `em` that is validated and published
+  still has to reach Fmax < 500 (`FMAX_TARGET`), and every gate after it is unchanged. On GCGR this cuts `emres` from about 3000 to
+  about 1950 steps (about 60 s per build) with all lipid dihedral restraints (inositol and sugar chairs, ceramide amide,
+  cis/trans bonds) in range after `em`.
 - **Stage commands.** `membraneforger build|check|slice|backmap|solvate|equilibration`: one pipeline, entered or left at a stage, with
   the same options for every command (`cli.split_command`, `Session.stop_after`). `slice` stops after the slice gate and writes
   `slice_cg.gro` (the cut Martini 3 membrane) and `placed_complex.pdb`; `backmap` stops once a backmapped membrane has passed gate 2 and
