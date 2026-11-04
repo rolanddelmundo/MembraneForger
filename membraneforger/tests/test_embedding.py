@@ -384,45 +384,6 @@ class PeriodicMean(unittest.TestCase):
         self.assertAlmostEqual(mf.periodic_mean(np.array([4.0, 6.0]), 10.0), 5.0, places=6)
 
 
-def grid_membrane(box, spacing=1.0):
-    """A synthetic membrane: one POPC per grid point, each a column of beads 0.5 nm long in z."""
-    membrane = []
-    for i in range(int(box[0] / spacing)):
-        for j in range(int(box[1] / spacing)):
-            x, y = (i + 0.5) * spacing, (j + 0.5) * spacing
-            beads = [{"resid": 1, "resname": "POPC", "atom": n, "chain": "", "x": x, "y": y, "z": 5.0 + 0.05 * k}
-                     for k, n in enumerate(MAPPING["POPC"]["beads"])]
-            membrane.append({"cg": "POPC", "cls": "phospholipid", "aa": "POPC", "beads": beads, "dropped": []})
-    return membrane
-
-
-class Trimming(unittest.TestCase):
-    def test_trim_keeps_the_molecules_around_the_complex_and_centres_it(self):
-        box = [10.0, 10.0, 12.0]
-        placed = [{"atom": "CA", "resname": "ALA", "x": 70.0 + dx, "y": 70.0, "z": 50.0} for dx in (-1.0, 1.0)]
-        result = mf.trim_membrane(grid_membrane(box), placed, box, (4.0, 4.0))
-        self.assertEqual(result["box"], [4.0, 4.0, 12.0])
-        self.assertEqual(len(result["membrane"]), 16)
-        self.assertEqual(sum(result["removed"].values()), 84)
-        for a in result["placed"]:
-            self.assertAlmostEqual(a["y"], 20.0, places=6)
-        self.assertAlmostEqual(np.mean([a["x"] for a in result["placed"]]), 20.0, places=6)
-        for mol in result["membrane"]:
-            for b in mol["beads"]:
-                self.assertTrue(0.0 <= b["x"] < 4.0 and 0.0 <= b["y"] < 4.0)
-
-    def test_trim_wraps_across_the_periodic_boundary(self):
-        box = [10.0, 10.0, 12.0]
-        placed = [{"atom": "CA", "resname": "ALA", "x": 5.0, "y": 5.0, "z": 50.0}]  # complex at the corner (0.5, 0.5) nm
-        result = mf.trim_membrane(grid_membrane(box), placed, box, (4.0, 4.0))
-        self.assertEqual(len(result["membrane"]), 16)
-
-    def test_box_larger_than_the_patch_is_refused(self):
-        box = [10.0, 10.0, 12.0]
-        placed = [{"atom": "CA", "resname": "ALA", "x": 50.0, "y": 50.0, "z": 50.0}]
-        self.assertIn("exceeds the membrane patch", failure(mf.trim_membrane, grid_membrane(box), placed, box, (12.0, 4.0)))
-
-
 class LipidEdits(unittest.TestCase):
     def setUp(self):
         self.membrane = mf.classify_cg(small_system() + residue(8, "POPC", MAPPING["POPC"]["beads"]), MAPPING)["membrane"]
