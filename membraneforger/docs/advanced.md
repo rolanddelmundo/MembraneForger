@@ -6,7 +6,8 @@ This page collects the details behind the top-level README. For the full option 
 
 ## How a build works
 
-![The nine steps of a build; gold steps are checks that stop the build if they fail](assets/workflow.png)
+![The nine steps of a build; gold steps are checks that stop the build if they fail](assets/workflow.png#only-light)
+![The nine steps of a build; gold steps are checks that stop the build if they fail](assets/workflow_dark.png#only-dark)
 
 A build runs nine steps. Four of them are checks (gold) that stop the build with a message naming the step:
 

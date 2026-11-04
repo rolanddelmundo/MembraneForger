@@ -3,7 +3,16 @@
 (function () {
   var home = document.querySelector(".mf-home");
   if (!home) return;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    /* No motion: only keep the movie's still frame in step with the colour scheme. */
+    var stillImg = home.querySelector(".mf-movie-frame img");
+    var setStill = function () {
+      if (stillImg) stillImg.src = stillImg.getAttribute(document.body.getAttribute("data-md-color-scheme") === "slate" ? "data-dark-src" : "data-light-src");
+    };
+    setStill();
+    new MutationObserver(setStill).observe(document.body, { attributes: true, attributeFilter: ["data-md-color-scheme"] });
+    return;
+  }
   var root = document.documentElement;
   root.classList.add("mf-motion");
 
@@ -83,21 +92,30 @@
   var movie = home.querySelector("[data-mf-movie]");
   var movieImg = movie ? movie.querySelector(".mf-movie-frame img") : null;
   var movieFrames = [], movieShown = -1;
+  var isDark = function () { return document.body.getAttribute("data-md-color-scheme") === "slate"; };
   if (movie && movieImg) {
     var dir = movie.getAttribute("data-frame-dir"), count = +movie.getAttribute("data-frame-count") || 0;
+    var near = false;
     var load = function () {
+      var suffix = isDark() ? "_dark" : "";
+      movieFrames = []; movieShown = -1;
       for (var i = 0; i < count; i++) {
         var im = new Image();
-        im.src = dir + "frame_" + (i < 10 ? "0" : "") + i + ".jpg";
+        im.src = dir + "frame_" + (i < 10 ? "0" : "") + i + suffix + ".jpg";
         movieFrames.push(im);
       }
     };
+    var still = function () { movieImg.src = movieImg.getAttribute(isDark() ? "data-dark-src" : "data-light-src"); };
+    still();
     if ("IntersectionObserver" in window) {
       var mo = new IntersectionObserver(function (es) {
-        if (es[0].isIntersecting) { load(); mo.disconnect(); }
+        if (es[0].isIntersecting) { near = true; load(); update(); mo.disconnect(); }
       }, { rootMargin: "150% 0px" });
       mo.observe(movie);
-    } else { load(); }
+    } else { near = true; load(); }
+    /* The header toggle changes the scheme on <body>: switch the still and, if fetched, the frame set. */
+    new MutationObserver(function () { still(); if (near) load(); onScroll(); })
+      .observe(document.body, { attributes: true, attributeFilter: ["data-md-color-scheme"] });
   }
 
   var ticking = false;

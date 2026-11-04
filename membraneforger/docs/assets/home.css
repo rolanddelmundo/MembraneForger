@@ -201,13 +201,8 @@
 }
 .mf-movie-credit { color: var(--mf-muted); font-size: .7rem; }
 
-/* Dark mode: the renders and figures have white backgrounds, so they sit on light rounded panels. */
-[data-md-color-scheme="slate"] .mf-hero-media,
-[data-md-color-scheme="slate"] .mf-stages img,
-[data-md-color-scheme="slate"] .mf-pair > div,
-[data-md-color-scheme="slate"] .mf-movie-frame,
-[data-md-color-scheme="slate"] .md-typeset img:not(.mf-home img) { background: #fff; border-radius: .5rem; }
-[data-md-color-scheme="slate"] .mf-pair > div { padding: .3rem 0; }
-[data-md-color-scheme="slate"] .mf-pair span { color: #5c6670; }
-[data-md-color-scheme="slate"] .md-typeset img:not(.mf-home img) { padding: .4rem; }
-[data-md-color-scheme="slate"] .mf-story figure img { border-radius: .6rem; }
+/* Dark mode swaps each render for its _dark copy (white background replaced, examples/make_dark_renders.py). */
+.mf-home img.mf-dark { display: none; }
+[data-md-color-scheme="slate"] .mf-home img.mf-light { display: none; }
+[data-md-color-scheme="slate"] .mf-home img.mf-dark { display: block; }
+[data-md-color-scheme="slate"] .mf-movie-frame { background: transparent; }

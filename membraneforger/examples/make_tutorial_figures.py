@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 """Draw the tutorial figures from a folder written by measure_tutorial_numbers.py (tutorial50_out).
 
-    python examples/make_tutorial_figures.py TUTORIAL50_OUT [--out membraneforger/docs/figures]
+    python examples/make_tutorial_figures.py TUTORIAL50_OUT [--out membraneforger/docs/figures] [--dark]
+
+--dark draws the same figures on the docs site's dark-mode background and writes them as *_dark.png.
 
 Writes, per figure, a PNG and a CSV with the numbers behind it, and two tables:
 
@@ -31,6 +33,19 @@ plt.rcParams.update({
 })
 UPPER, LOWER = "#0072B2", "#E69F00"
 PALETTE = ["#0072B2", "#E69F00", "#009E73", "#CC79A7", "#D55E00", "#56B4E9", "#F0E442", "#6e6e6e"]
+SUFFIX, REF_LINE = "", "#333333"
+DARK_BG, DARK_INK = "#1e2129", "#e6e9ec"
+
+
+def use_dark_style():
+    """Match the docs site's dark mode: its page background, light text and axes, and a lighter grey in the palette."""
+    global SUFFIX, REF_LINE
+    SUFFIX, REF_LINE = "_dark", "#c8ced4"
+    PALETTE[-1] = "#b0b0b0"
+    plt.rcParams.update({
+        "figure.facecolor": DARK_BG, "axes.facecolor": DARK_BG, "savefig.facecolor": DARK_BG, "axes.edgecolor": DARK_INK,
+        "axes.labelcolor": DARK_INK, "text.color": DARK_INK, "xtick.color": DARK_INK, "ytick.color": DARK_INK,
+    })
 
 
 def write_csv(path, header, rows):
@@ -59,7 +74,7 @@ def before_after(src, out):
             pts = [r for r in lipids if r["stage"] == stage and r["leaflet"] == leaflet]
             scatter = ax.scatter([r["x_A"] / 10 for r in pts], [r["y_A"] / 10 for r in pts], c=[r["voronoi_area_A2"] for r in pts], s=26,
                                  marker="s", cmap="coolwarm", vmin=20, vmax=80, linewidths=0)
-            ax.add_patch(plt.Rectangle((0, 0), box[0], box[1], fill=False, ec="#333333", lw=1.2))
+            ax.add_patch(plt.Rectangle((0, 0), box[0], box[1], fill=False, ec=REF_LINE, lw=1.2))
             ax.set_xlim(-0.5, box[0] + 0.5)
             ax.set_ylim(-0.5, box[1] + 0.5)
             ax.set_aspect("equal")
@@ -94,7 +109,7 @@ def before_after(src, out):
     colourbar = fig.colorbar(scatter, cax=fig.add_subplot(grid[0:2, 3]))
     colourbar.set_label("Voronoi area per lipid (Å$^2$)")
     fig.suptitle("KOR_Membrane1: the bundled 50 µs frame and the membrane it becomes in the build", fontsize=15, fontweight="bold", y=0.94)
-    fig.savefig(out / "KOR_Membrane1_before_after.png")
+    fig.savefig(out / f"KOR_Membrane1_before_after{SUFFIX}.png")
     plt.close(fig)
     write_csv(out / "KOR_Membrane1_before_after.csv", ["stage", "leaflet", "resid", "resname", "x_A", "y_A", "z_A", "voronoi_area_A2"],
               [[r["stage"], r["leaflet"], r["resid"], r["resname"], r["x_A"], r["y_A"], r["z_A"], r["voronoi_area_A2"]] for r in lipids])
@@ -118,14 +133,14 @@ def protein_density_and_apl(src, out, frames):
                             [check[leaflet]["region_reference_apl_A2"], check[leaflet]["construction_delta_percent"],
                              stages["embed"]["leaflets"][leaflet]["head_apl_A2"], stages["slice"]["leaflets"][leaflet]["head_apl_A2"]])
     for ax, leaflet in zip(axes, ("upper", "lower")):
-        ax.axhline(1.0, color="#333333", lw=0.8, ls=":")
+        ax.axhline(1.0, color=REF_LINE, lw=0.8, ls=":")
         ax.axvline(10, color="#999999", lw=0.8, ls=":")
         ax.set_xlabel("R, distance from the protein (Å)")
         ax.set_title(f"{leaflet.capitalize()} leaflet, all lipids", fontweight="bold")
     axes[0].set_ylabel("Lipid density within R / leaflet mean")
     axes[1].legend(frameon=False, ncol=2, fontsize=11, loc="upper right")
     fig.tight_layout()
-    fig.savefig(out / "protein_density_by_frame.png")
+    fig.savefig(out / f"protein_density_by_frame{SUFFIX}.png")
     plt.close(fig)
     write_csv(out / "protein_density_by_frame.csv", ["frame", "leaflet", "R_A", "cumulative_ratio"], curve_rows)
     write_csv(out / "table_apl.csv", ["frame", "leaflet", "apl_cg_frame_A2", "apl_embedded_A2", "apl_slice_A2", "apl_same_lipids_uncut_A2",
@@ -138,7 +153,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("tutorial50_out", help="the folder written by measure_tutorial_numbers.py")
     parser.add_argument("--out", default="membraneforger/docs/figures", help="folder for the PNG and CSV files (created)")
+    parser.add_argument("--dark", action="store_true", help="draw for the docs site's dark mode and write *_dark.png")
     args = parser.parse_args()
+    if args.dark:
+        use_dark_style()
     src, out = Path(args.tutorial50_out), Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     results = json.load(open(src / "summary.json"))["results"]

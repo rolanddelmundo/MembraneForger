@@ -27,7 +27,7 @@
         <a class="md-button" href="#input-requirements">Input requirements</a>
       </div>
     </div>
-    <div class="mf-hero-media"><img src="assets/renders/hero_system.jpg" alt="A receptor and G protein complex in an all-atom plasma membrane built by MembraneForger"></div>
+    <div class="mf-hero-media"><img class="mf-light" src="assets/renders/hero_system.jpg" alt="A receptor and G protein complex in an all-atom plasma membrane built by MembraneForger"><img loading="lazy" class="mf-dark" src="assets/renders/hero_system_dark.jpg" alt="A receptor and G protein complex in an all-atom plasma membrane built by MembraneForger"></div>
   </section>
 
   <div class="mf-note">
@@ -98,14 +98,14 @@ pip install ".[figures]"</code></pre>
 
   <h2>From structure to simulation</h2>
   <div class="mf-stages" data-mf-story>
-    <figure><img src="assets/renders/001_input_aa.jpg" alt="The input all-atom receptor and G protein complex" loading="lazy">
+    <figure><img class="mf-light" src="assets/renders/001_input_aa.jpg" alt="The input all-atom receptor and G protein complex" loading="lazy"><img class="mf-dark" src="assets/renders/001_input_aa_dark.jpg" alt="The input all-atom receptor and G protein complex" loading="lazy">
       <figcaption><b>1. Your structure.</b> The protein complex as given in the PDB file, with its ligands.</figcaption></figure>
-    <figure><img src="assets/renders/002_input_cg.jpg" alt="The complex inside a coarse-grained Martini 3 membrane" loading="lazy">
+    <figure><img class="mf-light" src="assets/renders/002_input_cg.jpg" alt="The complex inside a coarse-grained Martini 3 membrane" loading="lazy"><img class="mf-dark" src="assets/renders/002_input_cg_dark.jpg" alt="The complex inside a coarse-grained Martini 3 membrane" loading="lazy">
       <figcaption><b>2. Placed in a membrane.</b> The protein goes into a pre-equilibrated coarse-grained (Martini 3) plasma membrane of ten lipid types.</figcaption></figure>
-    <figure><img src="assets/renders/004_backmapped_membrane.jpg" alt="The membrane converted to all atoms around the complex" loading="lazy">
+    <figure><img class="mf-light" src="assets/renders/004_backmapped_membrane.jpg" alt="The membrane converted to all atoms around the complex" loading="lazy"><img class="mf-dark" src="assets/renders/004_backmapped_membrane_dark.jpg" alt="The membrane converted to all atoms around the complex" loading="lazy">
       <figcaption><b>3. Converted to all atoms.</b> Every lipid is rebuilt atom by atom (backmapped) around the unchanged protein.</figcaption></figure>
-    <figure><img src="assets/renders/014_final_validated.jpg" alt="The final system in its simulation box with ions" loading="lazy">
-      <figcaption><b>4. Ready to equilibrate.</b> Water (not drawn) and 0.15 M NaCl are added, the energy is minimized, and the system is checked.</figcaption></figure>
+    <figure><img class="mf-light" src="assets/renders/014_final_validated.jpg" alt="The final system surrounded by water, with sodium and chloride ions" loading="lazy"><img class="mf-dark" src="assets/renders/014_final_validated_dark.jpg" alt="The final system surrounded by water, with sodium and chloride ions" loading="lazy">
+      <figcaption><b>4. Ready to equilibrate.</b> Water (blue) and 0.15 M NaCl (sodium purple, chloride green) are added, the energy is minimized, and the system is checked.</figcaption></figure>
   </div>
 
   <section class="mf-movie" data-mf-movie data-frame-dir="assets/movie/gpr139_jnj/" data-frame-count="48">
@@ -118,7 +118,7 @@ pip install ".[figures]"</code></pre>
         <p class="mf-movie-credit">Example: GPR139 with the agonist JNJ-63533054, built with MembraneForger. First microsecond of a production run.</p>
       </div>
       <figure>
-        <div class="mf-movie-frame"><img src="assets/movie/gpr139_jnj/frame_00.jpg" alt="The agonist JNJ-63533054 in the GPR139 binding pocket, with the lipid bilayer behind, during a molecular dynamics simulation" loading="lazy"></div>
+        <div class="mf-movie-frame"><img src="assets/movie/gpr139_jnj/frame_00.jpg" data-light-src="assets/movie/gpr139_jnj/frame_00.jpg" data-dark-src="assets/movie/gpr139_jnj/frame_00_dark.jpg" alt="The agonist JNJ-63533054 in the GPR139 binding pocket, with the lipid bilayer behind, during a molecular dynamics simulation" loading="lazy"></div>
         <div class="mf-movie-bar" aria-hidden="true"><span></span></div>
       </figure>
     </div>
@@ -246,10 +246,10 @@ pip install ".[figures]"</code></pre>
      membrane keeps its equilibrated arrangement and gains the detail an all-atom simulation needs. Ring threading, bond crossings
      and stereochemistry are then checked.</p>
   <div class="mf-lipids">
-    <figure><div class="mf-pair"><div><img src="assets/renders/lipid_GM3_cg.jpg" alt="GM3 (ganglioside), coarse-grained beads" ><span>beads</span></div><div><img src="assets/renders/lipid_GM3_aa.jpg" alt="GM3 (ganglioside), all atoms" ><span>atoms</span></div></div><figcaption><b>GM3 (ganglioside)</b></figcaption></figure>
-    <figure><div class="mf-pair"><div><img src="assets/renders/lipid_PIP2_cg.jpg" alt="PIP2, coarse-grained beads" ><span>beads</span></div><div><img src="assets/renders/lipid_PIP2_aa.jpg" alt="PIP2, all atoms" ><span>atoms</span></div></div><figcaption><b>PIP2</b></figcaption></figure>
-    <figure><div class="mf-pair"><div><img src="assets/renders/lipid_POPC_cg.jpg" alt="POPC, coarse-grained beads" ><span>beads</span></div><div><img src="assets/renders/lipid_POPC_aa.jpg" alt="POPC, all atoms" ><span>atoms</span></div></div><figcaption><b>POPC</b></figcaption></figure>
-    <figure><div class="mf-pair"><div><img src="assets/renders/lipid_cholesterol_cg.jpg" alt="Cholesterol, coarse-grained beads" ><span>beads</span></div><div><img src="assets/renders/lipid_cholesterol_aa.jpg" alt="Cholesterol, all atoms" ><span>atoms</span></div></div><figcaption><b>Cholesterol</b></figcaption></figure>
+    <figure><div class="mf-pair"><div><img class="mf-light" src="assets/renders/lipid_GM3_cg.jpg" alt="GM3 (ganglioside), coarse-grained beads" ><img loading="lazy" class="mf-dark" src="assets/renders/lipid_GM3_cg_dark.jpg" alt="GM3 (ganglioside), coarse-grained beads" ><span>beads</span></div><div><img class="mf-light" src="assets/renders/lipid_GM3_aa.jpg" alt="GM3 (ganglioside), all atoms" ><img loading="lazy" class="mf-dark" src="assets/renders/lipid_GM3_aa_dark.jpg" alt="GM3 (ganglioside), all atoms" ><span>atoms</span></div></div><figcaption><b>GM3 (ganglioside)</b></figcaption></figure>
+    <figure><div class="mf-pair"><div><img class="mf-light" src="assets/renders/lipid_PIP2_cg.jpg" alt="PIP2, coarse-grained beads" ><img loading="lazy" class="mf-dark" src="assets/renders/lipid_PIP2_cg_dark.jpg" alt="PIP2, coarse-grained beads" ><span>beads</span></div><div><img class="mf-light" src="assets/renders/lipid_PIP2_aa.jpg" alt="PIP2, all atoms" ><img loading="lazy" class="mf-dark" src="assets/renders/lipid_PIP2_aa_dark.jpg" alt="PIP2, all atoms" ><span>atoms</span></div></div><figcaption><b>PIP2</b></figcaption></figure>
+    <figure><div class="mf-pair"><div><img class="mf-light" src="assets/renders/lipid_POPC_cg.jpg" alt="POPC, coarse-grained beads" ><img loading="lazy" class="mf-dark" src="assets/renders/lipid_POPC_cg_dark.jpg" alt="POPC, coarse-grained beads" ><span>beads</span></div><div><img class="mf-light" src="assets/renders/lipid_POPC_aa.jpg" alt="POPC, all atoms" ><img loading="lazy" class="mf-dark" src="assets/renders/lipid_POPC_aa_dark.jpg" alt="POPC, all atoms" ><span>atoms</span></div></div><figcaption><b>POPC</b></figcaption></figure>
+    <figure><div class="mf-pair"><div><img class="mf-light" src="assets/renders/lipid_cholesterol_cg.jpg" alt="Cholesterol, coarse-grained beads" ><img loading="lazy" class="mf-dark" src="assets/renders/lipid_cholesterol_cg_dark.jpg" alt="Cholesterol, coarse-grained beads" ><span>beads</span></div><div><img class="mf-light" src="assets/renders/lipid_cholesterol_aa.jpg" alt="Cholesterol, all atoms" ><img loading="lazy" class="mf-dark" src="assets/renders/lipid_cholesterol_aa_dark.jpg" alt="Cholesterol, all atoms" ><span>atoms</span></div></div><figcaption><b>Cholesterol</b></figcaption></figure>
   </div>
 
   <h2>Good to know</h2>
