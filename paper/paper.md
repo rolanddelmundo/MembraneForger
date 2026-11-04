@@ -158,10 +158,10 @@ membrane. The third runs the six restrained equilibration steps and writes the p
 
 # Research impact statement
 
-- **In use since November 2025.** MembraneForger built the GPR139–JNJ-63533054–G11 membrane system for molecular
-  dynamics simulations, started in November 2025, in a study of GPR139 structure and ligand recognition now in
-  revision at Nature Communications [@Li2026GPR139]. It is used in the author's laboratory at City of Hope for GPCR
-  simulations.
+- **In use since release.** The bundled membranes come from Martini 3 simulations started in December 2025. The
+  package has been used in the author's laboratory since its first release in July 2026. It built the
+  GPR139–JNJ-63533054–G11 membrane system for a study of GPR139 dynorphin recognition, now in revision at Nature
+  Communications [@Li2026GPR139].
 - **Range of systems.** Builds cover class A and class B GPCRs, including the glucagon receptor with tirzepatide and
   Gs (the bundled example), GPR139 with a small-molecule agonist, and lipidated receptors (S-geranylgeranyl and
   S-palmitoyl cysteine, N-palmitoyl glycine).
