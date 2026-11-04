@@ -7,7 +7,8 @@ Each IMAGE.jpg is written as IMAGE_dark.jpg. White areas larger than --min-area 
 gaps between helices) become the background colour; small white areas are specular highlights on the molecules
 and stay. A 1-pixel band around the molecules is un-mixed from white (colour to alpha), so edges keep their
 anti-aliasing without a white fringe. --outside-only replaces only the white that touches the image border; use it
-for a render with a see-through water box, where the white gaps between lipids belong to the box. The default colour is the docs site's dark-mode page background.
+for a render with a see-through water box, where the white gaps between lipids belong to the box. The default colour
+is the docs site's dark-mode page background.
 """
 import argparse
 from pathlib import Path
