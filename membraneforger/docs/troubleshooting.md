@@ -14,8 +14,7 @@ the stage is recorded in `run_manifest.json` (`error.stage`).
 | `ERROR:` | a check failed; the build stopped |
 | `INFO:` | a measurement or a count |
 
-Before a build, `python -m membraneforger --check` with the same options reports the inputs, programs and output
-directory in seconds (every line OK, WARN, FAIL or INFO) and catches most of the rows below without a job.
+Running `membraneforger --check` with the same options before a build catches most of the failures below in seconds.
 
 ## Common failures
 

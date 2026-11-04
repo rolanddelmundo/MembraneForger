@@ -1,14 +1,14 @@
 # Preparing the all-atom input
 
-The `--aa` PDB is the only source of protein and ligand chemistry: what is in it is simulated, what is missing is
-not added (except hydrogens), and what is named wrongly is refused. This page lists what the build expects. Run
+Everything in the `--aa` PDB is simulated. Nothing missing is added except hydrogens, and wrongly named residues
+are refused. Check a file before building:
 
 ```bash
-python -m membraneforger --check --aa complex.pdb --orient-chain R --nterm-side out --out my_build
+membraneforger --check --aa complex.pdb --orient-chain R --nterm-side out --out my_build
 ```
 
-before any build: it reads the file as the build will, lists the chains, termini, histidines, disulfides and ligands
-it found, checks GROMACS, mstool and PPM, and exits in seconds with `CHECK PASS` or `CHECK FAIL`.
+It lists the chains, termini, histidines, disulfides and ligands it found, checks GROMACS, mstool and PPM, and ends
+with `CHECK PASS` or `CHECK FAIL`.
 
 ## Checklist
 
@@ -23,10 +23,8 @@ The file must have one model, no duplicate atoms (same chain, residue and atom n
 
 ### Chains and termini
 
-- A chain is everything with one chain ID (or segment ID when the chain column is empty). Chains are built one by one
-  with `pdb2gmx`, so a chain break (a missing loop) is a problem: `pdb2gmx` joins the residues on either side with a
-  peptide bond across the gap. Model the loop, or split the fragments into two chains with different IDs and accept
-  two sets of termini.
+- A chain is everything with one chain ID (or segment ID if the chain column is empty). A missing loop is joined
+  across the gap by a peptide bond, so model the loop or split the fragments into separate chains.
 - The C terminus of every chain must be recognizable: a terminal carboxylate with `OXT` (or `OT1`/`OT2`), or a
   CHARMM cap (`CT3`, the N-methylamide `NT`, `CAT`, ...; `CT2`, the amide `NT` with `HT1`/`HT2`). A chain whose last
   residue has no `OXT` stops the build with `unrecognized C terminus`; add the atom (any PDB tool that completes
@@ -52,16 +50,13 @@ The file must have one model, no duplicate atoms (same chain, residue and atom n
 - Protein hydrogens are not needed: `pdb2gmx` is run with `-ignh` and rebuilds them for the chosen protonation states.
   Ligand hydrogens may be missing too; they are placed and relaxed in minimization. A ligand hydrogen the topology does
   not have is an error ([Ligands](ligands.md)).
-- Missing heavy atoms are **not** rebuilt. A truncated side chain (common in cryo-EM models) passes `pdb2gmx` through its
-  `-missing` option instead of stopping the build, so the residue is built incomplete and nothing later repairs it.
-  Complete side chains before the build (PDBFixer, Modeller, ChimeraX or CHARMM-GUI's PDB Reader all do this). The
-  build does not repack side chains.
-- The build never adds residues: an unresolved N or C terminus simply ends where the file ends.
+- Missing heavy atoms are **not** rebuilt, and a truncated side chain (common in cryo-EM models) is built
+  incomplete without an error. Complete side chains first (PDBFixer, Modeller, ChimeraX or CHARMM-GUI PDB Reader).
+- Missing residues are not added: each chain ends where the file ends.
 
 ### Orientation inputs
 
-The whole complex is moved as one rigid body, so the ligands and partner proteins keep their positions relative to
-the anchor chain.
+The whole complex moves as one rigid body, so ligands and partner proteins keep their positions.
 
 - `--orient-chain R` names the chain that spans the membrane; required when the input has several protein chains.
   `--orient-chains A,B` for a dimer.
@@ -77,17 +72,19 @@ the anchor chain.
 
 ### Size and the bundled membranes
 
-The bundled membranes are patches around a GPCR (about 290 residues, one transmembrane bundle), 18.3 x 18.3 nm. A
-complex of GPCR size goes into the hole the receptor left (`--embed-site hole`, the default). A much smaller protein
-(one transmembrane helix) needs `--embed-site free` and a larger `--xy-buffer`; a much larger one (a transporter dimer,
-a channel) may not fit the patch and needs your own Martini 3 frame (`--cg FILE --embed`,
-[Advanced options](advanced.md#choosing-the-membrane)). Soluble partners (a G protein, an antibody fragment) are fine
-as long as they stay within the box z, which is sized to the complex.
+The bundled membranes are 18.3 x 18.3 nm and have a hole where a GPCR was.
+
+- GPCR-sized protein: goes into the hole (`--embed-site hole`, the default).
+- Single transmembrane helix: use `--embed-site free` and a larger `--xy-buffer`.
+- Much larger protein (transporter dimer, channel): use your own Martini 3 frame (`--cg FILE --embed`,
+  [Advanced options](advanced.md#choosing-the-membrane)).
+
+Soluble partners such as a G protein or antibody fragment are fine; the box height is sized to the complex.
 
 ## A worked example
 
-The bundled GCGR complex (`membraneforger/examples/preeq_cg_cellmem/GCGR_MTZP_prot-lig.pdb`) shows a prepared input:
+The bundled GCGR complex (`membraneforger/examples/preeq_cg_cellmem/GCGR_MTZP_prot-lig.pdb`) is a prepared input:
 five chains (receptor R with ACE/CT3 caps, peptide P with a CT2 amide, Gs alpha A, beta B and gamma C), the ligands
 GDP and MG, four disulfides in R, a `CYSG` on the gamma C terminus, 28 histidines left as `HIS`, and no water or bulk
-ions. `python -m membraneforger --check --aa membraneforger/examples/preeq_cg_cellmem/GCGR_MTZP_prot-lig.pdb --orientation none --out x`
-prints what the build will do with each of them.
+ions. `membraneforger --check --aa membraneforger/examples/preeq_cg_cellmem/GCGR_MTZP_prot-lig.pdb --orientation none --out x`
+shows how each is handled.

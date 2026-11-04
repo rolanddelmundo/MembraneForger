@@ -1,15 +1,13 @@
 # Ligands, ions and other non-protein residues
 
-A ligand is every residue of the `--aa` input whose name is not an amino acid (`config.AMINO`): a small molecule, a
-nucleotide such as GDP, an ion such as Mg2+. The protein chemistry comes from CHARMM36 through `pdb2gmx`; a ligand's
-chemistry comes only from a GROMACS topology file that you place in the force-field directory. Without it the build
-stops at the `inputs` stage:
+Any non-amino-acid residue in the `--aa` input is a ligand: a small molecule, a nucleotide such as GDP, or an ion such
+as Mg2+. Each needs a GROMACS topology (`.itp`) in the force-field directory. Without one the build stops:
 
 ```
 ERROR: inputs: all-atom input complex.pdb: no topology in .../membraneforger/forcefield for residue(s) ['LIG']
 ```
 
-`python -m membraneforger --check --aa complex.pdb ...` reports the same in seconds, with the ligands it found.
+`membraneforger --check` reports this in seconds.
 
 ## What is bundled
 
@@ -19,7 +17,7 @@ ERROR: inputs: all-atom input complex.pdb: no topology in .../membraneforger/for
 |---|---|---|
 | `GDP` | guanosine diphosphate | CHARMM36 (CHARMM-GUI `psf2itp`) |
 | `MG` | Mg2+ | CHARMM36 ions |
-| `7V7`, `JNJ` | small-molecule ligands of the lab's receptors | CGenFF through CHARMM-GUI FF-Converter |
+| `7V7`, `JNJ` | small-molecule ligands | CGenFF through CHARMM-GUI FF-Converter |
 | `KTZ`, `KRT`, `KSM` | lipidated lysines of peptide agonists | treated as protein residues, see [Advanced options](advanced.md#lipidated-residues) |
 
 Water, Na+, Cl- and K+ must not be in the input; the build adds its own (`SOL`, `SOD`, `CLA`).
@@ -40,23 +38,17 @@ Water, Na+, Cl- and K+ must not be in the input; the build adds its own (`SOL`, 
 4. **Extra parameters.** If CGenFF produced parameters that are not in CHARMM36 (the `.prm` part of its output, with
    penalty scores), they must be visible to `grompp`: append them, converted to GROMACS units, to
    `charmm36.ff/ffbonded.itp` in your `--toppar` copy (`[ angletypes ]`, `[ dihedraltypes ]`, ...). `toppar/JNJ.prm.itp`
-   shows that format; a `.prm.itp` next to the ligand is **not** read automatically (the bundled `JNJ` has not been
-   built with MembraneForger yet, and its angle parameter is not in `ffbonded.itp`, so it is exactly this case).
-5. **Check the pose.** Ligand heavy atoms are frozen in both minimizations
-   ([Advanced options](advanced.md#ligands-during-minimization)), so a ligand that overlaps a lipid or a residue in the
-   input stays there and the build fails the Fmax or contact check naming the pair. Fix the pose or the residue in
-   the input.
+   shows that format. A `.prm.itp` next to the ligand is **not** read automatically. (The bundled `JNJ` needs this
+   step: one of its angle parameters is not yet in `ffbonded.itp`.)
+5. **Check the pose.** Ligand heavy atoms are frozen during minimization, so a ligand that overlaps a lipid or residue
+   stays overlapped and the build fails, naming the pair. Fix the pose in the input.
 
 ### What the build does with the ligand
 
-- **Atom names do not have to match the `.itp`.** The ligand is matched to its topology by the bond graph of its heavy
-  atoms (`topology.match_by_graph`): element and connectivity, computed from the coordinates. A residue whose heavy-atom
-  graph is not isomorphic to the `.itp` (a different tautomer or protonation, a missing atom) stops the build with
-  `heavy-atom graph is not isomorphic to its ITP`.
-- **Hydrogens may be missing.** A hydrogen the `.itp` has and the input lacks is placed on its parent atom at a fixed
-  direction and corrected by minimization (ligand hydrogens are not frozen). A hydrogen the input has and the `.itp`
-  lacks stops the build (`source hydrogens have no topology counterpart`): the protonation state of the input and of
-  the topology must agree.
+- **Atom names do not have to match the `.itp`.** Atoms are matched by element and connectivity. A different tautomer
+  or a missing heavy atom stops the build (`heavy-atom graph is not isomorphic to its ITP`).
+- **Hydrogens may be missing.** Missing hydrogens are added and relaxed in minimization. An extra hydrogen that the
+  `.itp` lacks stops the build: the protonation states must agree.
 - **Charge.** The ligand charge is part of the system charge, which the ions neutralize (0.15 M NaCl on top,
   `--counterion-mode`).
 - **Restraints for equilibration.** If the `.itp` has no `#ifdef POSRES` block, the build writes `toppar/posre_<RESNAME>.itp`
