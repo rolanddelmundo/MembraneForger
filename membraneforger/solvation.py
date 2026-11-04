@@ -78,10 +78,8 @@ def rebox_system(system: dict, topology: dict, requested_z_nm: float | None = No
             raise SystemExit(f"requested box z {requested_z_nm * 10:.0f} A is below the {box_z * 10:.0f} A this system needs "
                              f"({z_pad_nm} nm of water above and below the complex and membrane)")
         box_z, mode = float(requested_z_nm), "user"
-    if symmetric:
-        shift = box_z / 2.0 - center
-    else:
-        shift = (box_z - (hi - lo)) / 2.0 - lo  # equal clearance below the lowest and above the highest atom
+    # symmetric: the centre of the layout in the middle; otherwise equal clearance below the lowest and above the highest atom
+    shift = box_z / 2.0 - center if symmetric else (box_z - (hi - lo)) / 2.0 - lo
     if (all_z + shift).min() <= 0.0 or (all_z + shift).max() >= box_z:
         raise SystemExit("solute extends beyond the rebuilt z box")
     atoms = [dict(a, x=a["x"] / 10.0, y=a["y"] / 10.0, z=a["z"] / 10.0 + shift) for a in coords]

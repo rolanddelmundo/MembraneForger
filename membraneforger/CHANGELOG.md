@@ -182,6 +182,12 @@
   heavy atoms in the input and are protonated by pdb2gmx. A chain whose first residue is `GLYP` gets the `None` N
   terminus (its backbone N carries the acyl chain). Built for the Galpha N terminus of the receptor-Gs complexes
   (Met1 removed, Gly2 N-palmitoylated, Cys3 S-palmitoylated); the acyl coordinates are the user's, as for `CYSG`.
+- **Cleanup, no change to any build output.** The two `grompp` rebuilds of the final audit (`as_built`, `posres`) run side by side
+  instead of one after the other (same files, same gates; about 25 s less on a 270k-atom system). Removed `embedding.trim_membrane`
+  and its tests: nothing called it since `slice_membrane_cg` replaced it. `relax_seam` asks the complex's KD-tree only about the
+  beads that can be within reach before the next neighbour-list rebuild instead of every bead every step (the query was half of the
+  embedding time); relaxed coordinates and reports are bit-identical, embedding the example complex takes 8 s instead of 13 s. A few
+  lint-level simplifications (`prenyl.py`, `solvation.py`, `backbone_check.py`).
 
 ## 1.1.0 (2026-10-18)
 
