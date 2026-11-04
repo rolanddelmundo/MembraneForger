@@ -134,3 +134,42 @@
 .md-typeset .mf-check li::marker, .md-typeset .mf-steps > li::marker, .md-typeset .mf-pipe li::marker { content: none; }
 .mf-hero h1 { margin-top: 0 !important; }
 .mf-lipids figcaption { text-align: center !important; }
+
+/* Scroll effects (assets/home.js). The script adds .mf-motion to <html> only when motion is allowed, so without
+   JavaScript or with "reduce motion" on, everything above applies unchanged. */
+.mf-progress { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: var(--mf-accent); transform: scaleX(0);
+               transform-origin: 0 50%; z-index: 10; pointer-events: none; }
+
+.mf-motion .mf-reveal { opacity: 0; transform: translateY(1.2rem); transition: opacity .6s ease, transform .6s cubic-bezier(.2,.7,.2,1);
+                        transition-delay: var(--mf-delay, 0ms); }
+.mf-motion .mf-reveal.is-in { opacity: 1; transform: none; }
+
+.mf-hero-media { overflow: hidden; border-radius: .4rem; }
+.mf-motion .mf-hero-media { animation: mf-grow-in 1.4s cubic-bezier(.2,.7,.2,1) both; }
+.mf-motion .mf-hero-media img { transform: scale(calc(1 + .35 * var(--mf-hp, 0))) translateY(calc(var(--mf-hp, 0) * 1.5rem));
+                                opacity: calc(1 - .45 * var(--mf-hp, 0)); will-change: transform; }
+@keyframes mf-grow-in { from { opacity: 0; transform: scale(.82); } }
+
+/* Narrow screens: each stage picture zooms in as it scrolls into view. */
+.mf-motion .mf-stages figure img { transform: scale(var(--mf-z, 1)); transform-origin: 50% 60%; will-change: transform; }
+
+/* Wide screens: the four stages become one pinned panel that steps through as you scroll. */
+.mf-motion .mf-stages.mf-story { display: block; height: calc(var(--mf-n, 4) * 75vh + 20vh); position: relative; }
+.mf-story .mf-story-pin { position: sticky; top: 2.8rem; height: calc(100vh - 3.4rem); overflow: hidden; }
+.mf-story figure { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1.5fr; gap: 2rem; align-items: center;
+                   opacity: 0; transition: opacity .55s ease; pointer-events: none; }
+.mf-story figure.is-active { opacity: 1; pointer-events: auto; }
+.mf-story figure img { grid-column: 2; grid-row: 1; height: calc(100vh - 5rem); width: 100%; object-fit: contain; transition: transform .2s linear; }
+.mf-story figcaption { grid-column: 1; grid-row: 1; font-size: 1rem !important; line-height: 1.5 !important; margin: 0 0 4rem !important;
+                       transform: translateY(1rem); transition: transform .55s cubic-bezier(.2,.7,.2,1); }
+.mf-story figure.is-active figcaption { transform: none; }
+.mf-story figcaption b { display: block; font-size: 1.35rem; margin-bottom: .4rem; }
+.md-typeset .mf-story-dots { position: absolute; left: 0; bottom: 1.6rem; list-style: none; margin: 0 !important; padding: 0;
+                             display: flex; flex-direction: column; gap: .35rem; font-size: .72rem; color: var(--mf-muted); }
+.md-typeset .mf-story-dots li { margin: 0 !important; padding-left: 1.1rem; position: relative; transition: color .3s; }
+.md-typeset .mf-story-dots li::marker { content: none; }
+.md-typeset .mf-story-dots li::before { content: ""; position: absolute; left: 0; top: .32em; width: .55rem; height: .55rem; border-radius: 50%;
+                                        border: 2px solid var(--mf-rule); background: #fff; transition: all .3s; }
+.md-typeset .mf-story-dots li.is-done::before { border-color: var(--mf-accent); }
+.md-typeset .mf-story-dots li.is-active { color: #1a1a1a; font-weight: 600; }
+.md-typeset .mf-story-dots li.is-active::before { border-color: var(--mf-accent); background: var(--mf-accent); }

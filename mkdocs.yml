@@ -45,6 +45,9 @@ nav:
 extra_css:
   - assets/home.css
 
+extra_javascript:
+  - assets/home.js
+
 markdown_extensions:
   - admonition
   - attr_list
