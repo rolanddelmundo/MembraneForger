@@ -108,6 +108,22 @@ pip install ".[figures]"</code></pre>
       <figcaption><b>4. Ready to equilibrate.</b> Water (not drawn) and 0.15 M NaCl are added, the energy is minimized, and the system is checked.</figcaption></figure>
   </div>
 
+  <section class="mf-movie" data-mf-movie data-frame-dir="assets/movie/gpr139_jnj/" data-frame-count="48">
+    <div class="mf-movie-pin">
+      <div class="mf-movie-text">
+        <h2 id="after-the-build">After the build: simulation</h2>
+        <p>The minimized system is the starting point. After restrained equilibration you run production MD in GROMACS,
+           and the protein, ligand and lipids start to move.</p>
+        <p class="mf-movie-hint">Scroll to play.</p>
+        <p class="mf-movie-credit">Example: GPR139 with the agonist JNJ-63533054, built with MembraneForger. First microsecond of a production run.</p>
+      </div>
+      <figure>
+        <div class="mf-movie-frame"><img src="assets/movie/gpr139_jnj/frame_00.jpg" alt="The agonist JNJ-63533054 in the GPR139 binding pocket, with the lipid bilayer behind, during a molecular dynamics simulation" loading="lazy"></div>
+        <div class="mf-movie-bar" aria-hidden="true"><span></span></div>
+      </figure>
+    </div>
+  </section>
+
   <h2 id="how-it-works">How it works</h2>
   <ol class="mf-pipe" aria-label="Build pipeline">
     <li><b>Orient</b><span>align the protein to the membrane</span></li>

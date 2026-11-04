@@ -79,6 +79,27 @@
   function layout() { if (wide.matches) buildStory(); else dropStory(); update(); }
   if (wide.addEventListener) wide.addEventListener("change", layout); else wide.addListener(layout);
 
+  /* MD movie: frames are fetched when the section comes near, then scrolling picks the frame and zooms in. */
+  var movie = home.querySelector("[data-mf-movie]");
+  var movieImg = movie ? movie.querySelector(".mf-movie-frame img") : null;
+  var movieFrames = [], movieShown = -1;
+  if (movie && movieImg) {
+    var dir = movie.getAttribute("data-frame-dir"), count = +movie.getAttribute("data-frame-count") || 0;
+    var load = function () {
+      for (var i = 0; i < count; i++) {
+        var im = new Image();
+        im.src = dir + "frame_" + (i < 10 ? "0" : "") + i + ".jpg";
+        movieFrames.push(im);
+      }
+    };
+    if ("IntersectionObserver" in window) {
+      var mo = new IntersectionObserver(function (es) {
+        if (es[0].isIntersecting) { load(); mo.disconnect(); }
+      }, { rootMargin: "150% 0px" });
+      mo.observe(movie);
+    } else { load(); }
+  }
+
   var ticking = false;
   function update() {
     ticking = false;
@@ -110,6 +131,17 @@
         var t = clamp((vh - b.top) / (vh * 0.7));
         f.style.setProperty("--mf-z", (0.86 + 0.14 * t).toFixed(4));
       });
+    }
+
+    if (movie && movieImg) {
+      var m = movie.getBoundingClientRect();
+      var mp = clamp(-m.top / Math.max(m.height - vh, 1));
+      movie.style.setProperty("--mf-mp", mp.toFixed(4));
+      movie.style.setProperty("--mf-mz", (0.82 + 0.38 * mp).toFixed(4));
+      if (movieFrames.length) {
+        var k = Math.min(movieFrames.length - 1, Math.round(mp * (movieFrames.length - 1)));
+        if (k !== movieShown && movieFrames[k].complete && movieFrames[k].naturalWidth) { movieImg.src = movieFrames[k].src; movieShown = k; }
+      }
     }
   }
   function onScroll() { if (!ticking) { ticking = true; window.requestAnimationFrame(update); } }
