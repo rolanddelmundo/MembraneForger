@@ -1,6 +1,6 @@
 site_name: MembraneForger
 site_description: Build validated all-atom membrane-protein systems for GROMACS from one structure file
-site_url: https://rolanddelmundo.github.io/MembraneForger/
+site_url: https://membraneforger.github.io/
 repo_url: https://github.com/rolanddelmundo/MembraneForger
 repo_name: rolanddelmundo/MembraneForger
 edit_uri: edit/main/membraneforger/docs/
