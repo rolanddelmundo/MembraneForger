@@ -113,7 +113,7 @@ membraneforger --aa complex.pdb --orient-chain R --nterm-side out --out my_build
           <h3>Ligands, cofactors and lipidated residues</h3>
           <p>Small molecules, nucleotides, ions and acylated or prenylated residues keep the pose you give them.</p>
           <ul><li>CGenFF topologies dropped into one folder</li><li>Ligand heavy atoms frozen in minimization; E/Z prenyl check</li></ul>
-          <code>membraneforger --check --aa complex.pdb ...   # reports every residue and its topology</code>
+          <code>membraneforger check --aa complex.pdb ...   # reports every residue and its topology</code>
         </div>
       </a>
 
@@ -178,7 +178,7 @@ membraneforger --aa complex.pdb --orient-chain R --nterm-side out --out my_build
           <h3>Slice a membrane to the protein plus a buffer</h3>
           <p>A periodic, whole-lipid, anchor-based crop: the window is placed where the composition changes least, the seam is relaxed, and the cut is graded against the uncut membrane.</p>
           <ul><li>Gate: APL per leaflet, composition, lateral RDF, thickness, tilt</li><li>Smaller systems with the packing of the big one</li></ul>
-          <code>membraneforger --aa complex.pdb --xy-buffer 2.0 --apl-tolerance 3 --out build</code>
+          <code>membraneforger slice --aa complex.pdb --xy-buffer 2.0 --apl-tolerance 3 --out cut   # slice_cg.gro, placed_complex.pdb</code>
         </div>
       </a>
 
@@ -189,8 +189,8 @@ membraneforger --aa complex.pdb --orient-chain R --nterm-side out --out my_build
         <div>
           <h3>Backmap a Martini membrane to all atoms</h3>
           <p>mstool rebuilds every lipid around the rigid all-atom complex, including GM3 and PIP2; the result is checked before it is used.</p>
-          <ul><li>Ring threading, bond crossings and inventory checks; sugar and inositol stereocentres audited</li><li>All-atom membrane kept as <code>int/membrane.pdb</code></li></ul>
-          <code>membraneforger --aa complex.pdb --cg my_frame.gro --out build   # then int/membrane.pdb</code>
+          <ul><li>Ring threading, bond crossings and inventory checks; sugar and inositol stereocentres audited</li><li>Stops after gate 2 and keeps <code>membrane.pdb</code> at the top level</li></ul>
+          <code>membraneforger backmap --aa complex.pdb --cg my_frame.gro --out aa   # then aa/membrane.pdb</code>
         </div>
       </a>
 
@@ -202,7 +202,7 @@ membraneforger --aa complex.pdb --orient-chain R --nterm-side out --out my_build
           <h3>Solvate, add ions and minimize any protein + membrane PDB</h3>
           <p>Start from an assembled all-atom system of your own: CHARMM36 topology, box sized to the solute, TIP3P water, 0.15 M NaCl by water volume, index groups, restrained then free minimization, independent audit.</p>
           <ul><li>Needs a <code>CRYST1</code> record and CHARMM36 lipid names</li><li>Also the restart path after a backmapping of your own</li></ul>
-          <code>membraneforger --membrane system.pdb --out build</code>
+          <code>membraneforger solvate --membrane system.pdb --out build</code>
         </div>
       </a>
 
