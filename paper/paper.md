@@ -67,22 +67,56 @@ around a fixed protein and uses isomeric information to keep chirality and cis/t
 backmapping library. It does not embed a protein in an existing membrane, cut a periodic patch, build the GROMACS
 topology, solvent and ions, or judge whether the final system is fit to simulate.
 
-Testing builds with mstool showed three problems a user would have to find alone:
+# Contributions
 
-- **Configurations change after backmapping.** mstool restrains trans bonds only in its first refinement stage. Its
-  structure check only reports. The CHARMM36 ceramide amide torsion of GM3 and PSM has a zero force constant. A later
-  minimization twisted one amide to about −71°. MembraneForger restrains these bonds during minimization. It tests every
-  GM3 and PIP2 stereocentre after backmapping and after minimization.
-- **Some defects appear only in `mdrun`.** Threaded lipids and overlapping atoms pass backmapping, solvation and
-  ionization. One build stalled at Fmax 20,878 kJ mol⁻¹ nm⁻¹ after 50,000 steps, on a DOPC carbon 2.4 Å from a POPC
-  carbon. MembraneForger tests every non-bonded pair against its Lennard-Jones Rmin and every pair of bonds for a
-  crossing, under periodic boundaries. A failed test triggers a new backmapping seed.
-- **Frames are not always periodic in their box.** A frame saved after a rotational fit folds its corners onto the box
-  edges. MembraneForger detects the rotation and reverses it. It refuses a frame that no rotation fixes.
+## Backmapping of GM3, PIP2 and PSM
 
-Cutting a patch from a larger membrane also changes lipid packing at the new edge. MembraneForger cuts whole lipids
-under periodic boundaries and relaxes the seam. It compares the cut membrane with the uncut one before any atom is
-placed: area per lipid, leaflet composition, lateral radial distribution functions, thickness and protein orientation.
+Cell-membrane models need GM3, PIP2 and sphingomyelin. Their sugars, inositol ring and amide are hard to backmap correctly.
+MembraneForger makes them backmap correctly from Martini 3 to CHARMM36.
+
+- **GM3.** In Martini 3, GM3 is one molecule (`DPG3`). In CHARMM36 it is four residues: ceramide, glucose, galactose
+  and sialic acid. MembraneForger supplies the mapping and the OpenMM template that join them. The starting mapping
+  had glucose and galactose beads swapped, six wrong chirality definitions, no sialic acid C7 definition and no
+  ceramide trans definitions. All were corrected. All 16 sugar stereocentres and both ceramide trans bonds of every
+  GM3 are now tested after backmapping and after minimization.
+- **PIP2 (`SAP6` in Martini 3, `SAPI25` in CHARMM36).** The ring-chair restraints of the inositol stay satisfied when a
+  hydrogen and a hydroxyl swap places at one carbon. MembraneForger tests all six inositol stereocentres directly. This
+  found a real inverted C1 in a build whose chair restraints were all satisfied.
+- **PSM and the GM3 ceramide.** The CHARMM36 amide torsion of both lipids has a zero force constant, so nothing holds
+  the amide trans. In one build, restrained minimization twisted a GM3 amide that mstool had placed trans to about
+  −71°. In 349 archived builds, about 3 % of PSM amides ended below 150°. MembraneForger adds a trans restraint for
+  this amide during restrained minimization only. In tests, every GM3 amide then stayed trans.
+
+A wrong configuration never corrects itself in MD. A build with one inverted centre or cis amide is refused, and
+backmapping is retried with a new seed.
+
+## Improvements over mstool alone
+
+- **Configurations are held after backmapping.** mstool restrains trans bonds only in its first refinement stage, and
+  its structure check only reports. MembraneForger restrains them through minimization and tests them at the end.
+- **Defects that appear only in `mdrun` are caught first.** Threaded lipids and overlapping atoms pass backmapping,
+  solvation and ionization. One build stalled at Fmax 20,878 kJ mol⁻¹ nm⁻¹ after 50,000 steps, on a DOPC carbon 2.4 Å
+  from a POPC carbon. MembraneForger tests every non-bonded pair against its Lennard-Jones Rmin and every pair of bonds
+  for a crossing, under periodic boundaries. A failed test triggers a new backmapping seed.
+- **Frames are checked before use.** A frame saved after a rotational fit folds its corners onto the box edges.
+  MembraneForger detects the rotation and reverses it. It refuses a frame that no rotation fixes.
+- **The cut membrane is graded.** Cutting a patch changes lipid packing at the new edge. MembraneForger cuts whole lipids
+  under periodic boundaries and relaxes the seam. It compares the cut with the uncut membrane before any atom is placed:
+  area per lipid, leaflet composition, lateral radial distribution functions, thickness and protein orientation.
+- **The full system is built.** mstool returns a membrane. MembraneForger returns a solvated, ionized, minimized and
+  audited GROMACS system with its topology.
+
+## Simple and feasible to run
+
+- **One input and one command.** `membraneforger --aa complex.pdb` is a full build. No coarse-grained simulation is
+  needed: the 18 bundled 50 µs membranes are ready to use.
+- **Modest hardware.** A GPCR–G-protein build takes 15 to 30 minutes on eight cores and about 1.5 GB of memory. It runs
+  on a laptop or a Slurm cluster.
+- **Standard installation.** `pip install .` installs the package and its Python requirements. GROMACS is the only
+  other requirement. PPM 3.0 is needed only for structures without an OPM entry.
+- **Problems found in seconds.** `membraneforger --check` tests the software, the input and the options before a build
+  starts.
+- **Clear results.** Each build ends in PASS or FAIL. A failure names the stage and the check.
 
 # Software design
 
