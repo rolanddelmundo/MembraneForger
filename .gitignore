@@ -19,3 +19,4 @@ mforger_*.log
 /.micromamba/
 /ppm3_code/
 /site/
+!membraneforger/docs/assets/renders/

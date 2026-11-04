@@ -22,7 +22,7 @@
       <h1>MembraneForger</h1>
       <p class="mf-tagline">Build all-atom membrane-protein systems for GROMACS from one PDB file</p>
     </div>
-    <img src="assets/hero_before_after.png" alt="A bundled Martini 3 membrane, the same membrane with a GPCR complex embedded, and the slice cut around it">
+    <img src="assets/renders/004_backmapped_membrane.jpg" alt="A receptor and G protein complex in an all-atom plasma membrane built by MembraneForger">
   </div>
 
   <p>
@@ -34,6 +34,23 @@
 membraneforger --aa complex.pdb --orient-chain R --nterm-side out --out my_build</code></pre>
   </div>
   <p>New here? Start with <a href="first_build/">Your first build</a>.</p>
+
+  <h2>From structure to simulation</h2>
+  <div class="mf-stages">
+    <figure><img src="assets/renders/001_input_aa.jpg" alt="The input all-atom complex" loading="lazy"><figcaption><b>1</b> Your structure</figcaption></figure>
+    <figure><img src="assets/renders/002_input_cg.jpg" alt="The complex in a coarse-grained Martini 3 membrane" loading="lazy"><figcaption><b>2</b> Placed in a Martini 3 membrane</figcaption></figure>
+    <figure><img src="assets/renders/008_solvated.jpg" alt="The all-atom membrane and complex in a water box" loading="lazy"><figcaption><b>3</b> Backmapped to all atoms and solvated</figcaption></figure>
+    <figure><img src="assets/renders/014_final_validated.jpg" alt="The final system with ions after minimization and checks" loading="lazy"><figcaption><b>4</b> Ions added, minimized and checked</figcaption></figure>
+  </div>
+
+  <h2>Every lipid, bead to atom</h2>
+  <div class="mf-lipids">
+    <figure><img src="assets/renders/species_GM3.jpg" alt="GM3 ganglioside" loading="lazy"><figcaption>GM3</figcaption></figure>
+    <figure><img src="assets/renders/species_PIP2.jpg" alt="PIP2" loading="lazy"><figcaption>PIP2</figcaption></figure>
+    <figure><img src="assets/renders/species_POPC.jpg" alt="POPC" loading="lazy"><figcaption>POPC</figcaption></figure>
+    <figure><img src="assets/renders/species_cholesterol.jpg" alt="Cholesterol" loading="lazy"><figcaption>Cholesterol</figcaption></figure>
+  </div>
+  <p class="mf-caption">Martini 3 beads (spheres) over the all-atom lipid MembraneForger rebuilds from them.</p>
 
   <h2>What it does</h2>
 
