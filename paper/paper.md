@@ -145,7 +145,9 @@ a validation reference, a command-line reference and troubleshooting.
 
 # Research impact statement
 
-MembraneForger has been used in the author's laboratory at City of Hope since November 2025. It was released publicly
+MembraneForger has been used in the author's laboratory at City of Hope since November 2025. It was used to build the
+GPR139 membrane systems for molecular dynamics simulations, which started in November 2025, in a study of GPR139
+structure and ligand recognition now in revision at Nature Communications [@Li2026GPR139]. It was released publicly
 in July 2026.
 
 It was developed for simulations of class A and class B GPCRs. These include the glucagon receptor with tirzepatide
@@ -160,14 +162,15 @@ installation, stage commands, equilibration templates and the documentation site
 
 # AI usage disclosure
 
-Claude Code (Anthropic) was used for code optimization and packaging. The author designed the method, reviewed all
+Claude Code (Anthropic; Claude Opus 5.5) was used for code optimization and packaging. The author designed the method, reviewed all
 changes, ran the validation builds, and takes full responsibility for the software and this paper.
 
 # Acknowledgements
 
 The author thanks the developers of Martini, mstool, CHARMM-GUI, GROMACS, OpenMM [@Eastman2017] and OPM/PPM.
-Simulations were run on City of Hope high-performance computing resources. Funding: [to be added by the author; state
-whether the sponsor had any role].
+Simulations were run on City of Hope high-performance computing resources. This work was supported by the National Institute of
+Diabetes and Digestive and Kidney Diseases (NIDDK) training grant T32-DK131943. The funder had no role in the design of
+the software or the writing of this paper.
 
 # Conflicts of interest
 
