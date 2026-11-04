@@ -17,10 +17,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: pages
-  cancel-in-progress: false
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -32,21 +28,20 @@ jobs:
       - run: pip install mkdocs-material
       - name: Build (broken links fail the build)
         run: mkdocs build --strict
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
 
-  deploy:
-    # Pages is published only from the main branch (not pull requests, not manual runs of other refs)
+  publish:
+    # The site is served from membraneforger/membraneforger.github.io, whose workflow builds these docs from main.
+    # This job asks it to rebuild. SITE_DISPATCH_TOKEN is a fine-grained token with Contents read/write on that repo.
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Trigger a rebuild of membraneforger.github.io
+        env:
+          GH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "SITE_DISPATCH_TOKEN is not set; the site rebuilds on its daily schedule instead."
+            exit 0
+          fi
+          gh api -X POST repos/membraneforger/membraneforger.github.io/dispatches -f event_type=docs-updated
