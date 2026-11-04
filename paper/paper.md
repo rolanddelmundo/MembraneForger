@@ -27,7 +27,7 @@ protein–ligand structure file. The output is an energy-minimized CHARMM36 [@Kl
 
 The protein is placed into a Martini 3 [@Souza2021] membrane that was already simulated for 50 µs around a G
 protein-coupled receptor (GPCR). The membrane is cut to the protein plus a margin. The lipids are converted to all
-atoms with mstool [@Kim2023]. MembraneForger then builds the topology, adds water and 0.15 M NaCl, and minimizes
+atoms with mstool [@Kim2023], an open-source backmapping library. MembraneForger then builds the topology, adds water and 0.15 M NaCl, and minimizes
 (\autoref{fig:workflow}). Each stage ends with a quantitative check. The final structure is written only when every
 check passes.
 
@@ -54,12 +54,19 @@ has no memory of protein–lipid interactions, and it is used mainly through a w
 [@Qi2015] and insane [@Wassenaar2015] build coarse-grained membranes. backward [@Wassenaar2014] converts
 coarse-grained structures to all atoms with per-molecule mapping files.
 
-mstool [@Kim2023] is the closest tool. It backmaps Martini lipids around a fixed protein and uses isomeric information
-to keep chirality and cis/trans bonds correct. It is a backmapping library. It does not embed a protein in an existing
+mstool [@Kim2023] is the closest tool. It is an open-source Python library that converts
+("backmaps") coarse-grained Martini models to all-atom CHARMM36 models. It places the atoms of each lipid on its
+coarse-grained beads, then refines the structure with OpenMM [@Eastman2017] while holding a protein fixed. It uses
+mapping and isomeric information to keep chirality and cis/trans bonds correct. It performs only the
+conversion. It does not embed a protein in an existing
 membrane, cut a periodic patch, build the GROMACS topology, solvent and ions, or judge whether the final system is fit
 to simulate.
 
-## Building on mstool
+## Building on existing tools
+
+MembraneForger builds on existing tools rather than replacing them. Martini 3 supplies the equilibrated membranes,
+mstool the backmapping, GROMACS the topology, solvation and minimization, and OPM or PPM the orientation.
+MembraneForger joins them into one pipeline and adds what each step lacks. Compared with mstool used alone:
 
 - **Configurations are held after backmapping.** mstool restrains trans bonds only in its first refinement stage, and
   its structure check only reports. MembraneForger restrains them through minimization and tests them at the end.
@@ -75,7 +82,7 @@ to simulate.
 - **The full system is built.** mstool returns a membrane. MembraneForger returns a solvated, ionized, minimized and
   audited GROMACS system with its topology.
 
-We chose to build on mstool rather than write a new backmapper. Its backmapping algorithm worked well for our lipids. The gaps
+We chose to build on mstool rather than write a new backmapper. Its algorithm worked well for our lipids. The gaps
 were in the lipid definitions and in everything before and after the conversion. MembraneForger runs mstool unchanged
 in a worker process and supplies corrected mapping data for the lipids it needs.
 
