@@ -11,7 +11,7 @@ tags:
   - backmapping
 authors:
   - name: Roland Del Mundo
-    orcid: 0000-0000-0000-0000
+    # orcid: add the author's ORCID here before submitting (a placeholder fails the PDF build)
     affiliation: 1
 affiliations:
   - name: City of Hope, Duarte, California, United States
