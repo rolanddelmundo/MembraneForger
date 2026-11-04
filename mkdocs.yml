@@ -15,15 +15,16 @@ theme:
     - content.code.copy
     - search.highlight
     - navigation.tabs
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+  font:
+    text: Open Sans
+    code: Roboto Mono
   palette:
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: teal
-      toggle: {icon: material/weather-night, name: Dark mode}
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      primary: teal
-      toggle: {icon: material/weather-sunny, name: Light mode}
+    scheme: default
+    primary: white
+    accent: teal
 
 nav:
   - Home: index.md
