@@ -3,14 +3,8 @@
 
 :root { --mf-accent: #0b6e8f; --mf-band: #f2f4f6; --mf-rule: #e1e4e8; --mf-muted: #5c6670;
         --mf-ink: #1a1a1a; --mf-text2: #333; --mf-tint: #f3f8fa; --mf-surface: #fff; --mf-on-accent: #fff; }
-/* Dark mode: Material's "slate" scheme, chosen from the visitor's system setting or the header toggle. */
-[data-md-color-scheme="slate"] {
-  --mf-accent: #5cc0dd; --mf-band: #1f242b; --mf-rule: #353c46; --mf-muted: #9ba5af;
-  --mf-ink: #eceff2; --mf-text2: #cfd5db; --mf-tint: #18262d; --mf-surface: var(--md-default-bg-color); --mf-on-accent: #0b1a20;
-  --md-typeset-a-color: var(--mf-accent);
-}
 .md-typeset a { color: var(--mf-accent); }
-[data-md-color-scheme="default"] .md-header, [data-md-color-scheme="default"] .md-tabs { color: var(--mf-ink); }
+.md-header, .md-tabs { color: var(--mf-ink); }
 .md-header { box-shadow: 0 0 0 1px var(--mf-rule); }
 .md-tabs { border-bottom: 1px solid var(--mf-rule); }
 .md-header__button.md-logo { display: none; }
@@ -201,8 +195,3 @@
 }
 .mf-movie-credit { color: var(--mf-muted); font-size: .7rem; }
 
-/* Dark mode swaps each render for its _dark copy (white background replaced, examples/make_dark_renders.py). */
-.mf-home img.mf-dark { display: none; }
-[data-md-color-scheme="slate"] .mf-home img.mf-light { display: none; }
-[data-md-color-scheme="slate"] .mf-home img.mf-dark { display: block; }
-[data-md-color-scheme="slate"] .mf-movie-frame { background: transparent; }

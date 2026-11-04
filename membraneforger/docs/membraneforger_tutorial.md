@@ -111,8 +111,7 @@ measure of packing: the frame's footprint is tessellated with the coarse-grained
 membrane's with the complex's heavy atoms, which are far denser generators. On the matched GCGR frame the same lipids
 give a lower-leaflet APL of 57.3 A^2 with the CG protein and 48.3 A^2 with the fitted all-atom complex.
 
-![KOR before and after embedding: the bundled 50 us frame, the embedded membrane with GCGR, and the slice](figures/KOR_Membrane1_before_after.png#only-light)
-![KOR before and after embedding: the bundled 50 us frame, the embedded membrane with GCGR, and the slice](figures/KOR_Membrane1_before_after_dark.png#only-dark)
+![KOR before and after embedding: the bundled 50 us frame, the embedded membrane with GCGR, and the slice](figures/KOR_Membrane1_before_after.png)
 
 *Figure 1. The coarse-grained membrane of the KOR build at its three coarse-grained stages: the bundled 50 us frame
 with its own receptor, the membrane after embedding the GCGR complex, and the slice cut around it (1302, 1279 and 513
@@ -389,8 +388,7 @@ tilted helix shifts laterally by up to 2 nm across a leaflet: against all protei
 total lipid density read 1.3-1.4 at the protein for a single-pass protein tilted 53 degrees (0.9-1.1 at headgroup
 depth). The CG frame stage is left out: its protein is the frame's own receptor, not the complex.
 
-![All-lipid density around the protein, slice stage, 18 bundled frames](figures/protein_density_by_frame.png#only-light)
-![All-lipid density around the protein, slice stage, 18 bundled frames](figures/protein_density_by_frame_dark.png#only-dark)
+![All-lipid density around the protein, slice stage, 18 bundled frames](figures/protein_density_by_frame.png)
 
 *Figure 2. Cumulative density of all lipids within R of the protein over the leaflet mean, slice stage, GCGR complex,
 for each bundled frame and leaflet; 1 = as common as anywhere. The first shell (R = 10 A) is marked.*
