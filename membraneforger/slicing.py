@@ -206,18 +206,30 @@ def relax_seam(xyz: list[np.ndarray], size: np.ndarray, cell_z: float, cropped: 
     # intra-lipid restraints; once active a lipid stays active.
     lipid_of, active, active_intra = owner[intra[:, 0]], np.zeros(len(xyz), bool), np.zeros(len(intra), bool)
     points, remaining, step, crowded = start.copy(), np.zeros((0, 2), int), 0, False
-    listed, candidates = points.copy(), created_pairs(points, owner, new_box, repulsion_nm + skin, inherent)
+
+    def list_neighbours() -> tuple[np.ndarray, np.ndarray]:
+        """The lipid-lipid pairs and the beads near the complex that can come within range before the next rebuild: the
+        complex does not move, so a bead farther than protein_range + skin stays out of range while no bead has moved skin / 2."""
+        pairs = created_pairs(points, owner, new_box, repulsion_nm + skin, inherent)
+        if protein is None:
+            return pairs, np.zeros(0, int)
+        reach = protein.query(np.mod(points, new_box), distance_upper_bound=protein_range + skin)[0]
+        return pairs, np.flatnonzero(np.isfinite(reach))
+
+    listed, (candidates, near_complex) = points.copy(), list_neighbours()
     while step < steps:
         step += 1
         if np.linalg.norm(points - listed, axis=1).max() > 0.5 * skin:
-            listed, candidates = points.copy(), created_pairs(points, owner, new_box, repulsion_nm + skin, inherent)
+            listed, (candidates, near_complex) = points.copy(), list_neighbours()
         delta = minimum_image(points[candidates[:, 1]] - points[candidates[:, 0]]) if len(candidates) else np.zeros((0, 3))
         dist = np.linalg.norm(delta, axis=1)
         close = dist <= repulsion_nm
         pairs, delta, dist = candidates[close], delta[close], dist[close]
         remaining = pairs[dist < contact_nm]
-        near, index = (protein.query(np.mod(points, new_box), distance_upper_bound=protein_range)
-                       if protein is not None else (np.full(len(points), np.inf), None))
+        near, index = np.full(len(points), np.inf), None
+        if protein is not None:  # beads outside near_complex are beyond protein_range: their query result would be inf anyway
+            index = np.full(len(points), len(protein.data))
+            near[near_complex], index[near_complex] = protein.query(np.mod(points[near_complex], new_box), distance_upper_bound=protein_range)
         crowded = protein_clearance_nm is not None and bool((near < protein_clearance_nm).any())
         if not len(remaining) and not crowded:
             break

@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial import cKDTree
 
-from .config import AMINO, DIHRES_EM_FC, EM_MDP, FMAX_TARGET, LIGAND_GROUP, Settings
+from .config import AMINO, DIHRES_EM_FC, EM_MDP, EMRES_FMAX_TARGET, FMAX_TARGET, LIGAND_GROUP, Settings
 from .contacts import check_contacts, describe_contacts, record_contacts
 from .runtools import run_command, run_path
 from .solvation import ion_census, salt_summary
@@ -74,7 +74,7 @@ def run_em(out: Path, topology: dict, gmx: str, ntomp: int, nsteps: int) -> None
 def _minimize(out: Path, gmx: str, name: str, structure: str, coulomb: str, ntomp: int, nsteps: int, define: str = "", freeze: str = "") -> None:
     """grompp + mdrun one steepest-descent minimization from structure; em writes em.unverified.gro, others {name}.gro."""
     result = "em.unverified.gro" if name == "em" else f"{name}.gro"
-    (out / f"{name}.mdp").write_text(EM_MDP.format(emtol=FMAX_TARGET, nsteps=nsteps, coulombtype=coulomb,
+    (out / f"{name}.mdp").write_text(EM_MDP.format(emtol=FMAX_TARGET if name == "em" else EMRES_FMAX_TARGET, nsteps=nsteps, coulombtype=coulomb,
                                                    define=f"define          = {define}\n" if define else "", freeze=freeze))
     for stale in (f"{name}.gro", result, f"{name}.log", f"{name}.edr", f"{name}.trr"):
         (out / stale).unlink(missing_ok=True)

@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **Restrained minimization stops at Fmax < 1000** (`EMRES_FMAX_TARGET`); the unrestrained `em` that is validated and published
+  still has to reach Fmax < 500 (`FMAX_TARGET`), and every gate after it is unchanged. On GCGR this cuts `emres` from about 3000 to
+  about 1950 steps (about 60 s per build) with all lipid dihedral restraints (inositol and sugar chairs, ceramide amide,
+  cis/trans bonds) in range after `em`.
+- **Stage commands.** `membraneforger build|check|slice|backmap|solvate|equilibration`: one pipeline, entered or left at a stage, with
+  the same options for every command (`cli.split_command`, `Session.stop_after`). `slice` stops after the slice gate and writes
+  `slice_cg.gro` (the cut Martini 3 membrane) and `placed_complex.pdb`; `backmap` stops once a backmapped membrane has passed gate 2 and
+  keeps `membrane.pdb` at the top level; `solvate` is the `--membrane` entry by name; `check` is `--check`; `equilibration` runs
+  `membraneforger.equilibration`. A command line without a command word is a `build`, so earlier command lines still work. `--help`
+  names the program `membraneforger` (it said `membraneforger.py`) and `--version` prints the version.
+- **`--membrane` (solvate) judges its input as a backmapped membrane is judged.** It stopped on any membrane contact inside the
+  LJ limit, while a build lets such contacts go into minimization unless `membrane_overlap_before_em` is `stop` (the check after
+  EM decides); the `membrane.pdb` of a `backmap` command therefore could not be solvated (a GCGR test: ARG13 against a cholesterol
+  hydrogen, 0.80 A). Both entries now use `backmap_verdict`: a heavy-atom ring threading or a contact closer than
+  `min_start_contact_nm` stops, membrane contacts stop only with `stop`, and the verdict is recorded under `backmap_attempts`.
 - **The package installs with pip.** `pyproject.toml` declares the Python requirements once (the README, `slurm/setup.sh` and the CI
   install from it), ships the force field, the backmapping data, the bundled membranes and the new mdp templates as package data, and
   adds the `membraneforger` command, the same as `python -m membraneforger`, usable from any directory. Running from the clone still
@@ -182,6 +197,12 @@
   heavy atoms in the input and are protonated by pdb2gmx. A chain whose first residue is `GLYP` gets the `None` N
   terminus (its backbone N carries the acyl chain). Built for the Galpha N terminus of the receptor-Gs complexes
   (Met1 removed, Gly2 N-palmitoylated, Cys3 S-palmitoylated); the acyl coordinates are the user's, as for `CYSG`.
+- **Cleanup, no change to any build output.** The two `grompp` rebuilds of the final audit (`as_built`, `posres`) run side by side
+  instead of one after the other (same files, same gates; about 25 s less on a 270k-atom system). Removed `embedding.trim_membrane`
+  and its tests: nothing called it since `slice_membrane_cg` replaced it. `relax_seam` asks the complex's KD-tree only about the
+  beads that can be within reach before the next neighbour-list rebuild instead of every bead every step (the query was half of the
+  embedding time); relaxed coordinates and reports are bit-identical, embedding the example complex takes 8 s instead of 13 s. A few
+  lint-level simplifications (`prenyl.py`, `solvation.py`, `backbone_check.py`).
 
 ## 1.1.0 (2026-10-18)
 

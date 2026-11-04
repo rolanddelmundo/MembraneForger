@@ -38,6 +38,8 @@ directory in seconds (every line OK, WARN, FAIL or INFO) and catches most of the
 | `ERROR` in stage `validate` after minimization | the largest force stayed above the target, or a clash remained | The log names the atom and its neighbours. `em_clash_trace.json` traces a lipid culprit back to the first stage it clashes. Ligand heavy atoms are frozen in EM, so a clash with a ligand is not relieved by moving the ligand: fix the ligand pose or the clashing residue in the input. |
 | `ERROR` in stage `validate`: `the frozen ligand moved during EM` | a ligand atom in `LIG` shifted by more than 0.002 nm, so the freeze did not take effect | Compare `int/solv_ions.gro` with `int/em.unverified.gro` and check that `int/emres.mdp` and `int/em.mdp` contain `freezegrps = LIG`. |
 | GROMACS error | `gmx` not found, or a topology problem | Pass `--gmx`. Read the GROMACS message in the log. |
+| `--runs` or `--cg` rejects a frame name | the name is not a bundled frame, or `--runs` is larger than the series (9 frames each) | `--list-membranes` prints the valid names; `--runs N` needs `--cg 1` or `2`. |
+| The build is `PASS` but the log has `WARN:` lines, or the report says PASS WITH WARNINGS | a measurement is near a limit or poorly sampled (rare lipid species, Fmax, a contact) | The build is usable; read each warning and the matching section of the [tutorial](membraneforger_tutorial.md#5-validation) before production. Equilibrate and check the trajectory with `python -m membraneforger.equilibration`. |
 | `input ... would be overwritten by the build` | the input file lives in the output directory under a generated name | Choose another `--out`. |
 
 ## Where to look for each stage

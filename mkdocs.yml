@@ -1,0 +1,54 @@
+site_name: MembraneForger
+site_description: Build validated all-atom membrane-protein systems for GROMACS from one structure file
+site_url: https://rolanddelmundo.github.io/MembraneForger/
+repo_url: https://github.com/rolanddelmundo/MembraneForger
+repo_name: rolanddelmundo/MembraneForger
+edit_uri: edit/main/membraneforger/docs/
+docs_dir: membraneforger/docs   # the same Markdown files the README links to; nothing is copied
+
+theme:
+  name: material
+  custom_dir: membraneforger/docs/overrides
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+    - navigation.tabs
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+  font:
+    text: Open Sans
+    code: Roboto Mono
+  palette:
+    scheme: default
+    primary: white
+    accent: teal
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Your first build: first_build.md
+      - Preparing the input: preparing_inputs.md
+      - Ligands: ligands.md
+      - Equilibration: equilibration.md
+  - Reference:
+      - Command-line options: cli_reference.md
+      - Advanced options: advanced.md
+      - Tutorial and validation: membraneforger_tutorial.md
+      - Troubleshooting: troubleshooting.md
+  - Development:
+      - Module map: modules.md
+
+extra_css:
+  - assets/home.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences

@@ -1,0 +1,64 @@
+/* Site styling. Plain white pages, dark text, one accent colour for links. The landing page (overrides/home.html) follows
+   the layout of getcontacts.github.io: a light title band, a short introduction, a two-column list of use cases, a footer. */
+
+:root { --mf-accent: #0b6e8f; --mf-band: #f2f4f6; --mf-rule: #e1e4e8; --mf-muted: #5c6670; }
+.md-typeset a { color: var(--mf-accent); }
+.md-header, .md-tabs { color: #1a1a1a; }
+.md-header { box-shadow: 0 0 0 1px var(--mf-rule); }
+.md-tabs { border-bottom: 1px solid var(--mf-rule); }
+.md-header__button.md-logo { display: none; }
+
+/* Landing page */
+.mf-home { font-size: .8rem; line-height: 1.55; }
+.mf-home h1 { font-size: 2.4rem; font-weight: 700; margin: 0; line-height: 1.15; color: #1a1a1a; }
+.mf-home h2 { font-size: 1.3rem; font-weight: 600; margin: 2.4rem 0 .8rem; }
+.mf-home h3 { font-size: .95rem; font-weight: 600; margin: 0 0 .2rem; }
+.mf-home p { margin: 0 0 .8rem; }
+.mf-home code { font-size: .72rem; }
+
+.mf-band { background: var(--mf-band); border-radius: .2rem; padding: 1.6rem 2rem; margin: 0 0 1.8rem;
+           display: grid; grid-template-columns: 1fr auto; gap: 1.5rem; align-items: center; }
+.mf-band .mf-tagline { font-size: 1.1rem; color: var(--mf-muted); margin: .3rem 0 0; }
+.mf-band img { height: 7rem; display: block; }
+
+.mf-questions { border: 1px solid var(--mf-rule); border-radius: .2rem; padding: .8rem 1.2rem; margin: 0 0 1rem; }
+.mf-questions ul { margin: 0 0 0 1.1rem; padding: 0; }
+.mf-questions li { margin: .15rem 0; }
+
+.mf-install { margin: 1rem 0 0; }
+.mf-install pre { margin: 0; }
+
+.mf-group { font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--mf-muted); margin: 1.4rem 0 .6rem; }
+.mf-list { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem 2.5rem; }
+.mf-use { display: grid; grid-template-columns: 2.6rem 1fr; gap: .9rem; padding: .7rem 0; border-top: 1px solid var(--mf-rule); }
+.mf-use h3 a { color: #1a1a1a; }
+.mf-use h3 a:hover { color: var(--mf-accent); }
+.mf-use p { margin: 0 0 .3rem; }
+.mf-use ul { margin: 0 0 .4rem 1.1rem; padding: 0; color: var(--mf-muted); font-size: .72rem; }
+.mf-use li { margin: 0; }
+.mf-use > div > code { display: block; white-space: pre-wrap; word-break: break-word; font-size: .62rem; margin-top: .2rem; }
+.mf-icon svg { width: 2.6rem; height: 2.6rem; margin-top: .1rem; }
+.mf-icon .i-fill { fill: var(--mf-accent); opacity: .22; stroke: none; }
+.mf-icon .i-stroke { fill: none; stroke: var(--mf-accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+
+.mf-workflow { width: 100%; max-width: 56rem; display: block; margin: 0 0 1.2rem; }
+.mf-two { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem; }
+.mf-two ul { margin: 0 0 0 1.1rem; }
+.mf-two li { margin: .15rem 0; }
+
+.mf-footer { border-top: 1px solid var(--mf-rule); margin-top: 3rem; padding-top: 1rem; display: flex; flex-wrap: wrap; gap: .5rem 2rem;
+             justify-content: center; font-size: .75rem; color: var(--mf-muted); }
+
+@media screen and (max-width: 60em) {
+  .mf-band { grid-template-columns: 1fr; padding: 1.2rem 1.4rem; }
+  .mf-band img { height: auto; width: 100%; }
+  .mf-list, .mf-two { grid-template-columns: 1fr; }
+  .mf-home h1 { font-size: 1.9rem; }
+}
+
+/* Material's footer (previous/next links, "made with") on white as well */
+.md-footer, .md-footer-meta { background: #fff; color: #1a1a1a; }
+.md-footer { border-top: 1px solid var(--mf-rule); }
+.md-footer__link, .md-footer-meta__inner, .md-copyright, .md-copyright__highlight { color: var(--mf-muted); }
+.md-footer__title, .md-footer__direction { color: #1a1a1a; }
+.md-copyright a, .md-footer-meta a { color: var(--mf-accent); }

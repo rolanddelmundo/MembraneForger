@@ -28,7 +28,7 @@ from .runtools import INT_DIR, LOG_NAME, gromacs_version, log, sha256
 from .slicing import offset_slack, slice_membrane_cg
 from .solvation import add_ions, make_index, rebox_system, solvate_system
 from .stereo import check_gm3_stereo
-from .structio import xyz_nm
+from .structio import write_gro, write_pdb, xyz_nm
 from .topology import build_topology, lipid_clashes, prepare_structure, repair_structure, resolve_lipid_clashes
 from .validation import (
     align_frame_to_box,
@@ -43,7 +43,8 @@ from .validation import (
 
 __all__ = ['Session', 'StageFailure', 'run_stage', 'prepare_inputs', 'backmap_and_assemble', 'heavy_atom_piercings', 'membrane_piercings',
            'backmap_verdict', 'refuse_frame_protein_in_slice', 'review_contacts', 'review_backbone', 'refuse_overlaps',
-           'build_topology_and_box', 'finish_system', 'build_from_two_inputs', 'build']
+           'refuse_membrane_input', 'build_topology_and_box', 'finish_system', 'build_from_two_inputs', 'build', 'STOP_POINTS', 'SLICE_OUTPUTS',
+           'write_slice_outputs']
 
 # What to look at when a stage fails; {out}, {work} and {int} (the folder of intermediates) are filled in at run time.
 STAGE_HINTS = {
@@ -102,6 +103,10 @@ class Session:
     overwrite_restart: bool = False  # also allow it when checkpoints or trajectories of a simulation are there (--overwrite-restart)
     archive_previous: str = "no"  # with --overwrite: first copy the earlier build's reports ("reports") or reports and structures ("all") aside
     strict_segments: tuple = ()  # (chain, first, last) input ranges that were modelled, not observed: an outlier there fails the backbone check
+    # The `slice` and `backmap` commands run the same pipeline and stop after that stage: "slice" after the slice gate (the cut
+    # coarse-grained membrane and the placed complex are written), "backmap" once a backmapped membrane has passed gate 2
+    # (membrane.pdb stays at the top level); None builds to em.gro.
+    stop_after: str | None = None
     work: Path | None = None
     timings: dict = field(default_factory=dict)
     record: dict = field(default_factory=dict)
@@ -310,6 +315,22 @@ def refuse_frame_protein_in_slice(cg_protein: list, slab: tuple, box: list, plac
                          "would reach the cut membrane; this complex is too wide to sit clear of it "
                          "in this frame: use a smaller --xy-buffer or --box-nm, or --embed-site hole")
     return reached
+
+
+STOP_POINTS = ("slice", "backmap")
+SLICE_OUTPUTS = ("slice_cg.gro", "placed_complex.pdb")
+
+
+def write_slice_outputs(out: Path, prepared: dict) -> dict:
+    """Write what the slice stage produced: the cut coarse-grained membrane (Martini names, nm, in the cut box) and the placed
+    all-atom complex (A, with the same box as CRYST1). Returns the counts written."""
+    box = prepared["box"]
+    beads = [dict(b, resid=n, resname=mol["cg"]) for n, mol in enumerate(prepared["membrane"], 1) for b in mol["beads"]]
+    write_gro(beads, box, out / SLICE_OUTPUTS[0], "cut Martini 3 membrane around the placed complex")
+    write_pdb(prepared["placed"], out / SLICE_OUTPUTS[1],
+              f"CRYST1{box[0] * 10:9.3f}{box[1] * 10:9.3f}{box[2] * 10:9.3f}  90.00  90.00  90.00 P 1           1")
+    return {"membrane_molecules": len(prepared["membrane"]), "beads": len(beads), "complex_atoms": len(prepared["placed"]),
+            "box_nm": [round(v, 4) for v in box]}
 
 
 def backmap_and_assemble(session: Session, prepared: dict, seed: int) -> Path:
@@ -574,6 +595,11 @@ def refuse_backmap(problem: str, attempts: int) -> None:
     raise SystemExit(f"after {attempts} backmapping attempt(s): {problem}")
 
 
+def refuse_membrane_input(problem: str, name: str) -> None:
+    """Stop a --membrane (solvate) run whose input has a defect minimization cannot repair."""
+    raise SystemExit(f"in {name}: {problem}")
+
+
 def refuse_threaded_rings(heavy: list, attempts: int) -> None:
     """Stop the build when a heavy-atom bond still threads a ring and nothing more can be tried."""
     if heavy:
@@ -587,6 +613,12 @@ def build_from_two_inputs(session: Session, all_atom: Path, coarse_grain: Path, 
     if session.settings.backmap_attempts < 1:
         raise StageFailure("inputs", "Settings.backmap_attempts must be at least 1", "the settings passed to the build")
     prepared = prepare_inputs(session, all_atom, coarse_grain)
+    if session.stop_after == "slice":
+        written = run_stage(session, "slice", write_slice_outputs, out, prepared)
+        session.record["slice_outputs"] = written
+        return {"stopped": "slice", "summary": f"slice written: {SLICE_OUTPUTS[0]} ({written['membrane_molecules']} membrane "
+                                               f"molecules, {written['beads']} beads) and {SLICE_OUTPUTS[1]} "
+                                               f"({written['complex_atoms']} atoms), box {box_text(written['box_nm'])} nm"}
     for seed in range(1, session.settings.backmap_attempts + 1):
         membrane = backmap_and_assemble(session, prepared, seed)
         staged = build_topology_and_box(session, membrane, prepared["ligands"], prepared["composition"], hashes, seed)
@@ -596,10 +628,18 @@ def build_from_two_inputs(session: Session, all_atom: Path, coarse_grain: Path, 
         attempts.append({"seed": seed, **verdict["counts"]})
         session.record["backmap_attempts"] = attempts
         if verdict["accept"]:
+            if session.stop_after == "backmap":
+                return {"stopped": "backmap", "summary": f"membrane.pdb written and accepted after {seed} backmapping attempt(s): "
+                                                         f"{staged['solute_atoms']} complex atoms plus the backmapped membrane"}
             return staged
         if last:
             run_stage(session, verdict["stage"], refuse_backmap, verdict["problem"], len(attempts))
         log(out, f"backmap seed {seed}: {verdict['problem']}; backmapping again with another seed", "WARN")
+
+
+def box_text(box: list) -> str:
+    """A box as 'x x y x z' with two decimals."""
+    return " x ".join(f"{v:.2f}" for v in box)
 
 
 def keep_intermediates(out: Path, keep: tuple = ()) -> list[str]:
@@ -667,13 +707,16 @@ def build(session: Session, all_atom: Path | None, coarse_grain: Path | None, me
             staged = build_from_two_inputs(session, all_atom, coarse_grain, hashes)
         else:
             staged = build_topology_and_box(session, membrane, set(DEFAULT_LIGANDS), None, hashes)
-            run_stage(session, "rings", refuse_threaded_rings, heavy_atom_piercings(staged["rings"]), 0)
-            run_stage(session, "contacts", refuse_overlaps, staged["overlaps"], ("membrane",), f"in {membrane.name}")
-            if staged["contact"]["distance_nm"] < session.settings.min_start_contact_nm:
-                contact = staged["contact"]
-                run_stage(session, "rings", refuse_backmap, f"{contact['atoms'][0]} starts {10 * contact['distance_nm']:.2f} A "
-                                                            f"from {contact['atoms'][1]}", 0)
-        summary = finish_system(session, staged)
+            # The same verdict as a backmapped membrane gets on its last seed: a heavy-atom ring threading or a too-close
+            # contact stops here; membrane contacts go into minimization unless membrane_overlap_before_em is "stop".
+            verdict = backmap_verdict(staged, {}, session.settings, last=True)
+            session.record["backmap_attempts"] = [{"seed": 0, "source": membrane.name, **verdict["counts"]}]
+            if not verdict["accept"]:
+                run_stage(session, verdict["stage"], refuse_membrane_input, verdict["problem"], membrane.name)
+        if staged.get("stopped"):  # the slice or backmap command: the stage's outputs are the result
+            summary = staged["summary"]
+        else:
+            summary = finish_system(session, staged)
         status = "PASS"
     except StageFailure as failure:
         error = {"stage": failure.stage, "what": failure.what, "inspect": failure.inspect}
@@ -687,7 +730,8 @@ def build(session: Session, all_atom: Path | None, coarse_grain: Path | None, me
         keep_intermediates(out, tuple(inputs))
         raise
     if status == "PASS":
-        moved = keep_intermediates(out, tuple(inputs))
+        kept = tuple(inputs) + ((out / "membrane.pdb",) if session.stop_after == "backmap" else ())
+        moved = keep_intermediates(out, kept)
         log(out, f"intermediates kept in {out / INT_DIR} ({len(moved)} files moved there, plus the working files)")
         log(out, summary, "PASS")  # the last log line; the manifest written next hashes the finished log
     write_run_manifest(session, status, error, started, hashes, command)

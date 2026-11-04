@@ -3,8 +3,32 @@
 After `pip install .`, `membraneforger` and `python -m membraneforger` are the same command:
 
 ```bash
-membraneforger --aa complex.pdb --orient-chain R --nterm-side out --out my_build
+membraneforger [build|check|slice|backmap|solvate|equilibration] --aa complex.pdb --orient-chain R --nterm-side out --out my_build
 ```
+
+## Commands
+
+The command word comes first and the options after it; every command takes the same options, and a command line without
+a command word is a `build`, so earlier command lines still work.
+
+| Command | What runs | Result |
+|---|---|---|
+| `build` (default) | the whole pipeline: orient, grade the frame, embed, slice and its gate, backmap and gate 2, topology, box, water, ions, minimization, audit | `em.gro`, `topol.top`, `toppar/`, `index_ini.ndx`, the reports |
+| `check` | the pre-flight of a build, in seconds, nothing written (the same as `--check`) | OK/WARN/FAIL/INFO lines, `CHECK PASS` or `CHECK FAIL` |
+| `slice` | up to and including the slice gate | `slice_cg.gro` (the cut Martini 3 membrane, Martini names, in the cut box), `placed_complex.pdb` (the oriented complex in that box, with `CRYST1`), `membrane_validation.md` and its figures, `orientation_report.json`, `run_manifest.json` |
+| `backmap` | up to gate 2: the backmapped membrane has been assembled with the complex, repaired, given a topology and checked for ring threading, bond crossings and lipid stereochemistry (backmapping again with another seed when needed) | `membrane.pdb` (the all-atom complex plus membrane, with `CRYST1`) at the top level, the topology scratch in `int/` |
+| `solvate` | from an assembled protein + membrane PDB (`--membrane`): structure repair, topology, box, water, ions, both minimizations, validation, audit | the same as `build` |
+| `equilibration` | gates 3 and 4 on an equilibrated trajectory; `membraneforger equilibration --help` lists its own options | `equilibration_validation.md` |
+
+```bash
+membraneforger slice   --aa complex.pdb --cg KOR_Membrane1 --orient-chain R --nterm-side out --out cut
+membraneforger backmap --aa complex.pdb --cg KOR_Membrane1 --orient-chain R --nterm-side out --out aa
+membraneforger solvate --membrane aa/membrane.pdb --out system
+```
+
+`slice` and `backmap` need `--aa` and `--cg` (`--membrane` is already past those stages); `solvate` needs `--membrane`. `--runs N`
+works with `slice` and `backmap` too, one folder per frame. The log and `run_manifest.json` of a stopped run say `PASS` when the
+stage and its gate passed; `stop_after` in the manifest records the command.
 
 `python -m membraneforger --help` prints the same options with their current defaults. Lengths on the command line
 are in nm; the options that took Å before (`--box`, `--bilayer-z`, `--fit-max-core-rmsd`) are now `--box-nm`, `--bilayer-z-nm` and `--fit-max-core-rmsd-nm`. The old Å spellings still work, print a conversion warning and cannot be combined with the nm form.
@@ -17,6 +41,7 @@ are in nm; the options that took Å before (`--box`, `--bilayer-z`, `--fit-max-c
 | `--cg 1\|2\|NAME\|FILE` (`--coarse-grain`) | The membrane. `1` picks a bundled GPR139 frame, `2` a bundled kappa opioid receptor frame. A name (any case; `--list-membranes` shows which exist, for example `KOR_Membrane1` or `GPR139_Membrane5`) picks that bundled frame, so the build is repeatable. A file (or `custom=FILE`) is a Martini 3 frame of your own complex. | `1` |
 | `--runs N` | Build the complex N times, each time in a different bundled membrane of the `--cg 1` or `--cg 2` series (its first N frames, so `--runs 5` with `--cg 2` is KOR_Membrane1, KOR_Membrane2, KOR_Membrane3, KOR_Membrane4, KOR_Membrane5), one system per run in `<out>/<frame>/`. Needs `--cg 1` or `2`; at most the number of frames in the series (9 for KOR, 9 for GPR139). | `1` |
 | `--list-membranes` | Print the bundled frames by name and exit. | — |
+| `--version` | Print the version and exit. | — |
 | `--check` | With the options of a build: check GROMACS, the Python requirements, mstool, the all-atom input (chains, termini, histidines, disulfides, ligands, orientation options), the coarse-grained frame, PPM/OPM, the backmapping data and the output directory, print one OK/WARN/FAIL/INFO line each and exit (1 when anything failed). Nothing is written. See [Preparing the input](preparing_inputs.md). | off |
 | `--embed` | With `--cg FILE`, embed the protein into that frame's membrane instead of fitting it onto the frame's own protein. Always on for the bundled frames (`1`, `2` or a name). | off |
 | `--embed-site hole\|free` | Where an embedded complex goes. `hole` is where the frame's receptor was. `free` is unbroken membrane at least 1 nm from that receptor, for a much smaller protein such as one transmembrane helix. | `hole` |
@@ -25,7 +50,7 @@ are in nm; the options that took Å before (`--box`, `--bilayer-z`, `--fit-max-c
 | `--overwrite-restart` | Additionally allow replacing checkpoints and trajectories (`*.cpt`, `*.xtc`, `*.trr`, `*.tng`) in `--out`. The build never deletes them otherwise. GROMACS `-cpi`/`-append` continuation of a run is not affected. | off |
 | `--archive-previous no\|reports\|all` | With `--overwrite`, first copy the earlier build's reports (`reports`) or reports and structures (`all`: `em.gro` or `int/em.unverified.gro`, `topol.top`, `index_ini.ndx`) to `<out>/previous_builds/<start time>_<status>/`, so a rejected attempt survives its rebuild. Nothing is deleted; a copy that fails stops the build before anything is replaced. | `no` |
 | `--name NAME` | System name used in logs and in `[ system ]`. | output directory name |
-| `--membrane PDB` | Skip orientation and backmapping and start from an assembled protein + membrane PDB with a `CRYST1` record, for example `<out>/int/membrane.pdb` of an earlier build. Replaces `--aa` and `--cg`. | — |
+| `--membrane PDB` | Skip orientation and backmapping and start from an assembled protein + membrane PDB with a `CRYST1` record, for example the `membrane.pdb` of a `backmap` command or `<out>/int/membrane.pdb` of an earlier build. Replaces `--aa` and `--cg`; the `solvate` command is this entry by name. | — |
 
 ## Membrane orientation
 

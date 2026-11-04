@@ -1,6 +1,6 @@
 #//=============================================================
 #// MembraneForger - (c) 2026 Roland Del Mundo
-#// Command line: python membraneforger.py --all-atom AA.pdb --coarse-grain CG.gro --out DIR
+#// Command line: membraneforger [build|check|slice|backmap|solvate|equilibration] --aa AA.pdb --cg CG.gro --out DIR
 #//=============================================================
 """Parse the command line, locate installation resources, and run one build."""
 import argparse
@@ -31,7 +31,7 @@ from .config import (
 )
 from .embedding import CONVERTIBLE, EMBED_SITES, LIPID_NAMES, lipid_name
 from .orientation import NTERM_SIDES, ORIENTATION_MODES, OrientationRequest, parse_residue_ranges
-from .pipeline import Session, build
+from .pipeline import STOP_POINTS, Session, build
 from .preflight import run_check
 from .prenyl import PRENYL_MODES
 from .runtools import find_gromacs
@@ -39,7 +39,8 @@ from .validation import refuse_overwrite
 
 __all__ = ['BUNDLED_MEMBRANES', 'bundled_frames', 'bundled_membrane', 'bundled_series', 'describe_bundled_membranes',
            'make_parser', 'locate_forcefield', 'locate_data', 'parse_chains', 'parse_box', 'parse_disulfide_pair',
-           'orientation_request', 'resolve_lengths', 'run_sessions', 'angstrom_to_nm', 'nm_to_angstrom', 'default_out', 'main']
+           'orientation_request', 'resolve_lengths', 'run_sessions', 'angstrom_to_nm', 'nm_to_angstrom', 'default_out', 'main',
+           'COMMANDS', 'split_command']
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 BUNDLED_DIR = PACKAGE_DIR / "examples" / "preeq_cg_cellmem"
@@ -208,13 +209,35 @@ def orientation_request(args) -> OrientationRequest:
                               opm_cache=args.opm_cache.resolve() if args.opm_cache else None)
 
 
+# membraneforger [COMMAND] OPTIONS: one pipeline, entered or left at a stage. Every command takes the same options.
+COMMANDS = {
+    "build": "the whole pipeline: orient, embed, slice, backmap, topology, solvate, ions, minimize, audit; writes em.gro (the default)",
+    "check": "the pre-flight of a build in seconds, nothing written (the same as --check)",
+    "slice": "stop after the slice gate: writes slice_cg.gro (the cut Martini 3 membrane) and placed_complex.pdb",
+    "backmap": "stop once a backmapped membrane has passed gate 2: writes membrane.pdb (the all-atom complex plus membrane)",
+    "solvate": "start from an assembled protein + membrane PDB (--membrane): topology, box, water, ions, minimization, audit",
+    "equilibration": "grade an equilibrated trajectory (gates 3 and 4); python -m membraneforger.equilibration --help",
+}
+
+
+def split_command(argv: list) -> tuple[str, list]:
+    """Take the command word off the front of argv; without one the command is build, so earlier command lines still work."""
+    if argv and argv[0] in COMMANDS:
+        return argv[0], list(argv[1:])
+    return "build", list(argv)
+
+
 def make_parser() -> argparse.ArgumentParser:
     """Build the argument parser; only --all-atom and --coarse-grain are per-system inputs."""
     defaults = Settings()
     parser = argparse.ArgumentParser(
-        prog="membraneforger.py",
+        prog="membraneforger",
+        usage="%(prog)s [COMMAND] [options]",
         description="Build a validated, energy-minimized all-atom CHARMM36 membrane system (em.gro) from an all-atom "
-                    "protein/ligand PDB and a Martini 3 coarse-grained simulation frame.")
+                    "protein/ligand PDB and a Martini 3 coarse-grained simulation frame.",
+        epilog="commands (the options are the same for all of them; without a command, build):\n"
+               + "\n".join(f"  {name:<14s}{text}" for name, text in COMMANDS.items()),
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--aa", "--all-atom", dest="all_atom", type=Path, metavar="PDB",
                         help="all-atom protein (or protein/ligand) structure with its membrane normal along z; "
                              "the only source of protein and ligand chemistry")
@@ -225,6 +248,7 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--runs", type=int, default=1, metavar="N",
                         help="build the complex N times, each in a different bundled membrane of the --cg 1 or 2 series (its "
                              "first N frames, at most the number the series holds), one system per run in <out>/<frame>/ (default: %(default)s)")
+    parser.add_argument("--version", action="version", version="%(prog)s " + __import__("membraneforger").__version__)
     parser.add_argument("--list-membranes", action="store_true", help="list the bundled membranes by name and exit")
     parser.add_argument("--check", action="store_true",
                         help="check the inputs, programs (GROMACS, mstool, PPM) and output directory of this build in seconds and exit "
@@ -397,16 +421,26 @@ def parse_disulfide_pair(spec: str) -> tuple[str, int, int]:
 
 
 def main(argv: list | None = None) -> int:
-    """Run one build from command-line arguments and return its exit code."""
+    """Run one command (build by default) from command-line arguments and return its exit code."""
+    command, rest = split_command(sys.argv[1:] if argv is None else argv)
+    if command == "equilibration":
+        from .equilibration import main as grade
+        return grade(rest)
     parser = make_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(rest)
     resolve_lengths(args, parser)
     if args.list_membranes:
         print(describe_bundled_membranes())
         return 0
-    given_cg = "--cg" in sys.argv or "--coarse-grain" in sys.argv
+    if command == "check":
+        args.check = True
+    given_cg = any(flag in rest for flag in ("--cg", "--coarse-grain")) or any(flag.startswith(("--cg=", "--coarse-grain=")) for flag in rest)
     if args.membrane and (args.all_atom or given_cg):
         parser.error("--membrane replaces --aa and --cg; give one or the other")
+    if command == "solvate" and not args.membrane:
+        parser.error("solvate starts from an assembled protein + membrane PDB: give it with --membrane")
+    if command in STOP_POINTS and args.membrane:
+        parser.error(f"{command} needs --aa and --cg: a --membrane PDB is already past that stage (use solvate)")
     if not args.membrane and not args.all_atom:
         parser.error("--aa is required")
     embed, cg, frames = args.embed, str(args.coarse_grain), []
@@ -521,7 +555,8 @@ def main(argv: list | None = None) -> int:
                       box_a=box, bilayer_z_a=args.bilayer_z, delete_lipids=list(args.dellipid), add_lipid=args.addlipid,
                       exclude_disulfides=exclude_disulfides, orientation=orientation,
                       overwrite=args.overwrite, overwrite_restart=args.overwrite_restart,
-                      archive_previous=args.archive_previous, strict_segments=strict_segments)
+                      archive_previous=args.archive_previous, strict_segments=strict_segments,
+                      stop_after=command if command in STOP_POINTS else None)
     resolved = [p.resolve() if p else None for p in (args.all_atom, args.coarse_grain, args.membrane)]
     if args.check:
         checked = out / frames[0].name[:-len(BUNDLED_FRAME_SUFFIX)] if args.runs > 1 else out

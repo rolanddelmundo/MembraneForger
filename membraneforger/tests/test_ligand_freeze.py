@@ -60,6 +60,12 @@ class FrozenInMinimization(unittest.TestCase):
             self.assertIn("freezedim       = Y Y Y\n", mdp)
         self.assertIn("define          = -DDIHRES", (out / "emres.mdp").read_text())
 
+    def test_only_the_restrained_stage_stops_at_the_looser_target(self):
+        out = self.run_em(topology(), True)
+        self.assertIn(f"emtol           = {mf.EMRES_FMAX_TARGET}\n", (out / "emres.mdp").read_text())
+        self.assertIn(f"emtol           = {mf.FMAX_TARGET}\n", (out / "em.mdp").read_text())
+        self.assertLess(mf.FMAX_TARGET, mf.EMRES_FMAX_TARGET)
+
     def test_no_ligand_no_freeze(self):
         out = self.run_em(topology(ligands=()), False)
         self.assertNotIn("freeze", (out / "em.mdp").read_text())

@@ -1,5 +1,7 @@
 # MembraneForger tutorial: building and validating an all-atom membrane system
 
+New to MembraneForger? Start with [Your first build](first_build.md); this page is the reference for what each stage and check does.
+
 MembraneForger takes an all-atom protein (or protein-ligand) structure and a pre-equilibrated Martini 3 membrane
 and returns a validated, energy-minimized CHARMM36/GROMACS system. This document explains what each stage does,
 how the build is validated, and how to read the validation report (`membrane_validation.md`, `.json`, the figures)
@@ -167,7 +169,7 @@ x, y cell.
 
 mstool backmaps the sliced membrane around the complex held as a rigid obstacle, the structure is checked for ring
 threading and stereochemistry (another seed is tried when needed; contact findings between the membrane and the complex are logged as a warning and left to the minimization), the topology is built, the box is set in
-z, water and 0.15 M NaCl (in the water, see below) are added, the system is minimized with and then without the lipid dihedral restraints (the heavy atoms of every ligand, meaning each non-protein residue of the input, are frozen in both, so the receptor, lipids and solvent relax around it; ligand hydrogens and all protein atoms stay free), and
+z, water and 0.15 M NaCl (in the water, see below) are added, the system is minimized with and then without the lipid dihedral restraints (the restrained run to Fmax < 1000 kJ/mol/nm, the free run that is published to Fmax < 500; the heavy atoms of every ligand, meaning each non-protein residue of the input, are frozen in both, so the receptor, lipids and solvent relax around it; ligand hydrogens and all protein atoms stay free), and
 an independent audit must pass before `em.gro` appears. Every intermediate is kept: at the end of each build, passed
 or failed, the steps on the way to `em.gro` (`config.INTERMEDIATES`) are moved into `<out>/int/`, beside the working
 files (`int/work`) and the audit's scratch runs (`int/audit`); the top level holds the final outputs and the reports.

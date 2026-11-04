@@ -85,6 +85,7 @@ def write_run_manifest(session, status: str, error: dict | None, started: str, h
         "stage_seconds": session.timings,
         "orientation": orientation_summary(record.get("orientation")), "slice": record.get("slice"), "slice_check": record.get("slice_check"),
         "membrane_validation": record.get("membrane_validation"), "box": record.get("box"),
+        "stop_after": session.stop_after, "slice_outputs": record.get("slice_outputs"),
         "coarse_grain": record.get("coarse_grain"), "aa_cg_mapping": record.get("aa_cg_mapping"),
         "embedding": record.get("embedding"), "lipid_edits": record.get("lipid_edits"), "box_trim": record.get("box_trim"),
         "backmap_isomer_review": record.get("backmap_isomer_review"),
