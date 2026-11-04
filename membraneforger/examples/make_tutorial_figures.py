@@ -92,7 +92,7 @@ def before_after(src, out):
                 ax.set_xticklabels([])
             mean = np.mean([r["voronoi_area_A2"] for r in pts])
             ax.text(0.03, 0.03, f"N = {len(pts)}   mean {mean:.1f} Å$^2$", transform=ax.transAxes, fontsize=11,
-                    bbox=dict(fc="white", ec="none", alpha=0.8, pad=1.5))
+                    bbox=dict(fc=DARK_BG if SUFFIX else "white", ec="none", alpha=0.8, pad=1.5))
         ax = fig.add_subplot(grid[2, col])
         for leaflet, colour in (("upper", UPPER), ("lower", LOWER)):
             pts = [r for r in lipids if r["stage"] == stage and r["leaflet"] == leaflet]
