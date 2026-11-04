@@ -195,8 +195,13 @@ Backmapping dominates the run time. To redo the steps after it (topology, water,
 from the kept membrane:
 
 ```bash
-python -m membraneforger --membrane <out>/int/membrane.pdb --out <out>
+python -m membraneforger solvate --membrane <out>/int/membrane.pdb --out <out>
 ```
+
+(`solvate` names the entry; the same line without the command word and with `--membrane` is the older spelling and still works.)
+To stop at that point on purpose, `membraneforger backmap` runs the build up to gate 2 and leaves `membrane.pdb` at the top level of
+its `--out`; `membraneforger slice` stops earlier, after the slice gate, with the cut coarse-grained membrane (`slice_cg.gro`) and the
+placed complex (`placed_complex.pdb`). The [command-line reference](cli_reference.md#commands) lists the commands.
 
 Rerunning into an `<out>` that holds an earlier build is refused unless `--overwrite` is given; checkpoints and trajectories
 there also need `--overwrite-restart` and are never deleted otherwise. With `--overwrite` the other outputs and intermediates are

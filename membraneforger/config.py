@@ -114,7 +114,7 @@ WATERS_PER_NM3 = 216 / 1.86206 ** 3
 WATER_PROTECT_NM = 0.45  # cavity waters this close to protein/ligand heavy atoms stay inside the bilayer core
 LIPID_SCAN_A, LIPID_DELETE_A = 1.0, 0.10  # EM survived 0.15 A (6WHC_MORF) but not 0.05 A (7RA3_MRTR)
 # Every file a build writes into the output directory; removed at the start so nothing stale survives a rerun.
-GENERATED = ("oriented.pdb", "orientation_report.json", "membrane.pdb", "aa_cg_mapping.tsv", "prot-memb.pdb",
+GENERATED = ("oriented.pdb", "orientation_report.json", "membrane.pdb", "slice_cg.gro", "placed_complex.pdb", "aa_cg_mapping.tsv", "prot-memb.pdb",
              "topol.top", "topol.pre_genion.top", "boxed.gro",
              "solv_raw.gro", "solv.gro", "solv_ions.gro", "index_ini.ndx", "genion.ndx", "ions.mdp", "ions.tpr",
              "ions_mdout.mdp", "em.mdp", "mdout.mdp", "em_mdout.mdp", "emres_mdout.mdp", "em.tpr", "em.log", "em.edr",
