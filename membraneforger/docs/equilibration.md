@@ -14,6 +14,8 @@ bash membraneforger/mdp/run_equilibration.sh my_build gmx_mpi 16
 
 The script runs `grompp` and `mdrun` for `step6.1_equilibration` to `step6.6_equilibration` in `my_build/`, each
 restrained to the positions of `em.gro`, then writes `step7_production.tpr` and prints the `mdrun` command for it.
+The paths above are those of a clone of the repository. After `pip install`, the script is inside the installed package:
+`MF="$(python -c 'import membraneforger, os; print(os.path.dirname(membraneforger.__file__))')"`, then `bash "$MF/mdp/run_equilibration.sh" my_build`.
 On a cluster, load your GROMACS module first (`module load Gromacs/2026.3-Container` on Gemini) or pass the command
 as the second argument, and put the same lines in a job script; each step is one `grompp` plus one `mdrun`.
 

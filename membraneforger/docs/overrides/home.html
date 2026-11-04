@@ -125,7 +125,7 @@ membraneforger --aa complex.pdb --orient-chain R --nterm-side out --out my_build
           <h3>Equilibrate and grade the trajectory</h3>
           <p>Six restrained steps with the define switches the topology expects, then a production template and a second set of gates.</p>
           <ul><li>CHARMM-GUI schedule, 310 K, 1.875 ns</li><li>Box convergence, APL, thickness, core hydration, diffusion</li></ul>
-          <code>bash membraneforger/mdp/run_equilibration.sh build</code>
+          <code>bash &quot;$(python -c 'import membraneforger, os; print(os.path.dirname(membraneforger.__file__))')/mdp/run_equilibration.sh&quot; build</code>
         </div>
       </a>
 

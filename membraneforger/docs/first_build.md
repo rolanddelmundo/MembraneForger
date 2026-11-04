@@ -68,8 +68,11 @@ the membrane core.
 `em.gro` is minimized, not equilibrated:
 
 ```bash
-bash membraneforger/mdp/run_equilibration.sh example_out
+MF="$(python -c 'import membraneforger, os; print(os.path.dirname(membraneforger.__file__))')"   # where pip installed the package
+bash "$MF/mdp/run_equilibration.sh" example_out
 ```
+
+From a clone of the repository, `bash membraneforger/mdp/run_equilibration.sh example_out` is the same script.
 
 This runs the six restrained steps (1.875 ns) and writes `step7_production.tpr`; see [Equilibration](equilibration.md).
 Afterwards `python -m membraneforger.equilibration` grades box convergence, area per lipid, thickness and the other
