@@ -97,15 +97,16 @@ pip install ".[figures]"</code></pre>
   </table>
 
   <h2>From structure to simulation</h2>
+  <p>One build, start to finish: the GPR139 receptor with the peptide dynorphin A (1&ndash;8) and its Gq protein, placed in a bundled 50&nbsp;&micro;s plasma membrane.</p>
   <div class="mf-stages" data-mf-story>
     <figure><img class="mf-light" src="assets/renders/001_input_aa.jpg" alt="The input all-atom receptor and G protein complex" loading="lazy"><img class="mf-dark" src="assets/renders/001_input_aa_dark.jpg" alt="The input all-atom receptor and G protein complex" loading="lazy">
-      <figcaption><b>1. Your structure.</b> The protein complex as given in the PDB file, with its ligands.</figcaption></figure>
+      <figcaption><b>1. Your structure.</b> The protein complex as given in the PDB file, with any bound ligands or peptides.</figcaption></figure>
     <figure><img class="mf-light" src="assets/renders/002_input_cg.jpg" alt="The complex inside a coarse-grained Martini 3 membrane" loading="lazy"><img class="mf-dark" src="assets/renders/002_input_cg_dark.jpg" alt="The complex inside a coarse-grained Martini 3 membrane" loading="lazy">
-      <figcaption><b>2. Placed in a membrane.</b> The protein goes into a pre-equilibrated coarse-grained (Martini 3) plasma membrane of ten lipid types.</figcaption></figure>
+      <figcaption><b>2. Placed in a membrane.</b> The protein goes into a pre-equilibrated coarse-grained (Martini 3) plasma membrane of ten lipid types. Shown here is the whole membrane, about 18&nbsp;nm across with 1,281 lipids; the build keeps a slice around the protein.</figcaption></figure>
     <figure><img class="mf-light" src="assets/renders/004_backmapped_membrane.jpg" alt="The membrane converted to all atoms around the complex" loading="lazy"><img class="mf-dark" src="assets/renders/004_backmapped_membrane_dark.jpg" alt="The membrane converted to all atoms around the complex" loading="lazy">
       <figcaption><b>3. Converted to all atoms.</b> Every lipid is rebuilt atom by atom (backmapped) around the unchanged protein.</figcaption></figure>
     <figure><img class="mf-light" src="assets/renders/014_final_validated.jpg" alt="The final system surrounded by water, with sodium and chloride ions" loading="lazy"><img class="mf-dark" src="assets/renders/014_final_validated_dark.jpg" alt="The final system surrounded by water, with sodium and chloride ions" loading="lazy">
-      <figcaption><b>4. Ready to equilibrate.</b> Water (blue) and 0.15 M NaCl (sodium purple, chloride green) are added, the energy is minimized, and the system is checked.</figcaption></figure>
+      <figcaption><b>4. Ready to equilibrate.</b> Water (blue surface) and 0.15 M NaCl (sodium blue, chloride red) are added, the energy is minimized, and the system is checked.</figcaption></figure>
   </div>
 
   <section class="mf-movie" data-mf-movie data-frame-dir="assets/movie/gpr139_jnj/" data-frame-count="48">
