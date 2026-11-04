@@ -8,6 +8,11 @@
   keeps `membrane.pdb` at the top level; `solvate` is the `--membrane` entry by name; `check` is `--check`; `equilibration` runs
   `membraneforger.equilibration`. A command line without a command word is a `build`, so earlier command lines still work. `--help`
   names the program `membraneforger` (it said `membraneforger.py`) and `--version` prints the version.
+- **`--membrane` (solvate) judges its input as a backmapped membrane is judged.** It stopped on any membrane contact inside the
+  LJ limit, while a build lets such contacts go into minimization unless `membrane_overlap_before_em` is `stop` (the check after
+  EM decides); the `membrane.pdb` of a `backmap` command therefore could not be solvated (a GCGR test: ARG13 against a cholesterol
+  hydrogen, 0.80 A). Both entries now use `backmap_verdict`: a heavy-atom ring threading or a contact closer than
+  `min_start_contact_nm` stops, membrane contacts stop only with `stop`, and the verdict is recorded under `backmap_attempts`.
 - **The package installs with pip.** `pyproject.toml` declares the Python requirements once (the README, `slurm/setup.sh` and the CI
   install from it), ships the force field, the backmapping data, the bundled membranes and the new mdp templates as package data, and
   adds the `membraneforger` command, the same as `python -m membraneforger`, usable from any directory. Running from the clone still

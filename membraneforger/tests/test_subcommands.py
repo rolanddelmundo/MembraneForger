@@ -150,3 +150,45 @@ class StoppedBuild(unittest.TestCase):
         self.assertTrue((out / "membrane.pdb").is_file(), "membrane.pdb is the result and stays at the top level")
         self.assertFalse((out / "int" / "membrane.pdb").exists())
         self.assertEqual(json.loads((out / "run_manifest.json").read_text())["status"], "PASS")
+
+
+class SolvateVerdict(unittest.TestCase):
+    """solvate (--membrane) judges its input the way a backmapped membrane is judged on its last seed."""
+
+    def run_membrane(self, staged, settings=None):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        out = Path(tmp.name) / "b"
+        membrane = Path(tmp.name) / "system.pdb"
+        membrane.write_text("CRYST1   50.000   60.000   70.000  90.00  90.00  90.00 P 1           1\nEND\n")
+        session = mf.Session(out=out, name="b", gmx=sys.executable, forcefield=FORCEFIELD, data=None, python=sys.executable,
+                             ntomp=1, nsteps=1, settings=settings or mf.Settings())
+        with mock.patch.object(mf.pipeline, "gromacs_version", return_value="none"), \
+                mock.patch.object(mf.pipeline, "build_topology_and_box", return_value=staged), \
+                mock.patch.object(mf.pipeline, "finish_system", return_value="done") as finished, \
+                contextlib.redirect_stdout(io.StringIO()):
+            code = mf.build(session, None, None, membrane, ["x"])
+        return code, finished.called, (out / mf.LOG_NAME).read_text()
+
+    def staged(self, overlaps):
+        return {"solute_atoms": 2, "rings": {"pierced": []}, "contact": {"distance_nm": 0.3, "atoms": ["a", "b"]}, "overlaps": overlaps}
+
+    def test_membrane_contacts_go_into_minimization_by_default_and_stop_only_when_asked(self):
+        membrane = {"contacts": [{"class": "membrane", "atoms": ["ARG13:HH12(H, atom 7384)", "CHL134:H12B(H, atom 22388)"],
+                                  "distance_A": 0.8, "limit_A": 0.94, "rmin_A": 1.56, "molecules": [1, 2]}], "crossings": [],
+                    "limits": {"contact_rmin_fraction": 0.6}}
+        code, finished, log = self.run_membrane(self.staged(membrane))
+        self.assertEqual((code, finished), (0, True), log)
+        code, finished, log = self.run_membrane(self.staged(membrane), mf.Settings(membrane_overlap_before_em="stop"))
+        self.assertEqual((code, finished), (1, False))
+        self.assertIn("ERROR: contacts: in system.pdb", log)
+
+    def test_a_heavy_atom_ring_threading_or_a_too_close_contact_still_stops(self):
+        pierced = [{"bond": ["LIP1:C1", "LIP1:C2"], "ring": ["PHE5"], "ring_atoms": [1, 2], "bond_atoms": [30, 31]}]
+        code, finished, log = self.run_membrane({**self.staged(None), "rings": {"pierced": pierced}})
+        self.assertEqual((code, finished), (1, False))
+        self.assertIn("threads the ring", log)
+        close = {**self.staged(None), "contact": {"distance_nm": 0.005, "atoms": ["a", "b"]}}
+        code, finished, log = self.run_membrane(close)
+        self.assertEqual((code, finished), (1, False))
+        self.assertIn("minimization diverges", log)
