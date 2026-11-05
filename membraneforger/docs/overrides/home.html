@@ -5,13 +5,13 @@
     largest one opens in the full-screen view. Add a copy here when it is committed; nothing else needs to change. -#}
 {% set large = {
   "001_input_aa": [("2400", 1620)],
-  "004_backmapped_membrane": [("2400", 2291)],
+  "004_backmapped_membrane": [("2400", 2366)],
   "014_final_validated": [("2400", 1639), ("3600", 2458)],
   "hero_system": [("2400", 2280), ("3600", 3420)]} %}
 {% set lipid_large = 2.4 %}
 {#- 16:9 renders (<name>_wide.jpg, 1600x900, with @2400 and @3600). When `wide` is true the hero, the four stages and
     the movie use them at the full window width, one per row; when false the portrait set above is used. -#}
-{% set wide = true %}
+{% set wide = false %}
 {% set wide_large = [("2400", 2400), ("3600", 3600)] %}
 {% macro render(name, w, h, alt, sizes="100vw") -%}
 {%- set extra = wide_large if ("_wide" in name) else large.get(name, []) -%}
@@ -87,9 +87,9 @@
   <section class="mf-strip mf-bleed" aria-label="The four stages of a build">
     <figure style="--ar: {{ 1080/1600 }}" class="mf-zoom">{{ render("001_input_aa", 1080, 1600, "The input all-atom receptor and G protein complex", "(min-width: 60em) 18vw, (min-width: 30em) 50vw, 100vw") }}
       <figcaption><b>1. Your structure</b> The protein complex as given in the PDB file, with any bound ligands or peptides.</figcaption></figure>
-    <figure style="--ar: {{ 1200/840 }}" class="mf-zoom">{{ render("002_input_cg", 1200, 840, "The complex inside a coarse-grained Martini 3 membrane", "(min-width: 60em) 38vw, (min-width: 30em) 50vw, 100vw") }}
+    <figure style="--ar: {{ 1200/852 }}" class="mf-zoom">{{ render("002_input_cg", 1200, 852, "The complex inside a coarse-grained Martini 3 membrane", "(min-width: 60em) 38vw, (min-width: 30em) 50vw, 100vw") }}
       <figcaption><b>2. Placed in a membrane</b> A pre-equilibrated coarse-grained (Martini 3) plasma membrane of ten lipid types, about 18&nbsp;nm across with 1,281 lipids. The build keeps a slice around the protein.</figcaption></figure>
-    <figure style="--ar: {{ 1200/1257 }}" class="mf-zoom">{{ render("004_backmapped_membrane", 1200, 1257, "The membrane converted to all atoms around the complex", "(min-width: 60em) 26vw, (min-width: 30em) 50vw, 100vw") }}
+    <figure style="--ar: {{ 1200/1217 }}" class="mf-zoom">{{ render("004_backmapped_membrane", 1200, 1217, "The membrane converted to all atoms around the complex", "(min-width: 60em) 26vw, (min-width: 30em) 50vw, 100vw") }}
       <figcaption><b>3. Converted to all atoms</b> Every lipid is rebuilt atom by atom (backmapped) around the unchanged protein.</figcaption></figure>
     <figure style="--ar: {{ 1092/1600 }}" class="mf-zoom">{{ render("014_final_validated", 1092, 1600, "The final system surrounded by water, with sodium and chloride ions", "(min-width: 60em) 18vw, (min-width: 30em) 50vw, 100vw") }}
       <figcaption><b>4. Ready to equilibrate</b> Water (the front half cut away to show the protein) and 0.15&nbsp;M NaCl (sodium red, chloride blue) are added, the energy is minimized, and the system is checked.</figcaption></figure>
