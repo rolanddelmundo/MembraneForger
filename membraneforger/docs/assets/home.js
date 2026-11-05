@@ -1,152 +1,112 @@
-/* Scroll effects for the landing page (overrides/home.html). Everything here is decoration: without JavaScript, or with
-   "reduce motion" turned on, the page shows the same content as a static layout. */
+/* Landing page behaviour (overrides/home.html): full-screen view of any render, the turning movie, a reading progress
+   bar and fade-up reveals. Without JavaScript the page shows the same pictures as a static layout; with "reduce motion"
+   on, only the full-screen view is kept. */
 (function () {
   var home = document.querySelector(".mf-home");
   if (!home) return;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   var root = document.documentElement;
+  var clamp = function (v) { return v < 0 ? 0 : v > 1 ? 1 : v; };
+
+  /* A picture that does not exist yet (a lipid render not committed) hides its figure instead of showing a broken image. */
+  home.querySelectorAll(".mf-lipids img").forEach(function (im) {
+    var hide = function () { var f = im.closest("figure"); if (f) f.style.display = "none"; };
+    if (im.complete && im.naturalWidth === 0 && im.getAttribute("src")) hide();
+    im.addEventListener("error", hide);
+  });
+
+  /* Full-screen view: select any render to open its largest copy. */
+  var box = home.querySelector(".mf-lightbox");
+  if (box && box.showModal) {
+    var boxImg = box.querySelector("img"), boxCap = box.querySelector(".mf-lightbox-cap");
+    home.querySelectorAll(".mf-zoom img").forEach(function (im) {
+      im.setAttribute("tabindex", "0");
+      im.setAttribute("role", "button");
+      var open = function () {
+        var fig = im.closest("figure");
+        var cap = fig ? fig.querySelector("figcaption") : null;
+        boxImg.src = im.currentSrc || im.src;
+        var full = im.getAttribute("data-full");
+        if (full) { var pre = new Image(); pre.onload = function () { boxImg.src = full; }; pre.src = full; }
+        boxImg.alt = im.alt;
+        boxCap.textContent = cap ? cap.textContent.trim() : im.alt;
+        box.showModal();
+      };
+      im.addEventListener("click", open);
+      im.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+    });
+    box.addEventListener("click", function () { box.close(); });
+  }
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   root.classList.add("mf-motion");
 
-  var clamp = function (v) { return v < 0 ? 0 : v > 1 ? 1 : v; };
-  var wide = window.matchMedia("(min-width: 60em)");
-
-  /* Reading progress bar along the top of the window. */
   var bar = document.createElement("div");
   bar.className = "mf-progress";
   bar.setAttribute("aria-hidden", "true");
   document.body.appendChild(bar);
 
-  /* Fade-up reveals, staggered within each group. */
-  var groups = [
-    [".mf-home h2"], [".mf-note"], [".mf-steps > li"], [".mf-check > li"], [".mf-files tr"],
-    [".mf-pipe > li"], [".mf-caps > div"], [".mf-lipids > figure"], [".mf-home details.mf-more"]
-  ];
   var revealed = [];
-  groups.forEach(function (g) {
-    home.querySelectorAll(g[0]).forEach(function (el, i) {
+  [".mf-home h2", ".mf-note", ".mf-strip > figure", ".mf-pipe > li", ".mf-cards > div", ".mf-lipids > figure",
+   ".mf-stats > div", ".mf-reqs > a", ".mf-next > a", ".mf-check > li"].forEach(function (sel) {
+    home.querySelectorAll(sel).forEach(function (el, i) {
       el.classList.add("mf-reveal");
-      el.style.setProperty("--mf-delay", Math.min(i, 5) * 70 + "ms");
+      el.style.setProperty("--mf-delay", Math.min(i, 6) * 60 + "ms");
       revealed.push(el);
     });
   });
   if ("IntersectionObserver" in window) {
     var io = new IntersectionObserver(function (entries) {
-      entries.forEach(function (e) {
-        if (e.isIntersecting) { e.target.classList.add("is-in"); io.unobserve(e.target); }
-      });
-    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
+      entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add("is-in"); io.unobserve(e.target); } });
+    }, { rootMargin: "0px 0px -6% 0px", threshold: 0.05 });
     revealed.forEach(function (el) { io.observe(el); });
   } else {
     revealed.forEach(function (el) { el.classList.add("is-in"); });
   }
 
-  /* Hero: the membrane grows toward the reader as the hero scrolls away. */
-  var hero = home.querySelector(".mf-hero");
-  var heroMedia = home.querySelector(".mf-hero-media");
-
-  /* "From structure to simulation": on wide screens the four stages become one pinned panel. Scrolling steps through
-     them, and each picture grows a little while it is on screen. On narrow screens the grid stays and each picture
-     zooms in as it enters. */
-  var stages = home.querySelector("[data-mf-story]");
-  var figs = stages ? Array.prototype.slice.call(stages.querySelectorAll("figure")) : [];
-  var pin = null, dots = [];
-  function buildStory() {
-    if (!stages || pin) return;
-    pin = document.createElement("div");
-    pin.className = "mf-story-pin";
-    figs.forEach(function (f) { pin.appendChild(f); });
-    var nav = document.createElement("ol");
-    nav.className = "mf-story-dots";
-    nav.setAttribute("aria-hidden", "true");
-    figs.forEach(function (f, i) {
-      var li = document.createElement("li");
-      var b = f.querySelector("figcaption b");
-      li.textContent = b ? b.textContent.replace(/^\d+\.\s*/, "").replace(/\.$/, "") : "Step " + (i + 1);
-      nav.appendChild(li);
-      dots.push(li);
-    });
-    pin.appendChild(nav);
-    stages.appendChild(pin);
-    stages.classList.add("mf-story");
-    stages.style.setProperty("--mf-n", figs.length);
-  }
-  function dropStory() {
-    if (!pin) return;
-    figs.forEach(function (f) { stages.insertBefore(f, pin); f.classList.remove("is-active"); f.style.removeProperty("--mf-z"); });
-    pin.remove(); pin = null; dots = [];
-    stages.classList.remove("mf-story");
-  }
-  function layout() { if (wide.matches) buildStory(); else dropStory(); update(); }
-  if (wide.addEventListener) wide.addEventListener("change", layout); else wide.addListener(layout);
-
-  /* MD movie: frames are fetched when the section comes near, then scrolling picks the frame and zooms in. */
+  /* Movie: scrolling picks the frame. The frames are fetched when the section comes near, from the first directory in
+     data-frame-dirs that has them (the 1920 px copies first). */
   var movie = home.querySelector("[data-mf-movie]");
   var movieImg = movie ? movie.querySelector(".mf-movie-frame img") : null;
-  var movieFrames = [], movieShown = -1;
+  var frames = [], shown = -1;
   if (movie && movieImg) {
-    var dir = movie.getAttribute("data-frame-dir"), count = +movie.getAttribute("data-frame-count") || 0;
-    var load = function () {
-      movieFrames = []; movieShown = -1;
-      for (var i = 0; i < count; i++) {
-        var im = new Image();
-        im.src = dir + "frame_" + (i < 10 ? "0" : "") + i + ".jpg";
-        movieFrames.push(im);
-      }
+    var dirs = (movie.getAttribute("data-frame-dirs") || "").split(/\s+/).filter(Boolean);
+    var count = +movie.getAttribute("data-frame-count") || 0;
+    var name = function (i) { return "frame_" + (i < 10 ? "0" : "") + i + ".jpg"; };
+    var tryDir = function (k) {
+      if (k >= dirs.length) return;
+      var probe = new Image();
+      probe.onload = function () {
+        movieImg.src = probe.src;
+        frames = []; shown = 0;
+        for (var i = 0; i < count; i++) { var im = new Image(); im.src = dirs[k] + name(i); frames.push(im); }
+        update();
+      };
+      probe.onerror = function () { tryDir(k + 1); };
+      probe.src = dirs[k] + name(0);
     };
     if ("IntersectionObserver" in window) {
-      var mo = new IntersectionObserver(function (es) {
-        if (es[0].isIntersecting) { load(); update(); mo.disconnect(); }
-      }, { rootMargin: "150% 0px" });
+      var mo = new IntersectionObserver(function (es) { if (es[0].isIntersecting) { tryDir(0); mo.disconnect(); } }, { rootMargin: "150% 0px" });
       mo.observe(movie);
-    } else { load(); }
+    } else { tryDir(0); }
   }
 
   var ticking = false;
   function update() {
     ticking = false;
-    var vh = window.innerHeight;
-    var max = root.scrollHeight - vh;
+    var vh = window.innerHeight, max = root.scrollHeight - vh;
     bar.style.transform = "scaleX(" + (max > 0 ? clamp(window.scrollY / max) : 0) + ")";
-
-    if (hero && heroMedia) {
-      var r = hero.getBoundingClientRect();
-      var p = clamp(-r.top / Math.max(r.height, 1));
-      heroMedia.style.setProperty("--mf-hp", p.toFixed(4));
-    }
-
-    if (pin) {
-      var s = stages.getBoundingClientRect();
-      var run = s.height - pin.offsetHeight;
-      var prog = clamp(-s.top / Math.max(run, 1));
-      var n = figs.length;
-      var idx = Math.min(n - 1, Math.floor(prog * n));
-      figs.forEach(function (f, i) {
-        var local = clamp(prog * n - i);
-        f.classList.toggle("is-active", i === idx);
-        f.style.setProperty("--mf-z", (0.9 + 0.14 * local).toFixed(4));
-      });
-      dots.forEach(function (d, i) { d.classList.toggle("is-active", i === idx); d.classList.toggle("is-done", i < idx); });
-    } else if (figs.length) {
-      figs.forEach(function (f) {
-        var b = f.getBoundingClientRect();
-        var t = clamp((vh - b.top) / (vh * 0.7));
-        f.style.setProperty("--mf-z", (0.86 + 0.14 * t).toFixed(4));
-      });
-    }
-
     if (movie && movieImg) {
       var m = movie.getBoundingClientRect();
       var mp = clamp(-m.top / Math.max(m.height - vh, 1));
       movie.style.setProperty("--mf-mp", mp.toFixed(4));
-      movie.style.setProperty("--mf-mz", (0.82 + 0.38 * mp).toFixed(4));
-      if (movieFrames.length) {
-        var k = Math.min(movieFrames.length - 1, Math.round(mp * (movieFrames.length - 1)));
-        if (k !== movieShown && movieFrames[k].complete && movieFrames[k].naturalWidth) { movieImg.src = movieFrames[k].src; movieShown = k; }
+      if (frames.length) {
+        var k = Math.min(frames.length - 1, Math.round(mp * (frames.length - 1)));
+        if (k !== shown && frames[k].complete && frames[k].naturalWidth) { movieImg.src = frames[k].src; shown = k; }
       }
     }
   }
   function onScroll() { if (!ticking) { ticking = true; window.requestAnimationFrame(update); } }
   window.addEventListener("scroll", onScroll, { passive: true });
   window.addEventListener("resize", onScroll);
-  layout();
+  update();
 })();

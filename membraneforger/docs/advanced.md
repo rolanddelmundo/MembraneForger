@@ -2,7 +2,7 @@
 
 This page collects the details behind the top-level README. For the full option list see the
 [command-line reference](cli_reference.md). For the science behind each stage and every threshold see the
-[tutorial](membraneforger_tutorial.md).
+[tutorial](validation/index.md).
 
 ## How a build works
 
@@ -19,7 +19,7 @@ A build runs nine steps. Four of them are checks (gold) that stop the build with
 
 `em.gro` is written only when every check passes. After equilibration, `python -m membraneforger.equilibration` grades
 the trajectory (gates 3 and 4, see [Equilibration](equilibration.md#checking-the-result)). The
-[tutorial](membraneforger_tutorial.md#5-validation) gives every threshold.
+[tutorial](validation/membrane.md#5-validation) gives every threshold.
 
 ## Membrane orientation
 
@@ -87,7 +87,7 @@ python -m membraneforger --aa sp.pdb --orientation none --orient-residues 152-17
 
 When the complex is embedded, the lipids it touches are pushed aside at the coarse-grained level. Only those still
 overlapping it afterwards are removed, and an empty pocket in a leaflet larger than 1.0 nm³ stops the build. The
-tutorial ([section 2](membraneforger_tutorial.md#2-placement-and-embedding)) explains the push, the pocket gate and
+tutorial ([section 2](validation/placement.md#2-placement-and-embedding)) explains the push, the pocket gate and
 how `--embed-site free` chooses its spot.
 
 ### Bundled membranes
@@ -130,7 +130,7 @@ The runs are sequential, so five runs take about five times as long as one (`RUN
 
 MembraneForger checks every frame it reads, rotating a frame whose coordinates were rotated about z relative to its box
 back onto its periodic cell and logging the angle
-([tutorial 1.1](membraneforger_tutorial.md#11-a-frame-must-be-periodic-in-its-box)).
+([tutorial 1.1](validation/inputs.md#11-a-frame-must-be-periodic-in-its-box)).
 
 ### Changing the lipid composition
 
@@ -230,7 +230,7 @@ replaced and only `int/membrane.pdb` is kept. Give a new `--out` to keep the ear
 
 Disulfides are taken from the input geometry: two cysteine SG atoms within 3.0 Å, within one chain. `SSBOND` records
 are not read. The pairs are listed in `run_manifest.json` (`disulfides`) and re-measured after minimization. A
-disulfide between two chains is refused. See [tutorial 4.1](membraneforger_tutorial.md#41-disulfides).
+disulfide between two chains is refused. See [tutorial 4.1](validation/backmapping.md#41-disulfides).
 
 A pair close enough to be bonded that should nevertheless stay reduced — a contact a predicted model produces where
 the chemistry does not support a disulfide, such as two cysteines of a cytosolic protein — is named with

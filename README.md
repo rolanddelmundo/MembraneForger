@@ -124,7 +124,7 @@ membrane PDB through topology, water, ions and minimization. The options are the
 
 Each stage checks its own result, and a failed check stops the build and names the stage. The checks before and after
 backmapping and minimization, and the thresholds, are described in the
-[tutorial](membraneforger/docs/membraneforger_tutorial.md#5-validation).
+[tutorial](membraneforger/docs/validation/membrane.md#5-validation).
 
 ## After the build: equilibration
 
@@ -145,7 +145,7 @@ bash membraneforger/mdp/run_equilibration.sh my_build        # 1.875 ns in six s
   histidines, disulfides, orientation inputs, `--check`.
 - [Ligands](membraneforger/docs/ligands.md): adding a topology for your own ligand, ions and cofactors.
 - [Equilibration](membraneforger/docs/equilibration.md): the bundled mdp templates and restraint switches.
-- [Tutorial and validation reference](membraneforger/docs/membraneforger_tutorial.md): build stages, what every check measures, thresholds, limitations.
+- [Tutorial and validation reference](membraneforger/docs/validation/index.md): build stages, what every check measures, thresholds, limitations.
 - [Command-line reference](membraneforger/docs/cli_reference.md): every option and its default.
 - [Advanced options](membraneforger/docs/advanced.md): orientation modes, single-pass proteins, your own membrane, box size,
   lipid composition, restarts.

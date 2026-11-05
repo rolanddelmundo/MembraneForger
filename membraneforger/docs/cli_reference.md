@@ -127,5 +127,5 @@ The slice gate compares the cut membrane with the membrane it was cut from, befo
 
 `membraneforger/mdp/` holds the mdp templates of the six restrained equilibration steps and of production, and
 `run_equilibration.sh BUILD_DIR [GMX] [NTOMP]` runs them; see [Equilibration](equilibration.md). After you have equilibrated the system, `python -m membraneforger.equilibration --help` lists the options of the
-trajectory gates (convergence and equilibrium properties). The [tutorial](membraneforger_tutorial.md#59-gates-3-and-4-equilibration-and-equilibrium-properties)
+trajectory gates (convergence and equilibrium properties). The [tutorial](validation/integrity.md#59-gates-3-and-4-equilibration-and-equilibrium-properties)
 describes what they measure.

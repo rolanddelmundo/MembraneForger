@@ -38,7 +38,7 @@ Running `membraneforger --check` with the same options before a build catches mo
 | `ERROR` in stage `validate`: `the frozen ligand moved during EM` | a ligand atom in `LIG` shifted by more than 0.002 nm, so the freeze did not take effect | Compare `int/solv_ions.gro` with `int/em.unverified.gro` and check that `int/emres.mdp` and `int/em.mdp` contain `freezegrps = LIG`. |
 | GROMACS error | `gmx` not found, or a topology problem | Pass `--gmx`. Read the GROMACS message in the log. |
 | `--runs` or `--cg` rejects a frame name | the name is not a bundled frame, or `--runs` is larger than the series (9 frames each) | `--list-membranes` prints the valid names; `--runs N` needs `--cg 1` or `2`. |
-| The build is `PASS` but the log has `WARN:` lines, or the report says PASS WITH WARNINGS | a measurement is near a limit or poorly sampled (rare lipid species, Fmax, a contact) | The build is usable; read each warning and the matching section of the [tutorial](membraneforger_tutorial.md#5-validation) before production. Equilibrate and check the trajectory with `python -m membraneforger.equilibration`. |
+| The build is `PASS` but the log has `WARN:` lines, or the report says PASS WITH WARNINGS | a measurement is near a limit or poorly sampled (rare lipid species, Fmax, a contact) | The build is usable; read each warning and the matching section of the [tutorial](validation/membrane.md#5-validation) before production. Equilibrate and check the trajectory with `python -m membraneforger.equilibration`. |
 | `input ... would be overwritten by the build` | the input file lives in the output directory under a generated name | Choose another `--out`. |
 
 ## Where to look for each stage
@@ -64,6 +64,6 @@ without warnings. From the output directory:
 gmx grompp -f int/em.mdp -c em.gro -p topol.top -n index_ini.ndx -o test.tpr -maxwarn 0
 ```
 
-The [tutorial](membraneforger_tutorial.md) explains every check and threshold, and its
-[limitations section](membraneforger_tutorial.md#7-limitations-and-assumptions) lists what the build does not do.
+The [tutorial](validation/index.md) explains every check and threshold, and its
+[limitations section](validation/limitations.md#7-limitations-and-assumptions) lists what the build does not do.
 The next step is the restrained equilibration in [Equilibration](equilibration.md).

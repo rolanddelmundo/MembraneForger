@@ -1,7 +1,7 @@
 # Your first build
 
 This page builds the bundled glucagon receptor (GCGR) example from start to finish. Nothing needs to be downloaded or
-oriented. The [tutorial](membraneforger_tutorial.md) explains what each check measures, but you don't need it here.
+oriented. The [tutorial](validation/index.md) explains what each check measures, but you don't need it here.
 
 ## 1. Install and check
 
