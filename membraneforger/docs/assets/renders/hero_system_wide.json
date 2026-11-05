@@ -1,0 +1,29 @@
+{
+ "name": "hero_system_wide",
+ "source_png_px": [
+  3840,
+  2160
+ ],
+ "sizes": {
+  "": [
+   1600,
+   900
+  ],
+  "@2400": [
+   2400,
+   1350
+  ],
+  "@3600": [
+   3600,
+   2025
+  ]
+ },
+ "content_width_fraction": 0.3614583333333333,
+ "content_height_fraction": 0.9435185185185185,
+ "content_bbox_px_in_3840x2160": [
+  1226,
+  61,
+  2614,
+  2099
+ ]
+}
