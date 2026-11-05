@@ -110,8 +110,9 @@ body:has(.mf-home) { overflow-x: clip; }
 /* The whole system, turning as you scroll. The frames are white on the left and right, so the text sits in that space. */
 .mf-movie { margin: 3rem 0 0; position: relative; }
 .mf-movie-pin { position: relative; }
-.mf-movie-frame img { width: 100%; max-height: calc(100vh - 5rem); object-fit: contain; margin: 0 auto; }
-.mf-movie-text { position: absolute; left: max(var(--mf-gutter), calc((100vw - var(--mf-col)) / 2 + 1.2rem)); top: 50%; transform: translateY(-50%); width: min(24vw, 22rem); }
+.mf-movie-frame { display: flex; justify-content: center; }
+.mf-home .mf-movie-frame img { width: auto; max-width: 100%; height: auto; max-height: calc(100vh - 5rem); }
+.mf-movie-text { position: absolute; left: max(var(--mf-gutter), calc((100vw - var(--mf-col)) / 2 + 1.2rem)); top: 50%; transform: translateY(-50%); width: min(18vw, 20rem); }
 .mf-movie h2 { margin-top: 0 !important; }
 .mf-movie-hint { color: var(--mf-muted); display: none; }
 .mf-movie-bar { display: none; }
@@ -154,7 +155,7 @@ body:has(.mf-home) { overflow-x: clip; }
   .md-typeset .mf-pipe li:not(:last-child)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: -1.25rem; transform: translateX(-50%); }
   .mf-movie-text { position: static; transform: none; width: auto; padding: 0 1.2rem; }
   .mf-motion .mf-movie-pin { flex-direction: column-reverse; }
-  .mf-movie-frame img { max-height: 62vh; }
+  .mf-home .mf-movie-frame img { max-height: 62vh; }
 }
 /* Phones: one stage per row at the full width. */
 @media screen and (max-width: 30em) {
@@ -181,4 +182,4 @@ body:has(.mf-home) { overflow-x: clip; }
 .mf-stack figcaption b { display: inline !important; margin-right: .4rem; }
 .mf-movie--wide .mf-movie-text { position: static; transform: none; width: auto; max-width: var(--mf-col); margin: 0 auto .8rem; padding: 0 1.2rem; }
 .mf-motion .mf-movie--wide .mf-movie-pin { flex-direction: column-reverse; }
-.mf-movie--wide .mf-movie-frame img { max-height: calc(100vh - 11rem); }
+.mf-home .mf-movie--wide .mf-movie-frame img { max-height: calc(100vh - 11rem); }
