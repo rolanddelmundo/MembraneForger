@@ -7,7 +7,7 @@
   "001_input_aa": [("2400", 1620)],
   "004_backmapped_membrane": [("2400", 2366)],
   "014_final_validated": [("2400", 1639), ("3600", 2458)],
-  "hero_system": [("2400", 2280), ("3600", 3420)]} %}
+  "hero_system": [("2400", 1633), ("3600", 2450)]} %}
 {% set lipid_large = 2.4 %}
 {#- 16:9 renders (<name>_wide.jpg, 1600x900, with @2400 and @3600). When `wide` is true the hero, the four stages and
     the movie use them at the full window width, one per row; when false the portrait set above is used. -#}
@@ -59,7 +59,7 @@
       </div>
       <pre class="mf-hero-cmd"><code>membraneforger --aa complex.pdb --orient-chain R --nterm-side out --out build</code></pre>
     </div>
-    <div class="mf-hero-media mf-zoom">{{ render("hero_system", 2280, 2400, "A receptor and G protein complex in an all-atom plasma membrane with water, built by MembraneForger", "(min-width: 60em) 62vw, 100vw") }}</div>
+    <div class="mf-hero-media mf-zoom">{{ render("hero_system", 1633, 2400, "A receptor and G protein complex in an all-atom plasma membrane with water, built by MembraneForger", "(min-width: 60em) 62vw, 100vw") }}</div>
   </section>
 {% endif %}
 
