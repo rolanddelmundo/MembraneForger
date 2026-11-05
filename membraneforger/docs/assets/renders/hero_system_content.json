@@ -1,0 +1,37 @@
+{
+ "name": "hero_system",
+ "source_png_px": [
+  2654,
+  3900
+ ],
+ "sizes": {
+  "hero_system.jpg": [
+   1633,
+   2400
+  ],
+  "hero_system@2400.jpg": [
+   1633,
+   2400
+  ],
+  "hero_system@3600.jpg": [
+   2450,
+   3600
+  ]
+ },
+ "content_bbox_px": [
+  80,
+  118,
+  2574,
+  3783
+ ],
+ "content_width_fraction": 0.9397136397889977,
+ "content_height_fraction": 0.9397435897435897,
+ "margin_px": {
+  "left": 80,
+  "top": 118,
+  "right": 80,
+  "bottom": 117
+ },
+ "touching_edges_2px": [],
+ "framing": "whole box (full water slab, ions, whole G protein), 3% white margin, portrait"
+}
