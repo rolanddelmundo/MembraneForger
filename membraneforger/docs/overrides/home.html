@@ -11,7 +11,7 @@
 {% set lipid_large = 2.4 %}
 {#- 16:9 renders (<name>_wide.jpg, 1600x900, with @2400 and @3600). When `wide` is true the hero, the four stages and
     the movie use them at the full window width, one per row; when false the portrait set above is used. -#}
-{% set wide = false %}
+{% set wide = true %}
 {% set wide_large = [("2400", 2400), ("3600", 3600)] %}
 {% macro render(name, w, h, alt, sizes="100vw") -%}
 {%- set extra = wide_large if ("_wide" in name) else large.get(name, []) -%}
@@ -155,7 +155,7 @@
            data-frame-dirs="{% if wide %}assets/movie/gpr139_dyna8_wide/ {% endif %}assets/movie/gpr139_dyna8_1920/ assets/movie/gpr139_dyna8/ assets/movie/gpr139_jnj/">
     <div class="mf-movie-pin">
       <figure>
-        <div class="mf-movie-frame"><img src="assets/movie/gpr139_dyna8_1920/frame_00.jpg" onerror="this.onerror=null;this.src='assets/movie/gpr139_dyna8/frame_00.jpg'" width="1920" height="1080" alt="The GPR139 and dynorphin A system in its membrane, turning about the membrane normal" loading="lazy"></div>
+        <div class="mf-movie-frame"><img src="assets/movie/{% if wide %}gpr139_dyna8_wide{% else %}gpr139_dyna8_1920{% endif %}/frame_00.jpg" onerror="this.onerror=null;this.src='assets/movie/gpr139_dyna8/frame_00.jpg'" width="1920" height="1080" alt="The GPR139 and dynorphin A system in its membrane, turning about the membrane normal" loading="lazy"></div>
         <div class="mf-movie-bar" aria-hidden="true"><span></span></div>
       </figure>
       <div class="mf-movie-text">

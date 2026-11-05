@@ -183,3 +183,4 @@ body:has(.mf-home) { overflow-x: clip; }
 .mf-movie--wide .mf-movie-text { position: static; transform: none; width: auto; max-width: var(--mf-col); margin: 0 auto .8rem; padding: 0 1.2rem; }
 .mf-motion .mf-movie--wide .mf-movie-pin { flex-direction: column-reverse; }
 .mf-home .mf-movie--wide .mf-movie-frame img { max-height: calc(100vh - 11rem); }
+.md-typeset .mf-stack figcaption { max-width: var(--mf-col); margin-left: auto; margin-right: auto; box-sizing: border-box; }
