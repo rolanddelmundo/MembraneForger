@@ -14,7 +14,7 @@
 {% set wide = false %}
 {% set wide_large = [("2400", 2400), ("3600", 3600)] %}
 {% macro render(name, w, h, alt, sizes="100vw") -%}
-{%- set extra = wide_large if name.endswith("_wide") else large.get(name, []) -%}
+{%- set extra = wide_large if ("_wide" in name) else large.get(name, []) -%}
 <img src="assets/renders/{{ name }}.jpg" width="{{ w }}" height="{{ h }}" alt="{{ alt }}" loading="lazy" decoding="async"
      {%- if extra %} srcset="assets/renders/{{ name }}.jpg {{ w }}w{% for s, sw in extra %}, assets/renders/{{ name }}@{{ s }}.jpg {{ sw }}w{% endfor %}" sizes="{{ sizes }}" data-full="assets/renders/{{ name }}@{{ extra[-1][0] }}.jpg"{% else %} data-full="assets/renders/{{ name }}.jpg"{% endif %}>
 {%- endmacro %}
@@ -45,7 +45,7 @@
       <pre class="mf-hero-cmd"><code>membraneforger --aa complex.pdb --orient-chain R --nterm-side out --out build</code></pre>
     </div>
     </div>
-    <div class="mf-bleed mf-zoom mf-hero-wide-media">{{ render("hero_system_wide", 1600, 900, "A receptor and G protein complex in an all-atom plasma membrane with water, built by MembraneForger") }}</div>
+    <div class="mf-bleed mf-zoom mf-hero-wide-media">{{ render("hero_system_wide_edge", 1600, 900, "A receptor and G protein complex in an all-atom plasma membrane with water, built by MembraneForger") }}</div>
   </section>
 {% else %}
   <section class="mf-hero mf-bleed">
