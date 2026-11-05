@@ -170,3 +170,15 @@ body:has(.mf-home) { overflow-x: clip; }
 .md-footer__link, .md-footer-meta__inner, .md-copyright, .md-copyright__highlight { color: var(--mf-muted); }
 .md-footer__title, .md-footer__direction { color: var(--mf-ink); }
 .md-copyright a, .md-footer-meta a { color: var(--mf-accent); }
+
+/* 16:9 set (home.html `wide`): every render spans the full window, one per row. */
+.mf-hero-wide { padding: 2.4rem 0 0; }
+.mf-hero-wide .mf-hero-text { max-width: 46rem; }
+.mf-hero-wide-media { margin-top: 1.6rem; }
+.mf-hero-wide-media img, .mf-stack img { width: 100%; cursor: zoom-in; }
+.mf-stack { display: flex; flex-direction: column; gap: 2.6rem; margin: .4rem 0 1rem; }
+.mf-stack figcaption { margin-top: .6rem !important; font-size: .85rem !important; }
+.mf-stack figcaption b { display: inline !important; margin-right: .4rem; }
+.mf-movie--wide .mf-movie-text { position: static; transform: none; width: auto; max-width: var(--mf-col); margin: 0 auto .8rem; padding: 0 1.2rem; }
+.mf-motion .mf-movie--wide .mf-movie-pin { flex-direction: column-reverse; }
+.mf-movie--wide .mf-movie-frame img { max-height: calc(100vh - 11rem); }

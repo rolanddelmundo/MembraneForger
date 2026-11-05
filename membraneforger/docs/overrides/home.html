@@ -9,8 +9,12 @@
   "014_final_validated": [("2400", 1639), ("3600", 2458)],
   "hero_system": [("2400", 2280), ("3600", 3420)]} %}
 {% set lipid_large = 2.4 %}
+{#- 16:9 renders (<name>_wide.jpg, 1600x900, with @2400 and @3600). When `wide` is true the hero, the four stages and
+    the movie use them at the full window width, one per row; when false the portrait set above is used. -#}
+{% set wide = false %}
+{% set wide_large = [("2400", 2400), ("3600", 3600)] %}
 {% macro render(name, w, h, alt, sizes="100vw") -%}
-{%- set extra = large.get(name, []) -%}
+{%- set extra = wide_large if name.endswith("_wide") else large.get(name, []) -%}
 <img src="assets/renders/{{ name }}.jpg" width="{{ w }}" height="{{ h }}" alt="{{ alt }}" loading="lazy" decoding="async"
      {%- if extra %} srcset="assets/renders/{{ name }}.jpg {{ w }}w{% for s, sw in extra %}, assets/renders/{{ name }}@{{ s }}.jpg {{ sw }}w{% endfor %}" sizes="{{ sizes }}" data-full="assets/renders/{{ name }}@{{ extra[-1][0] }}.jpg"{% else %} data-full="assets/renders/{{ name }}.jpg"{% endif %}>
 {%- endmacro %}
@@ -27,6 +31,23 @@
 {% block content %}
 <div class="mf-home">
 
+{% if wide %}
+  <section class="mf-hero-wide">
+    <div class="mf-wrap">
+    <div class="mf-hero-text">
+      <h1>MembraneForger</h1>
+      <p class="mf-tagline">From one protein structure to an energy-minimized, all-atom membrane system, ready to equilibrate in GROMACS.</p>
+      <p class="mf-hero-sub">It places the protein in a realistic, asymmetric plasma membrane equilibrated for 50&nbsp;&micro;s, rebuilds every lipid atom by atom, adds water and salt, minimizes the energy and checks every step.</p>
+      <div class="mf-buttons">
+        <a class="md-button md-button--primary" href="install/">Get started</a>
+        <a class="md-button" href="first_build/">Build the example</a>
+      </div>
+      <pre class="mf-hero-cmd"><code>membraneforger --aa complex.pdb --orient-chain R --nterm-side out --out build</code></pre>
+    </div>
+    </div>
+    <div class="mf-bleed mf-zoom mf-hero-wide-media">{{ render("hero_system_wide", 1600, 900, "A receptor and G protein complex in an all-atom plasma membrane with water, built by MembraneForger") }}</div>
+  </section>
+{% else %}
   <section class="mf-hero mf-bleed">
     <div class="mf-hero-text">
       <h1>MembraneForger</h1>
@@ -40,12 +61,29 @@
     </div>
     <div class="mf-hero-media mf-zoom">{{ render("hero_system", 2280, 2400, "A receptor and G protein complex in an all-atom plasma membrane with water, built by MembraneForger", "(min-width: 60em) 62vw, 100vw") }}</div>
   </section>
+{% endif %}
 
   <section class="mf-wrap mf-intro">
     <h2 id="structure-to-simulation">From structure to simulation</h2>
     <p>One build, start to finish: the GPR139 receptor with the peptide dynorphin A (1&ndash;8) and its Gq protein, placed in a bundled 50&nbsp;&micro;s plasma membrane. Select a picture to see it full screen.</p>
   </section>
 
+{% if wide %}
+  <section class="mf-stack" aria-label="The four stages of a build">
+    <figure class="mf-zoom">
+      <div class="mf-bleed">{{ render("001_input_aa_wide", 1600, 900, "The input all-atom receptor and G protein complex") }}</div>
+      <figcaption class="mf-wrap"><b>1. Your structure</b> The protein complex as given in the PDB file, with any bound ligands or peptides.</figcaption></figure>
+    <figure class="mf-zoom">
+      <div class="mf-bleed">{{ render("002_input_cg_wide", 1600, 900, "The complex inside a coarse-grained Martini 3 membrane") }}</div>
+      <figcaption class="mf-wrap"><b>2. Placed in a membrane</b> A pre-equilibrated coarse-grained (Martini 3) plasma membrane of ten lipid types, about 18&nbsp;nm across with 1,281 lipids. The build keeps a slice around the protein.</figcaption></figure>
+    <figure class="mf-zoom">
+      <div class="mf-bleed">{{ render("004_backmapped_membrane_wide", 1600, 900, "The membrane converted to all atoms around the complex") }}</div>
+      <figcaption class="mf-wrap"><b>3. Converted to all atoms</b> Every lipid is rebuilt atom by atom (backmapped) around the unchanged protein.</figcaption></figure>
+    <figure class="mf-zoom">
+      <div class="mf-bleed">{{ render("014_final_validated_wide", 1600, 900, "The final system surrounded by water, with sodium and chloride ions") }}</div>
+      <figcaption class="mf-wrap"><b>4. Ready to equilibrate</b> Water (the front half cut away to show the protein) and 0.15&nbsp;M NaCl (sodium red, chloride blue) are added, the energy is minimized, and the system is checked.</figcaption></figure>
+  </section>
+{% else %}
   <section class="mf-strip mf-bleed" aria-label="The four stages of a build">
     <figure style="--ar: {{ 1080/1600 }}" class="mf-zoom">{{ render("001_input_aa", 1080, 1600, "The input all-atom receptor and G protein complex", "(min-width: 60em) 18vw, (min-width: 30em) 50vw, 100vw") }}
       <figcaption><b>1. Your structure</b> The protein complex as given in the PDB file, with any bound ligands or peptides.</figcaption></figure>
@@ -56,6 +94,7 @@
     <figure style="--ar: {{ 1092/1600 }}" class="mf-zoom">{{ render("014_final_validated", 1092, 1600, "The final system surrounded by water, with sodium and chloride ions", "(min-width: 60em) 18vw, (min-width: 30em) 50vw, 100vw") }}
       <figcaption><b>4. Ready to equilibrate</b> Water (the front half cut away to show the protein) and 0.15&nbsp;M NaCl (sodium red, chloride blue) are added, the energy is minimized, and the system is checked.</figcaption></figure>
   </section>
+{% endif %}
 
   <section class="mf-wrap">
     <ol class="mf-pipe" aria-label="Build pipeline">
@@ -112,8 +151,8 @@
     {% endfor %}
   </section>
 
-  <section class="mf-movie mf-bleed" data-mf-movie data-frame-count="48"
-           data-frame-dirs="assets/movie/gpr139_dyna8_1920/ assets/movie/gpr139_dyna8/ assets/movie/gpr139_jnj/">
+  <section class="mf-movie mf-bleed{% if wide %} mf-movie--wide{% endif %}" data-mf-movie data-frame-count="48"
+           data-frame-dirs="{% if wide %}assets/movie/gpr139_dyna8_wide/ {% endif %}assets/movie/gpr139_dyna8_1920/ assets/movie/gpr139_dyna8/ assets/movie/gpr139_jnj/">
     <div class="mf-movie-pin">
       <figure>
         <div class="mf-movie-frame"><img src="assets/movie/gpr139_dyna8/frame_00.jpg" onerror="this.onerror=null;this.src='assets/movie/gpr139_jnj/frame_00.jpg'" width="900" height="506" alt="The GPR139 and dynorphin A system in its membrane, turning about the membrane normal" loading="lazy"></div>
