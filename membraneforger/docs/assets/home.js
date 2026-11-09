@@ -14,6 +14,14 @@
     im.addEventListener("error", hide);
   });
 
+  /* Only same-origin image files are ever put into the full-screen view. */
+  function safeImage(url) {
+    try {
+      var u = new URL(url, window.location.href);
+      return u.origin === window.location.origin && /\.(jpe?g|png|webp)$/i.test(u.pathname) ? u.href : null;
+    } catch (e) { return null; }
+  }
+
   /* Full-screen view: select any render to open its largest copy. */
   var box = home.querySelector(".mf-lightbox");
   if (box && box.showModal) {
@@ -24,9 +32,10 @@
       var open = function () {
         var fig = im.closest("figure");
         var cap = fig ? fig.querySelector("figcaption") : null;
-        boxImg.src = im.currentSrc || im.src;
-        var full = im.getAttribute("data-full");
-        if (full) { var pre = new Image(); pre.onload = function () { boxImg.src = full; }; pre.src = full; }
+        var first = safeImage(im.currentSrc || im.src);
+        if (first) boxImg.src = first;
+        var full = safeImage(im.getAttribute("data-full") || "");
+        if (full) { var pre = new Image(); pre.onload = function () { boxImg.src = pre.src; }; pre.src = full; }
         boxImg.alt = im.alt;
         boxCap.textContent = cap ? cap.textContent.trim() : im.alt;
         box.showModal();
@@ -74,15 +83,21 @@
     var name = function (i) { return "frame_" + (i < 10 ? "0" : "") + i + ".jpg"; };
     var tryDir = function (k) {
       if (k >= dirs.length) return;
+      var first = safeImage(dirs[k] + name(0));
+      if (!first) { tryDir(k + 1); return; }
       var probe = new Image();
       probe.onload = function () {
         movieImg.src = probe.src;
         frames = []; shown = 0;
-        for (var i = 0; i < count; i++) { var im = new Image(); im.src = dirs[k] + name(i); frames.push(im); }
+        for (var i = 0; i < count; i++) {
+          var im = new Image(), u = safeImage(dirs[k] + name(i));
+          if (u) im.src = u;
+          frames.push(im);
+        }
         update();
       };
       probe.onerror = function () { tryDir(k + 1); };
-      probe.src = dirs[k] + name(0);
+      probe.src = first;
     };
     if ("IntersectionObserver" in window) {
       var mo = new IntersectionObserver(function (es) { if (es[0].isIntersecting) { tryDir(0); mo.disconnect(); } }, { rootMargin: "150% 0px" });
