@@ -79,6 +79,11 @@
   var frames = [], shown = -1;
   if (movie && movieImg) {
     var dirs = (movie.getAttribute("data-frame-dirs") || "").split(/\s+/).filter(Boolean);
+    /* Phones get the small frames first: the large ones are about three times the download for no visible gain. */
+    if (window.innerWidth <= 800) {
+      var large = /(1920|3840|wide)/;
+      dirs = dirs.filter(function (d) { return !large.test(d); }).concat(dirs.filter(function (d) { return large.test(d); }));
+    }
     var count = +movie.getAttribute("data-frame-count") || 0;
     var name = function (i) { return "frame_" + (i < 10 ? "0" : "") + i + ".jpg"; };
     var tryDir = function (k) {

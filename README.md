@@ -124,7 +124,7 @@ membrane PDB through topology, water, ions and minimization. The options are the
 
 Each stage checks its own result, and a failed check stops the build and names the stage. The checks before and after
 backmapping and minimization, and the thresholds, are described in the
-[tutorial](membraneforger/docs/validation/membrane.md#5-validation).
+[tutorial](membraneforger/docs/validation/index.md).
 
 ## After the build: equilibration
 
