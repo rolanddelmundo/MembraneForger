@@ -69,7 +69,7 @@ gmx trjconv -s step7_production.tpr -f step7_production.xtc -o frame.gro -sep -p
 python -m membraneforger.equilibration --out . --energy box.xvg --frames frame*.gro --temperature 310
 ```
 
-The report is `equilibration_validation.md`; the [tutorial](membraneforger_tutorial.md#59-gates-3-and-4-equilibration-and-equilibrium-properties)
+The report is `equilibration_validation.md`; the [tutorial](validation/integrity.md#59-gates-3-and-4-equilibration-and-equilibrium-properties)
 explains what each record measures and its thresholds. The box z shrinks by 1.4 to 1.6 nm over the six steps
 ([Advanced options](advanced.md#choosing-z-pad-nm)); the default 2.25 nm water padding leaves about 2.7 nm between
 periodic images of the solute afterwards, which the report checks.

@@ -16,6 +16,8 @@ theme:
     - search.highlight
     - navigation.tabs
     - navigation.footer
+    - navigation.indexes
+    - navigation.tracking
     - toc.follow
     - search.suggest
   font:
@@ -28,22 +30,39 @@ theme:
 
 nav:
   - Home: index.md
-  - Getting started:
+  - Get started:
+      - Install: install.md
       - Your first build: first_build.md
-      - Equilibration: equilibration.md
-  - Preparing a PDB:
       - Preparing the input: preparing_inputs.md
       - Ligands: ligands.md
-  - Examples: examples.md
-  - Troubleshooting: troubleshooting.md
-  - CLI reference: cli_reference.md
-  - Advanced:
+  - Guides:
+      - Examples and recipes: examples.md
+      - Equilibration: equilibration.md
+      - Troubleshooting: troubleshooting.md
+      - Questions: faq.md
+  - Validation:
+      - validation/index.md
+      - Inputs: validation/inputs.md
+      - Placement and slicing: validation/placement.md
+      - Backmapping and assembly: validation/backmapping.md
+      - Membrane quality checks: validation/membrane.md
+      - Integrity checks and gates: validation/integrity.md
+      - Thresholds: validation/thresholds.md
+      - Limitations and settings: validation/limitations.md
+  - Reference:
+      - Command line: cli_reference.md
+      - Output files: outputs.md
       - Advanced options: advanced.md
-      - Tutorial and validation: membraneforger_tutorial.md
       - Module map: modules.md
+      - Changelog: https://github.com/rolanddelmundo/MembraneForger/blob/main/membraneforger/CHANGELOG.md
+  - About: about.md
+
+not_in_nav: |
+  /membraneforger_tutorial.md
 
 extra_css:
   - assets/home.css
+  - assets/site.css
 
 extra_javascript:
   - assets/home.js
@@ -56,3 +75,5 @@ markdown_extensions:
       permalink: true
   - pymdownx.highlight
   - pymdownx.superfences
+  - pymdownx.details
+  - md_in_html

@@ -1,0 +1,46 @@
+/* Inner pages: the same type, colours and callouts as the landing page (assets/home.css holds the colour tokens). */
+
+.md-typeset { color: var(--mf-text2); line-height: 1.65; }
+.md-typeset h1 { color: var(--mf-ink); font-weight: 700; letter-spacing: -.015em; margin-bottom: .6em; }
+.md-typeset h2 { color: var(--mf-ink); font-weight: 650; border-top: 1px solid var(--mf-rule); padding-top: 1.2em; margin-top: 1.8em; }
+.md-typeset h1 + p, .md-typeset h1 + div + p { font-size: .9rem; color: var(--mf-muted); }
+.md-typeset h3 { color: var(--mf-ink); font-weight: 650; }
+.md-nav__link--active, .md-nav__item .md-nav__link--active { color: var(--mf-accent) !important; font-weight: 600; }
+.md-tabs__link--active, .md-tabs__item--active .md-tabs__link { color: var(--mf-accent); font-weight: 600; }
+
+/* Code */
+.md-typeset pre > code { border-radius: .35rem; border: 1px solid var(--mf-rule); background: #f7f9fa; }
+.md-typeset :not(pre) > code { background: #f0f3f5; border-radius: .2rem; }
+
+/* Tables: a light header band, rows separated by rules, the header stays in view in long tables. */
+.md-typeset table:not([class]) { border: 1px solid var(--mf-rule); border-radius: .35rem; font-size: .74rem; box-shadow: none; }
+.md-typeset table:not([class]) th { background: var(--mf-band); color: var(--mf-ink); font-weight: 650; position: sticky; top: 0; }
+.md-typeset table:not([class]) td { border-top: 1px solid var(--mf-rule); vertical-align: top; }
+
+/* Callouts in the landing page's style */
+.md-typeset .admonition, .md-typeset details { border-width: 0 0 0 4px; border-radius: 0 .35rem .35rem 0; box-shadow: none; font-size: .78rem; }
+.md-typeset .admonition.note, .md-typeset .admonition.tip, .md-typeset .admonition.info { border-color: var(--mf-accent); background: var(--mf-tint); }
+.md-typeset .note > .admonition-title, .md-typeset .tip > .admonition-title, .md-typeset .info > .admonition-title { background: transparent; }
+.md-typeset .note > .admonition-title::before, .md-typeset .tip > .admonition-title::before, .md-typeset .info > .admonition-title::before { background-color: var(--mf-accent); }
+
+/* Figures on inner pages use the whole content width, on white. */
+.md-typeset img { border-radius: .2rem; }
+.md-typeset p > img:only-child { display: block; margin: 1rem auto; width: 100%; height: auto; }
+
+/* Chips under a page title: time and what you need */
+.mf-chips { display: flex; flex-wrap: wrap; gap: .4rem; margin: -.2rem 0 1.2rem; }
+.mf-chips span { font-size: .68rem; padding: .2rem .65rem; border-radius: 1rem; background: var(--mf-tint); color: var(--mf-accent); border: 1px solid #cfe5ec; font-weight: 600; }
+.mf-chips p { display: contents; }
+
+/* Validation: the stage flow at the top of the overview, and the numbers */
+.mf-flow { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0 1.6rem; }
+.mf-flow p { display: contents; }
+.md-typeset .mf-flow-step { flex: 1 1 6rem; text-align: center; padding: .55rem .5rem; border: 2px solid var(--mf-accent); border-radius: .4rem;
+                            background: var(--mf-tint); font-weight: 600; font-size: .74rem; color: var(--mf-ink); transition: background .2s; }
+.md-typeset .mf-flow-step:hover { background: #e2f0f4; }
+.mf-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--mf-rule); border: 1px solid var(--mf-rule); border-radius: .4rem; overflow: hidden; margin: 1rem 0; }
+.mf-stats > div { background: #fff; padding: .8rem .8rem; }
+.mf-stats p { margin: 0; }
+.mf-stats b { display: block; font-size: 1.15rem; color: var(--mf-accent); line-height: 1.2; }
+.mf-stats span { display: block; font-size: .7rem; color: var(--mf-muted); margin-top: .2rem; line-height: 1.35; }
+@media screen and (max-width: 30em) { .mf-stats { grid-template-columns: 1fr 1fr; } }
